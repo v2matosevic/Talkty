@@ -1,0 +1,58 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild[Ll]og.*
+
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.cache
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Installer output
+installer/output/
+
+# Application data (models, logs, settings)
+*.gguf
+
+# Crash logs
+crash_*.log
+
+# Publish output
+publish/
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+
+# Development/temporary files
+.playwright-mcp/
+CreateIcon.cs
+create_icon.py
+icon_preview.png
+image.png
+taltky_icon.ico
+plan_project.md
+*.tmp.*

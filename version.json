@@ -1,0 +1,5 @@
+{
+  "version": "1.0.5",
+  "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
+  "release_notes": "ESC key to cancel recording, fixed volume ducking, configurable volume duck level"
+}

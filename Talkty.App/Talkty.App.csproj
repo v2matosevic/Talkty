@@ -1,0 +1,79 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Resources\tray.ico</ApplicationIcon>
+
+    <!-- App metadata -->
+    <AssemblyTitle>Talkty</AssemblyTitle>
+    <Product>Talkty</Product>
+    <Description>Local speech-to-text powered by Whisper. Fast, private, and works offline.</Description>
+    <Company>Version2</Company>
+    <Copyright>Copyright (c) 2025 Version2. All rights reserved.</Copyright>
+    <Authors>Version2</Authors>
+    <Version>1.0.5</Version>
+    <AssemblyVersion>1.0.5.0</AssemblyVersion>
+    <FileVersion>1.0.5.0</FileVersion>
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <!-- Additional metadata for Windows Explorer -->
+    <PackageProjectUrl>https://github.com/v2matosevic/Talkty</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/v2matosevic/Talkty</RepositoryUrl>
+
+    <!-- Publish settings -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+
+    <!-- Don't use single file - native Whisper DLLs need to be alongside exe -->
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Whisper.net for speech recognition -->
+    <PackageReference Include="Whisper.net" Version="1.9.0" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
+    <!-- Sherpa-ONNX for alternative engines (SenseVoice, Moonshine) -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.10.31" />
+    <!-- Archive extraction for model archives (tar.bz2) -->
+    <PackageReference Include="SharpCompress" Version="0.38.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\tray.ico" />
+  </ItemGroup>
+
+  <!-- Copy CUDA runtime DLLs to output for GPU acceleration -->
+  <!-- CUDA DLLs must be in main output directory so Windows DLL loader can find them -->
+  <!-- when ggml-cuda-whisper.dll loads and needs cublas64_13.dll etc. -->
+  <Target Name="CopyCudaDlls" AfterTargets="Build" Condition="Exists('$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll')">
+    <PropertyGroup>
+      <CudaBinPath>$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64</CudaBinPath>
+    </PropertyGroup>
+    <!-- Copy to main output directory so DLL loader can find them -->
+    <Copy SourceFiles="$(CudaBinPath)\cublas64_13.dll" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(CudaBinPath)\cublasLt64_13.dll" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(CudaBinPath)\cudart64_13.dll" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <Message Text="Copied CUDA 13.1 DLLs to $(OutputPath)" Importance="high" />
+  </Target>
+
+  <!-- Also copy for Publish -->
+  <Target Name="CopyCudaDllsPublish" AfterTargets="Publish" Condition="Exists('$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll')">
+    <PropertyGroup>
+      <CudaBinPath>$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64</CudaBinPath>
+    </PropertyGroup>
+    <!-- Copy to main publish directory so DLL loader can find them -->
+    <Copy SourceFiles="$(CudaBinPath)\cublas64_13.dll" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(CudaBinPath)\cublasLt64_13.dll" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(CudaBinPath)\cudart64_13.dll" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Message Text="Copied CUDA 13.1 DLLs to $(PublishDir)" Importance="high" />
+  </Target>
+
+</Project>

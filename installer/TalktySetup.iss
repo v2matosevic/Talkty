@@ -2,7 +2,7 @@
 ; Built with Inno Setup 6
 
 #define MyAppName "Talkty"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "Version2"
 #define MyAppURL "https://github.com/v2matosevic/Talkty"
 #define MyAppExeName "Talkty.App.exe"

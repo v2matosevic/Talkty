@@ -7,6 +7,7 @@ namespace Talkty.App;
 public partial class App : Application
 {
     private static Mutex? _mutex;
+    private static bool _ownsMutex;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -60,7 +61,8 @@ public partial class App : Application
             return;
         }
 
-        Log.Info("Single instance check passed");
+        _ownsMutex = true;
+        Log.Info("Single instance check passed - mutex acquired");
         Log.Info($"Log file: {Log.GetLogFilePath()}");
 
         base.OnStartup(e);
@@ -70,8 +72,24 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         Log.Info("=== APPLICATION EXITING ===");
-        _mutex?.ReleaseMutex();
-        _mutex?.Dispose();
+
+        if (_mutex != null)
+        {
+            if (_ownsMutex)
+            {
+                try
+                {
+                    _mutex.ReleaseMutex();
+                    Log.Debug("Mutex released successfully");
+                }
+                catch (ApplicationException ex)
+                {
+                    Log.Warning($"Failed to release mutex (not owned): {ex.Message}");
+                }
+            }
+            _mutex.Dispose();
+        }
+
         base.OnExit(e);
     }
 

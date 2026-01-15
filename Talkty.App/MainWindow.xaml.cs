@@ -442,11 +442,18 @@ public partial class MainWindow : Window
         _settingsService.Settings.Hints.HasSeenTrayMinimizeHint = true;
         _settingsService.Save();
 
-        // Show balloon tip from tray icon
-        TrayIcon.ShowBalloonTip(
-            "Talkty is still running",
-            "The app is minimized to the system tray. Double-click the icon or use the hotkey to access it.",
-            Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+        // Show balloon tip from tray icon (wrapped in try-catch due to known WPF visual tree race condition)
+        try
+        {
+            TrayIcon.ShowBalloonTip(
+                "Talkty is still running",
+                "The app is minimized to the system tray. Double-click the icon or use the hotkey to access it.",
+                Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+        }
+        catch (ArgumentException ex)
+        {
+            Log.Warning($"Failed to show balloon tip (visual tree race condition): {ex.Message}");
+        }
     }
 
     private void TrayIcon_TrayMouseDoubleClick(object sender, RoutedEventArgs e)

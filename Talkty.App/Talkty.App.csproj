@@ -15,9 +15,9 @@
     <Company>Version2</Company>
     <Copyright>Copyright (c) 2025 Version2. All rights reserved.</Copyright>
     <Authors>Version2</Authors>
-    <Version>1.0.6</Version>
-    <AssemblyVersion>1.0.6.0</AssemblyVersion>
-    <FileVersion>1.0.6.0</FileVersion>
+    <Version>1.0.7</Version>
+    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <FileVersion>1.0.7.0</FileVersion>
     <NeutralLanguage>en</NeutralLanguage>
 
     <!-- Additional metadata for Windows Explorer -->
@@ -30,6 +30,8 @@
 
     <!-- Don't use single file - native Whisper DLLs need to be alongside exe -->
     <PublishSingleFile>false</PublishSingleFile>
+    <!-- Pre-compile IL to native at publish time — reduces JIT overhead on first launch -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,6 +42,8 @@
     <PackageReference Include="Whisper.net" Version="1.9.0" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" />
     <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
+    <!-- Vulkan GPU backend for AMD/Intel iGPU acceleration (10-12x over CPU) -->
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.0" />
     <!-- Sherpa-ONNX for alternative engines (SenseVoice, Moonshine) -->
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.10.31" />
     <!-- Archive extraction for model archives (tar.bz2) -->

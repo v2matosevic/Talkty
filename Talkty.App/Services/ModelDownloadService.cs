@@ -216,6 +216,10 @@ public class ModelDownloadService : IModelDownloadService
 
                     Log.Info($"[DOWNLOAD] Starting download loop...");
 
+                    // Reuse a single CTS for read timeouts — TryReset() avoids per-chunk allocation
+                    var readCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                    try
+                    {
                     while (true)
                     {
                         _cts.Token.ThrowIfCancellationRequested();
@@ -223,10 +227,15 @@ public class ModelDownloadService : IModelDownloadService
                         int bytesRead;
                         try
                         {
-                            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
                             readCts.CancelAfter(TimeSpan.FromSeconds(60));
                             bytesRead = await contentStream.ReadAsync(buffer, readCts.Token);
                             readCount++;
+                            // Reset timeout for next read; if TryReset fails (cancelled), create fresh CTS
+                            if (!readCts.TryReset())
+                            {
+                                readCts.Dispose();
+                                readCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                            }
                         }
                         catch (OperationCanceledException) when (!_cts.Token.IsCancellationRequested)
                         {
@@ -256,8 +265,10 @@ public class ModelDownloadService : IModelDownloadService
                         consecutiveZeroReads = 0;
 
                         await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), _cts.Token);
-                        await fileStream.FlushAsync(_cts.Token);
                         bytesDownloaded += bytesRead;
+                        // Flush every 10 chunks (~800 KB) to reduce syscall overhead vs per-chunk
+                        if (readCount % 10 == 0)
+                            await fileStream.FlushAsync(_cts.Token);
 
                         var now = DateTime.Now;
                         var elapsed = (now - lastProgressTime).TotalSeconds;
@@ -297,6 +308,8 @@ public class ModelDownloadService : IModelDownloadService
 
                     Log.Info($"[DOWNLOAD] Download loop completed. Total bytes: {bytesDownloaded:N0}, Total reads: {readCount}");
                     break;
+                    }
+                    finally { readCts.Dispose(); }
                 }
                 catch (Exception ex) when (ex is IOException or HttpRequestException or TaskCanceledException && !_cts.Token.IsCancellationRequested)
                 {

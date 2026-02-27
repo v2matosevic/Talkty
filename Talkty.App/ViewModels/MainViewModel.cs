@@ -316,7 +316,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 ModelProfileDisplay = profile.GetDisplayName();
 
                 // Show success toast with backend info
-                var backendType = BackendInfo.Contains("CUDA", StringComparison.OrdinalIgnoreCase) ? "GPU" : "CPU";
+                var backendType = (BackendInfo.Contains("CUDA", StringComparison.OrdinalIgnoreCase) ||
+                                   BackendInfo.Contains("Vulkan", StringComparison.OrdinalIgnoreCase)) ? "GPU" : "CPU";
                 RequestShowToast?.Invoke(this, new ToastEventArgs
                 {
                     Message = $"Model loaded: {profile.GetDisplayName()} ({backendType})",
@@ -373,12 +374,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (IsListening)
         {
             Log.Info("Stopping listening and starting transcription");
-            StopListeningAndTranscribe();
+            _ = StopListeningAndTranscribeAsync();
         }
         else
         {
             Log.Info("Starting listening");
-            StartListening();
+            _ = StartListeningAsync();
         }
     }
 
@@ -436,7 +437,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async void StartListening()
+    private async Task StartListeningAsync()
     {
         bool volumeDucked = false;
         try
@@ -475,7 +476,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async void StopListeningAndTranscribe()
+    private async Task StopListeningAndTranscribeAsync()
     {
         try
         {
@@ -531,17 +532,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                     if (_settingsService.Settings.AutoPaste && clipboardSuccess)
                     {
-                        // Wait longer for larger models - transcription can take a while
-                        // and we need to ensure the overlay has time to update
-                        var pasteDelay = _settingsService.Settings.ModelProfile switch
-                        {
-                            ModelProfile.Large => 300,
-                            ModelProfile.Medium => 250,
-                            ModelProfile.Small => 200,
-                            _ => 150
-                        };
-                        Log.Debug($"Auto-pasting at cursor after {pasteDelay}ms delay (model: {_settingsService.Settings.ModelProfile})");
-                        await Task.Delay(pasteDelay);
+                        // Brief settle time for focus restoration — transcription is already done
+                        Log.Debug("Auto-pasting at cursor");
+                        await Task.Delay(80);
                         SimulatePaste();
                     }
                 }
@@ -574,11 +567,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             IsTranscribing = false;
 
-            await Task.Delay(1000);
+            await Task.Delay(400);
             Log.Debug("Raising RequestHideOverlay");
             RequestHideOverlay?.Invoke(this, EventArgs.Empty);
 
-            await Task.Delay(500);
+            await Task.Delay(200);
             if (!IsListening && !IsTranscribing)
             {
                 StatusText = "Ready";
@@ -602,7 +595,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnAudioLevelChanged(object? sender, float level)
     {
-        Application.Current.Dispatcher.Invoke(() => AudioLevel = level);
+        // InvokeAsync (fire-and-forget) so the NAudio callback thread never blocks on UI
+        Application.Current.Dispatcher.InvokeAsync(() => AudioLevel = level);
     }
 
     private void SimulatePaste()

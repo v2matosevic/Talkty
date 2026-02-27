@@ -30,6 +30,7 @@ public partial class OverlayWindow : Window
     private const int WS_EX_TOOLWINDOW = 0x00000080;
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
+    private static readonly Random _random = new();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -107,33 +108,18 @@ public partial class OverlayWindow : Window
 
     private void UpdateAudioBars(float level)
     {
-        // Level is 0.0 to 1.0
-        // Animate bar heights based on audio level
+        // Already on UI thread — PropertyChanged fires on UI thread after our InvokeAsync fix.
+        // No Dispatcher.Invoke needed; execute directly.
         var baseHeight = 6.0;
         var maxHeight = 14.0;
         var range = maxHeight - baseHeight;
 
-        // Add some randomness for visual effect
-        var random = new Random();
-
-        Dispatcher.Invoke(() =>
-        {
-            if (Bar1 != null)
-            {
-                var variation = random.NextDouble() * 0.3;
-                Bar1.Height = baseHeight + (range * level * (0.7 + variation));
-            }
-            if (Bar2 != null)
-            {
-                var variation = random.NextDouble() * 0.2;
-                Bar2.Height = baseHeight + 2 + (range * level * (0.9 + variation));
-            }
-            if (Bar3 != null)
-            {
-                var variation = random.NextDouble() * 0.3;
-                Bar3.Height = baseHeight + (range * level * (0.6 + variation));
-            }
-        });
+        if (Bar1 != null)
+            Bar1.Height = baseHeight + (range * level * (0.7 + _random.NextDouble() * 0.3));
+        if (Bar2 != null)
+            Bar2.Height = baseHeight + 2 + (range * level * (0.9 + _random.NextDouble() * 0.2));
+        if (Bar3 != null)
+            Bar3.Height = baseHeight + (range * level * (0.6 + _random.NextDouble() * 0.3));
     }
 
     private void PositionOnActiveMonitor()

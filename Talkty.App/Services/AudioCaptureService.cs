@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using NAudio.Wave;
 using Talkty.App.Models;
 
@@ -9,12 +10,13 @@ public class AudioCaptureService : IAudioCaptureService
     private WaveInEvent? _waveIn;
     private MemoryStream? _audioStream;
     private WaveFileWriter? _waveWriter;
+    // Float samples accumulated directly during recording — eliminates WAV encode/decode round-trip
+    private List<float> _floatSamples = [];
     private string? _selectedDeviceId;
     private readonly object _recordingLock = new();
     private readonly object _dataLock = new();
 
     public event EventHandler<float>? AudioLevelChanged;
-    public event EventHandler<byte[]>? AudioDataAvailable;
 
     public bool IsRecording { get; private set; }
 
@@ -71,6 +73,8 @@ public class AudioCaptureService : IAudioCaptureService
                 Log.Debug($"WaveFormat: {_waveIn.WaveFormat.SampleRate}Hz, {_waveIn.WaveFormat.BitsPerSample}bit, {_waveIn.WaveFormat.Channels}ch");
 
                 _waveWriter = new WaveFileWriter(_audioStream, _waveIn.WaveFormat);
+                // Pre-allocate for 2 minutes of audio to avoid list resizing during recording
+                _floatSamples = new List<float>(16000 * 120);
             }
 
             _waveIn.DataAvailable += OnDataAvailable;
@@ -139,80 +143,41 @@ public class AudioCaptureService : IAudioCaptureService
     {
         Log.Debug("GetRecordedAudioAsFloat called");
 
-        byte[] wavBytes;
         lock (_dataLock)
         {
-            if (_audioStream == null)
+            if (_floatSamples.Count == 0)
             {
-                Log.Warning("GetRecordedAudioAsFloat: no audio stream");
+                Log.Warning("GetRecordedAudioAsFloat: no samples recorded");
                 return [];
             }
 
-            try
-            {
-                _waveWriter?.Flush();
-                wavBytes = _audioStream.ToArray();
-            }
-            catch (Exception ex)
-            {
-                Log.Error("Error getting audio bytes", ex);
-                return [];
-            }
-        }
-
-        if (wavBytes.Length == 0)
-        {
-            Log.Warning("GetRecordedAudioAsFloat: empty WAV bytes");
-            return [];
-        }
-
-        Log.Debug($"Converting {wavBytes.Length} WAV bytes to float samples");
-
-        try
-        {
-            using var ms = new MemoryStream(wavBytes);
-            using var reader = new WaveFileReader(ms);
-
-            var samples = new List<float>();
-            var buffer = new byte[reader.WaveFormat.BlockAlign];
-
-            while (reader.Read(buffer, 0, buffer.Length) > 0)
-            {
-                short sample = BitConverter.ToInt16(buffer, 0);
-                samples.Add(sample / 32768f);
-            }
-
-            Log.Info($"Converted to {samples.Count} float samples ({samples.Count / 16000.0:F2}s)");
-            return [.. samples];
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Error converting audio to float", ex);
-            return [];
+            var result = _floatSamples.ToArray();
+            Log.Info($"Returning {result.Length} float samples ({result.Length / 16000.0:F2}s)");
+            return result;
         }
     }
 
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
-        // Don't lock here - just write data quickly
         try
         {
+            // Use MemoryMarshal to reinterpret bytes as shorts — zero-copy, no manual byte shifting
+            var shorts = MemoryMarshal.Cast<byte, short>(e.Buffer.AsSpan(0, e.BytesRecorded));
+
+            float max = 0;
             lock (_dataLock)
             {
                 _waveWriter?.Write(e.Buffer, 0, e.BytesRecorded);
-            }
-
-            // Calculate audio level for visualization (no lock needed)
-            float max = 0;
-            for (int i = 0; i < e.BytesRecorded; i += 2)
-            {
-                short sample = (short)(e.Buffer[i + 1] << 8 | e.Buffer[i]);
-                float absValue = Math.Abs(sample / 32768f);
-                if (absValue > max) max = absValue;
+                foreach (var s in shorts)
+                {
+                    var f = s / 32768f;
+                    _floatSamples.Add(f);
+                    var abs = Math.Abs(f);
+                    if (abs > max) max = abs;
+                }
             }
 
             AudioLevelChanged?.Invoke(this, max);
-            AudioDataAvailable?.Invoke(this, e.Buffer[..e.BytesRecorded]);
         }
         catch
         {

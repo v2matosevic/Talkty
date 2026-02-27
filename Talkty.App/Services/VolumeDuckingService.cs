@@ -185,16 +185,17 @@ public class VolumeDuckingService : IVolumeDuckingService
         float toLevel,
         CancellationToken ct)
     {
+        // Get device once per fade operation — safe within a 250ms window.
+        // The stale COM issue only occurred when reusing across long (20s+) recordings.
+        var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        var volume = device.AudioEndpointVolume;
+
         for (int i = 1; i <= FadeSteps; i++)
         {
             ct.ThrowIfCancellationRequested();
 
             var progress = (float)i / FadeSteps;
-            var level = Lerp(fromLevel, toLevel, progress);
-
-            // Get fresh device reference for each step to avoid stale COM objects
-            var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            device.AudioEndpointVolume.MasterVolumeLevelScalar = Math.Clamp(level, 0f, 1f);
+            volume.MasterVolumeLevelScalar = Math.Clamp(Lerp(fromLevel, toLevel, progress), 0f, 1f);
 
             if (i < FadeSteps)
             {

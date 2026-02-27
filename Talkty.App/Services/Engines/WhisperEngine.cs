@@ -87,7 +87,38 @@ public class WhisperEngine : ITranscriptionEngine
     }
 
     /// <summary>
+    /// Check if Vulkan runtime DLLs are available (for AMD/Intel GPU acceleration).
+    /// </summary>
+    private static bool CheckVulkanAvailability()
+    {
+        try
+        {
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var vulkanRuntimePath = Path.Combine(baseDir, "runtimes", "vulkan", "win-x64");
+            var vulkanDll = Path.Combine(vulkanRuntimePath, "ggml-vulkan-whisper.dll");
+
+            Log.Debug($"Checking Vulkan availability: {vulkanDll}");
+
+            if (File.Exists(vulkanDll))
+            {
+                var size = new FileInfo(vulkanDll).Length / (1024.0 * 1024.0);
+                Log.Info($"Vulkan DLL found: ggml-vulkan-whisper.dll ({size:F1} MB)");
+                return true;
+            }
+
+            Log.Debug("Vulkan DLL not found");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"Failed to check Vulkan availability: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Configure the runtime library order based on GPU preference.
+    /// Priority: CUDA (NVIDIA) > Vulkan (AMD/Intel) > CPU.
     /// Must be called before any WhisperFactory is created.
     /// </summary>
     private static void ConfigureRuntime(bool useGpu)
@@ -98,29 +129,29 @@ public class WhisperEngine : ITranscriptionEngine
 
             if (cudaAvailable)
             {
-                Log.Info("Configuring runtime for CUDA GPU ONLY (no CPU fallback)...");
-                RuntimeOptions.RuntimeLibraryOrder = [
-                    RuntimeLibrary.Cuda
-                    // NO CPU fallback - user explicitly wants GPU only
-                ];
-                Log.Info("RuntimeLibraryOrder set to: [CUDA] - CPU fallback DISABLED");
+                Log.Info("Configuring runtime: CUDA GPU (no fallback)");
+                RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cuda];
+                Log.Info("RuntimeLibraryOrder set to: [CUDA]");
+                return;
             }
-            else
+
+            var vulkanAvailable = CheckVulkanAvailability();
+            if (vulkanAvailable)
             {
-                Log.Error("GPU requested but CUDA DLLs not available!");
-                Log.Warning("Falling back to CPU since CUDA files are missing");
-                RuntimeOptions.RuntimeLibraryOrder = [
-                    RuntimeLibrary.Cpu
-                ];
-                Log.Info("RuntimeLibraryOrder set to: [CPU] (CUDA files missing)");
+                Log.Info("Configuring runtime: Vulkan GPU (AMD/Intel — no CUDA found)");
+                RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Vulkan];
+                Log.Info("RuntimeLibraryOrder set to: [Vulkan]");
+                return;
             }
+
+            Log.Error("GPU requested but neither CUDA nor Vulkan are available — falling back to CPU");
+            RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cpu];
+            Log.Info("RuntimeLibraryOrder set to: [CPU] (no GPU runtime found)");
         }
         else
         {
-            Log.Info("Configuring runtime for CPU only...");
-            RuntimeOptions.RuntimeLibraryOrder = [
-                RuntimeLibrary.Cpu
-            ];
+            Log.Info("Configuring runtime: CPU");
+            RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cpu];
             Log.Info("RuntimeLibraryOrder set to: [CPU]");
         }
     }
@@ -230,8 +261,8 @@ public class WhisperEngine : ITranscriptionEngine
                     if (useGpu && loadedRuntime.Contains("CPU"))
                     {
                         Log.Warning("GPU was requested but CPU is being used!");
-                        Log.Warning("CUDA may not be installed. Install CUDA Toolkit 12.1+ for GPU acceleration.");
-                        BackendInfo = "CPU (GPU unavailable - install CUDA Toolkit)";
+                        Log.Warning("No GPU runtime found. For NVIDIA: install CUDA Toolkit 12.1+. For AMD/Intel: Vulkan runtime should be bundled.");
+                        BackendInfo = "CPU (GPU unavailable — check GPU drivers/CUDA)";
                     }
 
                     // Log loaded whisper-related modules
@@ -240,9 +271,12 @@ public class WhisperEngine : ITranscriptionEngine
                     // For multilingual models, use auto-detect to transcribe in original language
                     _currentLanguage = profile.SupportsAutoDetect() ? "auto" : "en";
 
-                    Log.Debug($"Building WhisperProcessor with language={_currentLanguage}...");
+                    // Cap at 8 threads — Whisper has diminishing returns beyond that,
+                    // and over-saturating cores hurts on high-core-count machines.
+                    var threads = Math.Min(8, Environment.ProcessorCount);
+                    Log.Debug($"Building WhisperProcessor with language={_currentLanguage}, threads={threads}...");
                     var builder = _factory.CreateBuilder()
-                        .WithThreads(Environment.ProcessorCount)
+                        .WithThreads(threads)
                         .WithLanguage(_currentLanguage);
 
                     // Do NOT use WithTranslate() - transcribe in original language
@@ -257,7 +291,7 @@ public class WhisperEngine : ITranscriptionEngine
 
                     _processor = builder.Build();
 
-                    Log.Info($"WhisperProcessor built. Threads: {Environment.ProcessorCount}");
+                    Log.Info($"WhisperProcessor built. Threads: {threads}");
                     CurrentProfile = profile;
                     return true;
                 }
@@ -402,8 +436,9 @@ public class WhisperEngine : ITranscriptionEngine
                 // Dispose old processor
                 _processor?.Dispose();
 
+                var threads = Math.Min(8, Environment.ProcessorCount);
                 var builder = _factory.CreateBuilder()
-                    .WithThreads(Environment.ProcessorCount)
+                    .WithThreads(threads)
                     .WithLanguage(language);
 
                 // Do NOT use WithTranslate() - transcribe in original language

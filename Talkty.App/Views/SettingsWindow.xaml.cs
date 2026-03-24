@@ -80,49 +80,41 @@ public partial class SettingsWindow : Window
         _viewModel.CancelCommand.Execute(null);
     }
 
-    // Model profile selection
-    private void TinyProfile_Click(object sender, MouseButtonEventArgs e)
+    // Single handler for all model profile selections via data-driven ItemsControl
+    private void ModelItem_Click(object sender, MouseButtonEventArgs e)
     {
-        _viewModel.SelectedProfile = ModelProfile.Tiny;
-    }
-
-    private void BaseProfile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.Base;
-    }
-
-    private void SmallProfile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.Small;
-    }
-
-    private void MediumProfile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.Medium;
-    }
-
-    private void LargeProfile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.Large;
-    }
-
-    private void LargeTurboProfile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.LargeTurbo;
-    }
-
-    private void DistilLargeV3Profile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.DistilLargeV3;
-    }
-
-    private void SenseVoiceProfile_Click(object sender, MouseButtonEventArgs e)
-    {
-        _viewModel.SelectedProfile = ModelProfile.SenseVoice;
+        if (sender is FrameworkElement element && element.DataContext is ModelProfileViewModel model)
+        {
+            _viewModel.SelectedProfile = model.Profile;
+        }
     }
 
     private void HotkeyBox_Click(object sender, MouseButtonEventArgs e)
     {
         _viewModel.StartRecordingHotkeyCommand.Execute(null);
+    }
+
+    // Collapsible model section toggles
+    private void ToggleLowEnd_Click(object sender, MouseButtonEventArgs e) =>
+        ToggleSection(LowEndList, LowEndArrow);
+
+    private void ToggleMidRange_Click(object sender, MouseButtonEventArgs e) =>
+        ToggleSection(MidRangeList, MidRangeArrow);
+
+    private void ToggleHighEnd_Click(object sender, MouseButtonEventArgs e) =>
+        ToggleSection(HighEndList, HighEndArrow);
+
+    private static void ToggleSection(UIElement list, System.Windows.Controls.TextBlock arrow)
+    {
+        if (list.Visibility == Visibility.Visible)
+        {
+            list.Visibility = Visibility.Collapsed;
+            arrow.Text = "▸";
+        }
+        else
+        {
+            list.Visibility = Visibility.Visible;
+            arrow.Text = "▾";
+        }
     }
 }

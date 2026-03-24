@@ -18,10 +18,19 @@ public interface ITranscriptionService : IDisposable
     /// <param name="audioSamples">Audio samples as 16-bit PCM at 16kHz mono.</param>
     /// <param name="language">Language code (e.g., "en", "auto"). Defaults to "en".</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="onFirstSegment">Optional callback fired when the first segment is ready (for early clipboard copy).</param>
     Task<TranscriptionResult> TranscribeAsync(
         float[] audioSamples,
         string language = "en",
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Action<string>? onFirstSegment = null,
+        string? vocabularyPrompt = null);
+
+    /// <summary>
+    /// Pre-sets the vocabulary prompt so the processor is built with it on model load.
+    /// Call before LoadModelAsync to avoid a rebuild on first transcription.
+    /// </summary>
+    void SetVocabularyPrompt(string? prompt);
 
     /// <summary>
     /// Whether a model is currently loaded and ready.

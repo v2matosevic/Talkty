@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Talkty.App.Models;
 
 namespace Talkty.App.Controls;
 
@@ -11,14 +12,6 @@ public partial class ToastNotification : UserControl
 {
     private readonly DispatcherTimer _autoHideTimer;
     private Action? _actionCallback;
-
-    public enum ToastType
-    {
-        Info,
-        Success,
-        Warning,
-        Tip
-    }
 
     public ToastNotification()
     {

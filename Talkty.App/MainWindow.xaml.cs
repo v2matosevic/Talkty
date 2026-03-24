@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Talkty.App.Controls;
+using Talkty.App.Models;
 using Talkty.App.Services;
 using Talkty.App.ViewModels;
 using Talkty.App.Views;
@@ -20,7 +21,7 @@ public partial class MainWindow : Window
     private SettingsWindow? _settingsWindow;
     private bool _isExiting;
     private DateTime _lastHotkeyTime = DateTime.MinValue;
-    private static readonly TimeSpan HotkeyDebounceInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan HotkeyDebounceInterval = TimeSpan.FromMilliseconds(Constants.HotkeyDebounceMs);
     private bool _hasShownTrayHint;
 
     public MainWindow()
@@ -64,6 +65,18 @@ public partial class MainWindow : Window
         var volumeDuckingService = new VolumeDuckingService();
         Log.Debug("VolumeDuckingService created");
 
+        // AutoPasteService: clipboard verification runs on UI thread via Dispatcher
+        var autoPasteService = new AutoPasteService(() =>
+        {
+            bool hasText = false;
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                hasText = System.Windows.Clipboard.ContainsText();
+            });
+            return hasText;
+        });
+        Log.Debug("AutoPasteService created");
+
         // Initialize ViewModel
         Log.Info("Creating MainViewModel...");
         _viewModel = new MainViewModel(
@@ -71,7 +84,8 @@ public partial class MainWindow : Window
             _audioCaptureService,
             transcriptionService,
             clipboardService,
-            volumeDuckingService: volumeDuckingService);
+            volumeDuckingService: volumeDuckingService,
+            autoPasteService: autoPasteService);
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;
@@ -130,7 +144,7 @@ public partial class MainWindow : Window
             // Second launch - show a quick tip
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
             {
-                Toast.Show("Tip: Press the hotkey from any app to start recording", ToastNotification.ToastType.Tip, 4000);
+                Toast.Show("Tip: Press the hotkey from any app to start recording", ToastType.Tip, 4000);
             });
         }
     }
@@ -339,15 +353,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            // Map ViewModel ToastType to Control ToastType
-            var controlType = e.Type switch
-            {
-                ViewModels.ToastType.Success => Controls.ToastNotification.ToastType.Success,
-                ViewModels.ToastType.Warning => Controls.ToastNotification.ToastType.Warning,
-                ViewModels.ToastType.Tip => Controls.ToastNotification.ToastType.Tip,
-                _ => Controls.ToastNotification.ToastType.Info
-            };
-            Toast.Show(e.Message, controlType, e.DurationMs);
+            Toast.Show(e.Message, e.Type, e.DurationMs);
         });
     }
 
@@ -509,7 +515,7 @@ public partial class MainWindow : Window
         {
             Log.Debug($"History item clicked: {item.Preview}");
             _viewModel.CopyHistoryItemCommand.Execute(item);
-            Toast.Show("Copied to clipboard", ToastNotification.ToastType.Success, 2000);
+            Toast.Show("Copied to clipboard", ToastType.Success, 2000);
         }
     }
 

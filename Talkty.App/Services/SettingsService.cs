@@ -48,6 +48,18 @@ public class SettingsService : ISettingsService
             {
                 Settings.ModelsPath = DefaultModelsPath;
             }
+
+            // Populate default vocabulary on first run or if empty
+            if (Settings.CustomVocabulary == null || Settings.CustomVocabulary.Count == 0)
+            {
+                Settings.CustomVocabulary = new List<string>(DefaultVocabulary.CodingTerms);
+            }
+
+            // Populate default text replacements on first run or if empty
+            if (Settings.TextReplacements == null || Settings.TextReplacements.Count == 0)
+            {
+                Settings.TextReplacements = new Dictionary<string, string>(DefaultVocabulary.DefaultReplacements);
+            }
         }
         catch (JsonException ex)
         {
@@ -74,7 +86,11 @@ public class SettingsService : ISettingsService
         {
             EnsureDirectoriesExist();
             var json = JsonSerializer.Serialize(Settings, JsonOptions);
-            File.WriteAllText(SettingsFilePath, json);
+            // Atomic write: write to temp file first, then move over original.
+            // If the process crashes mid-write, the original file is untouched.
+            var tempPath = SettingsFilePath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, SettingsFilePath, overwrite: true);
             Log.Info($"Settings saved to {SettingsFilePath}");
         }
         catch (IOException ex)
@@ -113,7 +129,10 @@ public class SettingsService : ISettingsService
         {
             EnsureDirectoriesExist();
             var json = JsonSerializer.Serialize(history, JsonOptions);
-            File.WriteAllText(HistoryFilePath, json);
+            // Atomic write: temp file + move to avoid corruption on crash
+            var tempPath = HistoryFilePath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, HistoryFilePath, overwrite: true);
             Log.Debug($"Saved {history.Count} history entries");
         }
         catch (Exception ex)

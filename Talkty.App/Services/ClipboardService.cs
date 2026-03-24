@@ -7,7 +7,7 @@ public class ClipboardService : IClipboardService
     public bool SetText(string text)
     {
         const int maxRetries = 3;
-        const int retryDelayMs = 100;
+        const int retryDelayMs = 50;
 
         for (int i = 0; i < maxRetries; i++)
         {

@@ -18,6 +18,18 @@ public class TranscriptionService : ITranscriptionService
     public string? BackendInfo => _currentEngine?.BackendInfo;
     public IReadOnlyList<string> SupportedLanguages => _currentEngine?.SupportedLanguages ?? ["en"];
 
+    private string? _pendingVocabularyPrompt;
+
+    public void SetVocabularyPrompt(string? prompt)
+    {
+        _pendingVocabularyPrompt = prompt;
+        // If engine already exists, forward to it
+        if (_currentEngine is Engines.WhisperEngine whisper)
+        {
+            whisper.SetVocabularyPrompt(prompt);
+        }
+    }
+
     public async Task<bool> LoadModelAsync(ModelProfile profile, string modelPath, bool useGpu = false)
     {
         Log.Info($"TranscriptionService.LoadModelAsync: Profile={profile}, Path={modelPath}, UseGpu={useGpu}");
@@ -46,6 +58,12 @@ public class TranscriptionService : ITranscriptionService
                         // Create new engine
                         _currentEngine = TranscriptionEngineFactory.CreateEngine(requiredEngine);
                         Log.Info($"Created new {_currentEngine.EngineName} engine");
+
+                        // Forward pending vocabulary prompt to new engine
+                        if (_pendingVocabularyPrompt != null && _currentEngine is Engines.WhisperEngine newWhisper)
+                        {
+                            newWhisper.SetVocabularyPrompt(_pendingVocabularyPrompt);
+                        }
                     }
                 }
 
@@ -63,9 +81,11 @@ public class TranscriptionService : ITranscriptionService
     public async Task<TranscriptionResult> TranscribeAsync(
         float[] audioSamples,
         string language = "en",
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<string>? onFirstSegment = null,
+        string? vocabularyPrompt = null)
     {
-        Log.Info($"TranscriptionService.TranscribeAsync: Samples={audioSamples.Length}, Language={language}");
+        Log.Info($"TranscriptionService.TranscribeAsync: Samples={audioSamples.Length}, Language={language}{(vocabularyPrompt != null ? $", Vocabulary={vocabularyPrompt.Length} chars" : "")}");
 
         if (_currentEngine == null)
         {
@@ -104,7 +124,9 @@ public class TranscriptionService : ITranscriptionService
         var options = new TranscriptionOptions
         {
             Language = effectiveLanguage,
-            TimeoutMs = (int)ITranscriptionService.DefaultTimeout.TotalMilliseconds
+            TimeoutMs = (int)ITranscriptionService.DefaultTimeout.TotalMilliseconds,
+            OnFirstSegment = onFirstSegment,
+            VocabularyPrompt = vocabularyPrompt
         };
 
         return await _currentEngine.TranscribeAsync(audioSamples, options, cancellationToken);

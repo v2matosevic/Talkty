@@ -15,6 +15,7 @@ public class WhisperEngine : ITranscriptionEngine
     private WhisperFactory? _factory;
     private readonly object _lock = new();
     private string _currentLanguage = "en";
+    private string? _currentVocabularyPrompt;
     private bool _useGpu = false;
 
     public string EngineName => "Whisper";
@@ -200,6 +201,15 @@ public class WhisperEngine : ITranscriptionEngine
     public bool CanHandleProfile(ModelProfile profile) =>
         profile.GetEngine() == TranscriptionEngine.Whisper;
 
+    /// <summary>
+    /// Pre-sets the vocabulary prompt so the processor is built with it on model load.
+    /// Call before LoadModelAsync to avoid a rebuild on first transcription.
+    /// </summary>
+    public void SetVocabularyPrompt(string? prompt)
+    {
+        _currentVocabularyPrompt = prompt;
+    }
+
     public async Task<bool> LoadModelAsync(
         ModelProfile profile,
         string modelPath,
@@ -268,31 +278,20 @@ public class WhisperEngine : ITranscriptionEngine
                     // Log loaded whisper-related modules
                     Log.LogLoadedModules("whisper", "ggml", "cuda", "cublas");
 
-                    // For multilingual models, use auto-detect to transcribe in original language
+                    // Use "auto" for multilingual models, "en" for English-only
                     _currentLanguage = profile.SupportsAutoDetect() ? "auto" : "en";
 
-                    // Cap at 8 threads — Whisper has diminishing returns beyond that,
-                    // and over-saturating cores hurts on high-core-count machines.
-                    var threads = Math.Min(8, Environment.ProcessorCount);
-                    Log.Debug($"Building WhisperProcessor with language={_currentLanguage}, threads={threads}...");
-                    var builder = _factory.CreateBuilder()
-                        .WithThreads(threads)
-                        .WithLanguage(_currentLanguage);
-
-                    // Do NOT use WithTranslate() - transcribe in original language
-                    if (profile.SupportsAutoDetect())
-                    {
-                        Log.Debug("Whisper configured for auto language detection (transcribe in original language)");
-                    }
-                    else
-                    {
-                        Log.Debug("Whisper configured for English-only model");
-                    }
-
-                    _processor = builder.Build();
+                    var threads = GetOptimalThreadCount();
+                    Log.Debug($"Building WhisperProcessor with language={_currentLanguage}, threads={threads}, vocabulary={(!string.IsNullOrWhiteSpace(_currentVocabularyPrompt) ? $"{_currentVocabularyPrompt.Length} chars" : "none")}...");
+                    _processor = BuildProcessor(_factory, _currentLanguage, threads, profile.SupportsAutoDetect(), _currentVocabularyPrompt);
 
                     Log.Info($"WhisperProcessor built. Threads: {threads}");
                     CurrentProfile = profile;
+
+                    // Warmup: run a tiny transcription to prime JIT, GPU memory, and internal buffers.
+                    // First real transcription will be noticeably faster after this.
+                    WarmupProcessor();
+
                     return true;
                 }
                 catch (Exception ex)
@@ -305,12 +304,45 @@ public class WhisperEngine : ITranscriptionEngine
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Prime the processor with a tiny silent audio sample.
+    /// This warms up JIT compilation, GPU memory allocation, and internal whisper.cpp buffers
+    /// so the first real transcription doesn't pay a cold-start penalty.
+    /// </summary>
+    private void WarmupProcessor()
+    {
+        if (_processor == null) return;
+
+        try
+        {
+            var warmupStart = DateTime.Now;
+            // 0.5 seconds of silence at 16kHz — primes JIT, GPU memory, internal buffers
+            var silence = new float[8000];
+            using var cts = new CancellationTokenSource(5000);
+            var task = Task.Run(async () =>
+            {
+                await foreach (var segment in _processor.ProcessAsync(silence, cts.Token))
+                {
+                    // Discard — we only care about priming the pipeline
+                }
+            }, cts.Token);
+            task.Wait(cts.Token);
+            var warmupTime = DateTime.Now - warmupStart;
+            Log.Info($"Processor warmup completed in {warmupTime.TotalMilliseconds:F0}ms");
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal — warmup is best-effort
+            Log.Warning($"Processor warmup failed (non-fatal): {ex.Message}");
+        }
+    }
+
     public async Task<TranscriptionResult> TranscribeAsync(
         float[] audioSamples,
         TranscriptionOptions options,
         CancellationToken cancellationToken = default)
     {
-        var audioDuration = audioSamples.Length / 16000.0; // 16kHz sample rate
+        var audioDuration = audioSamples.Length / (double)Constants.SampleRate;
         Log.Section("TRANSCRIPTION");
         Log.Info($"Audio: {audioSamples.Length} samples ({audioDuration:F1}s)");
         Log.Info($"Language: {options.Language}");
@@ -346,11 +378,15 @@ public class WhisperEngine : ITranscriptionEngine
                 Log.Debug($"Multilingual model: using language '{targetLanguage}' for transcription");
             }
 
-            // Check if we need to rebuild processor for different language
-            if (targetLanguage != _currentLanguage && CurrentProfile != null)
+            // Check if we need to rebuild processor for different language or vocabulary
+            var vocabularyPrompt = options.VocabularyPrompt;
+            var languageChanged = targetLanguage != _currentLanguage;
+            var vocabularyChanged = vocabularyPrompt != _currentVocabularyPrompt;
+
+            if ((languageChanged || vocabularyChanged) && CurrentProfile != null)
             {
-                Log.Debug($"Language changed from {_currentLanguage} to {targetLanguage}, rebuilding processor...");
-                await RebuildProcessorForLanguage(targetLanguage);
+                Log.Debug($"Processor rebuild needed: languageChanged={languageChanged}, vocabularyChanged={vocabularyChanged}");
+                await RebuildProcessor(targetLanguage, vocabularyPrompt);
             }
 
             Log.Debug($"Starting Whisper processing with {options.TimeoutMs}ms timeout...");
@@ -358,6 +394,7 @@ public class WhisperEngine : ITranscriptionEngine
             {
                 var segments = new List<string>();
                 int segmentCount = 0;
+                bool firstSegmentFired = false;
 
                 await foreach (var segment in _processor.ProcessAsync(audioSamples, linkedCts.Token))
                 {
@@ -365,10 +402,28 @@ public class WhisperEngine : ITranscriptionEngine
                     segmentCount++;
                     Log.Debug($"Segment {segmentCount}: [{segment.Start:mm\\:ss} - {segment.End:mm\\:ss}] \"{segment.Text}\"");
                     segments.Add(segment.Text);
+
+                    // Fire first-segment callback so caller can copy to clipboard immediately
+                    if (!firstSegmentFired && options.OnFirstSegment != null && !string.IsNullOrWhiteSpace(segment.Text))
+                    {
+                        try
+                        {
+                            options.OnFirstSegment(segment.Text.Trim());
+                            firstSegmentFired = true;
+                            Log.Debug("First segment callback fired");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning($"First segment callback failed: {ex.Message}");
+                        }
+                    }
                 }
 
                 Log.Info($"Processing complete. Total segments: {segmentCount}");
-                return string.Join(" ", segments).Trim();
+                // Smart join: merges fragments split by pauses, preserves real sentence breaks
+                return segmentCount > 1
+                    ? TextPostProcessor.JoinSegments(segments)
+                    : string.Join(" ", segments).Trim();
             }, linkedCts.Token);
 
             var elapsed = DateTime.Now - startTime;
@@ -425,7 +480,63 @@ public class WhisperEngine : ITranscriptionEngine
         }
     }
 
-    private Task RebuildProcessorForLanguage(string language)
+    /// <summary>
+    /// Optimal thread count: use estimated physical cores (not logical/HT) capped at 8.
+    /// Whisper.cpp is compute-bound — hyperthreading causes cache thrashing, not speedup.
+    /// </summary>
+    private static int GetOptimalThreadCount()
+    {
+        var logicalCores = Environment.ProcessorCount;
+        var estimatedPhysicalCores = Math.Max(1, logicalCores / 2);
+        var threads = Math.Min(8, estimatedPhysicalCores);
+        Log.Debug($"Thread selection: {logicalCores} logical cores → {estimatedPhysicalCores} estimated physical → using {threads}");
+        return threads;
+    }
+
+    /// <summary>
+    /// Builds a WhisperProcessor with speed-optimized settings.
+    /// Greedy decoding (bestOf=1), no context carryover, single segment for short audio,
+    /// deterministic temperature, and no fallback retries.
+    /// </summary>
+    private static WhisperProcessor BuildProcessor(WhisperFactory factory, string language, int threads, bool isMultilingual, string? vocabularyPrompt = null)
+    {
+        // Use greedy decoding (fastest) — sub-builder sets BestOf=1 (single candidate)
+        var greedyBuilder = factory.CreateBuilder()
+            .WithGreedySamplingStrategy();
+        if (greedyBuilder is Whisper.net.GreedySamplingStrategyBuilder greedy)
+        {
+            greedy.WithBestOf(1);
+        }
+
+        // Get back to the main builder via ParentBuilder
+        var builder = greedyBuilder.ParentBuilder
+            .WithThreads(threads)
+            .WithLanguage(language)
+            // Each recording is independent — don't carry context from previous transcriptions
+            .WithNoContext()
+            // Fully deterministic: no random sampling, no temperature fallback retries
+            .WithTemperature(0f)
+            .WithTemperatureInc(0f);
+
+        if (!string.IsNullOrWhiteSpace(vocabularyPrompt))
+        {
+            builder.WithPrompt(vocabularyPrompt);
+            Log.Debug($"Vocabulary prompt applied ({vocabularyPrompt.Length} chars)");
+        }
+
+        if (isMultilingual)
+        {
+            Log.Debug("Whisper configured for auto language detection (transcribe in original language)");
+        }
+        else
+        {
+            Log.Debug("Whisper configured for English-only model");
+        }
+
+        return builder.Build();
+    }
+
+    private Task RebuildProcessor(string language, string? vocabularyPrompt)
     {
         return Task.Run(() =>
         {
@@ -433,19 +544,14 @@ public class WhisperEngine : ITranscriptionEngine
             {
                 if (_factory == null || CurrentProfile == null) return;
 
-                // Dispose old processor
                 _processor?.Dispose();
 
-                var threads = Math.Min(8, Environment.ProcessorCount);
-                var builder = _factory.CreateBuilder()
-                    .WithThreads(threads)
-                    .WithLanguage(language);
-
-                // Do NOT use WithTranslate() - transcribe in original language
-                _processor = builder.Build();
+                var threads = GetOptimalThreadCount();
+                _processor = BuildProcessor(_factory, language, threads, CurrentProfile.Value.SupportsAutoDetect(), vocabularyPrompt);
                 _currentLanguage = language;
+                _currentVocabularyPrompt = vocabularyPrompt;
 
-                Log.Info($"Processor rebuilt for language: {language}");
+                Log.Info($"Processor rebuilt for language: {language}, vocabulary: {(vocabularyPrompt != null ? $"{vocabularyPrompt.Length} chars" : "none")}");
             }
         });
     }

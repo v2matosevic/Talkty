@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Runtime.InteropServices;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,113 +11,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 {
     private bool _disposed;
 
-    // SendInput API for reliable keyboard simulation
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int vKey);
-
-    [DllImport("user32.dll")]
-    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("kernel32.dll")]
-    private static extern uint GetCurrentThreadId();
-
-    [DllImport("user32.dll")]
-    private static extern bool BringWindowToTop(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [DllImport("user32.dll")]
-    private static extern bool AllowSetForegroundWindow(int dwProcessId);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool IsIconic(IntPtr hWnd);
-
-    private const int ASFW_ANY = -1;
-    private const int SW_RESTORE = 9;
-    private const int SW_SHOW = 5;
-    private const ushort VK_CONTROL = 0x11;
-    private const ushort VK_V = 0x56;
-    private const ushort VK_MENU = 0x12;  // Alt key
-    private const ushort VK_SHIFT = 0x10;
-    private const uint INPUT_KEYBOARD = 1;
-    private const uint KEYEVENTF_KEYUP = 0x0002;
-
-    // INPUT structure for SendInput - must be properly sized for 64-bit
-    [StructLayout(LayoutKind.Sequential)]
-    private struct INPUT
-    {
-        public uint type;
-        public INPUTUNION u;
-
-        public static int Size => Marshal.SizeOf(typeof(INPUT));
-    }
-
-    // Union - use explicit layout with proper padding for 64-bit
-    [StructLayout(LayoutKind.Explicit)]
-    private struct INPUTUNION
-    {
-        [FieldOffset(0)] public MOUSEINPUT mi;
-        [FieldOffset(0)] public KEYBDINPUT ki;
-        [FieldOffset(0)] public HARDWAREINPUT hi;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MOUSEINPUT
-    {
-        public int dx;
-        public int dy;
-        public uint mouseData;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct HARDWAREINPUT
-    {
-        public uint uMsg;
-        public ushort wParamL;
-        public ushort wParamH;
-    }
-
     private readonly ISettingsService _settingsService;
     private readonly IAudioCaptureService _audioCaptureService;
     private readonly ITranscriptionService _transcriptionService;
     private readonly IClipboardService _clipboardService;
     private readonly IUpdateService _updateService;
     private readonly IVolumeDuckingService? _volumeDuckingService;
-
-    // Store the foreground window when recording starts for auto-paste
-    private IntPtr _targetWindowHandle = IntPtr.Zero;
+    private readonly IAutoPasteService _autoPasteService;
 
     [ObservableProperty]
     private string _statusText = "Ready";
@@ -172,7 +71,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ITranscriptionService transcriptionService,
         IClipboardService clipboardService,
         IUpdateService? updateService = null,
-        IVolumeDuckingService? volumeDuckingService = null)
+        IVolumeDuckingService? volumeDuckingService = null,
+        IAutoPasteService? autoPasteService = null)
     {
         Log.Info("MainViewModel constructor starting");
 
@@ -182,6 +82,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _clipboardService = clipboardService;
         _updateService = updateService ?? new UpdateService();
         _volumeDuckingService = volumeDuckingService;
+        _autoPasteService = autoPasteService ?? throw new ArgumentNullException(nameof(autoPasteService));
 
         _audioCaptureService.AudioLevelChanged += OnAudioLevelChanged;
         Log.Debug("AudioLevelChanged event handler attached");
@@ -192,34 +93,49 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private async void LoadSettingsAndModel()
     {
-        Log.Info("LoadSettingsAndModel starting");
-
-        _settingsService.Load();
-        var settings = _settingsService.Settings;
-        Log.Debug($"Settings loaded. ModelProfile: {settings.ModelProfile}, Mic: {settings.SelectedMicrophoneId ?? "default"}");
-
-        ModelProfileDisplay = settings.ModelProfile.GetDisplayName();
-
-        if (!string.IsNullOrEmpty(settings.SelectedMicrophoneId))
+        try
         {
-            _audioCaptureService.SelectDevice(settings.SelectedMicrophoneId);
-            Log.Debug($"Audio device selected: {settings.SelectedMicrophoneId}");
-        }
+            Log.Info("LoadSettingsAndModel starting");
 
-        // Initialize volume ducking level from settings
-        if (_volumeDuckingService != null)
+            _settingsService.Load();
+            var settings = _settingsService.Settings;
+            Log.Debug($"Settings loaded. ModelProfile: {settings.ModelProfile}, Mic: {settings.SelectedMicrophoneId ?? "default"}");
+
+            ModelProfileDisplay = settings.ModelProfile.GetDisplayName();
+
+            if (!string.IsNullOrEmpty(settings.SelectedMicrophoneId))
+            {
+                _audioCaptureService.SelectDevice(settings.SelectedMicrophoneId);
+                Log.Debug($"Audio device selected: {settings.SelectedMicrophoneId}");
+            }
+
+            // Initialize volume ducking level from settings
+            if (_volumeDuckingService != null)
+            {
+                _volumeDuckingService.DuckLevel = settings.VolumeDuckLevel;
+                Log.Debug($"Volume duck level set to: {settings.VolumeDuckLevel:P0}");
+            }
+
+            // Load persisted history
+            LoadPersistedHistory();
+
+            // Pre-set vocabulary prompt so the processor is built with it from the start
+            // (avoids a processor rebuild on the first transcription)
+            if (settings.UseCustomVocabulary)
+            {
+                _transcriptionService.SetVocabularyPrompt(DefaultVocabulary.PromptContext);
+            }
+
+            await LoadModelAsync(settings.ModelProfile, settings.UseGpu);
+
+            // Check for updates in background (non-blocking)
+            _ = CheckForUpdatesAsync();
+        }
+        catch (Exception ex)
         {
-            _volumeDuckingService.DuckLevel = settings.VolumeDuckLevel;
-            Log.Debug($"Volume duck level set to: {settings.VolumeDuckLevel:P0}");
+            Log.Error("LoadSettingsAndModel failed — app may be in degraded state", ex);
+            StatusText = "Startup error — check settings";
         }
-
-        // Load persisted history
-        LoadPersistedHistory();
-
-        await LoadModelAsync(settings.ModelProfile, settings.UseGpu);
-
-        // Check for updates in background (non-blocking)
-        _ = CheckForUpdatesAsync();
     }
 
     public async Task CheckForUpdatesAsync()
@@ -246,7 +162,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var entries = _settingsService.LoadHistory();
-            foreach (var entry in entries.Take(50)) // Limit to 50 entries
+            foreach (var entry in entries.Take(Constants.MaxHistoryEntries))
             {
                 History.Add(new TranscriptionHistoryItem
                 {
@@ -417,7 +333,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             RecordingStopped?.Invoke(this, EventArgs.Empty);
 
             // Reset status after short delay
-            Task.Delay(1000).ContinueWith(_ =>
+            Task.Delay(Constants.StatusResetDelayMs).ContinueWith(_ =>
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -442,9 +358,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         bool volumeDucked = false;
         try
         {
-            // Capture the foreground window BEFORE showing overlay (for auto-paste later)
-            _targetWindowHandle = GetForegroundWindow();
-            Log.Debug($"Target window for auto-paste: {_targetWindowHandle}");
 
             // Duck system volume if enabled
             if (_settingsService.Settings.DuckVolumeWhileRecording && _volumeDuckingService != null)
@@ -480,6 +393,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
+            // Capture the foreground window NOW (at stop time) — this is the app
+            // the user is currently looking at and wants to paste into.
+            _autoPasteService.CaptureTargetWindow();
+
+            // Claim foreground privilege IMMEDIATELY on the UI thread.
+            // Windows only grants SetForegroundWindow permission to the thread
+            // that last received user input (our hotkey). If we wait until after
+            // transcription (~1s later), the privilege expires and paste fails.
+            _autoPasteService.ClaimForegroundPrivilege();
+
             Log.Debug("Calling AudioCaptureService.StopRecording()");
             _audioCaptureService.StopRecording();
 
@@ -497,7 +420,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             Log.Debug("Getting recorded audio samples");
             var audioSamples = _audioCaptureService.GetRecordedAudioAsFloat();
-            Log.Info($"Audio samples: {audioSamples.Length} ({audioSamples.Length / 16000.0:F1}s at 16kHz)");
+            Log.Info($"Audio samples: {audioSamples.Length} ({audioSamples.Length / (float)Constants.SampleRate:F1}s at 16kHz)");
 
             if (audioSamples.Length == 0)
             {
@@ -508,21 +431,83 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            // Trim leading/trailing silence — reduces audio Whisper must process (10-25% faster)
+            audioSamples = TrimSilence(audioSamples);
+
             Log.Info("Starting transcription...");
             var startTime = DateTime.Now;
             var language = _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language;
-            var result = await _transcriptionService.TranscribeAsync(audioSamples, language);
+
+            // Build vocabulary prompt — use contextual sentences for stronger Whisper bias
+            string? vocabularyPrompt = null;
+            if (_settingsService.Settings.UseCustomVocabulary)
+            {
+                vocabularyPrompt = DefaultVocabulary.PromptContext;
+                Log.Debug($"Vocabulary prompt: {vocabularyPrompt.Length} chars");
+            }
+
+            // Load text replacements for post-processing (applied after Whisper output)
+            var textReplacements = _settingsService.Settings.UseCustomVocabulary
+                ? _settingsService.Settings.TextReplacements
+                : null;
+
+            // Streaming callback: copy first segment to clipboard immediately (before full transcription completes).
+            // This lets clipboard-only users paste sooner. Auto-paste waits for full text.
+            Action<string>? onFirstSegment = null;
+            if (_settingsService.Settings.CopyToClipboard)
+            {
+                onFirstSegment = (text) =>
+                {
+                    try
+                    {
+                        // Apply post-processing to streamed segment too
+                        if (textReplacements is { Count: > 0 })
+                            text = TextPostProcessor.ApplyReplacements(text, textReplacements);
+
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            _clipboardService.SetText(text);
+                        });
+                        Log.Info($"First segment → clipboard ({text.Length} chars)");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"First segment clipboard copy failed: {ex.Message}");
+                    }
+                };
+            }
+
+            var result = await _transcriptionService.TranscribeAsync(audioSamples, language, default, onFirstSegment, vocabularyPrompt);
             var elapsed = DateTime.Now - startTime;
 
             Log.Info($"Transcription completed in {elapsed.TotalSeconds:F1}s. Success: {result.Success}");
 
             if (result.Success && !string.IsNullOrWhiteSpace(result.Text))
             {
+                // Strip Whisper hallucinations (e.g., "Thank you for watching", "[MUSIC]")
+                result.Text = TextPostProcessor.StripHallucinations(result.Text);
+
+                // Apply deterministic text replacements (cloud→Claude, etc.)
+                if (textReplacements is { Count: > 0 })
+                {
+                    var original = result.Text;
+                    var corrected = TextPostProcessor.ApplyReplacements(original, textReplacements);
+                    if (corrected != original)
+                    {
+                        result.Text = corrected;
+                        Log.Info($"Post-processing: \"{original}\" → \"{corrected}\"");
+                    }
+                }
+
+                // Clean up punctuation: merge false sentence breaks, normalize spacing
+                result.Text = TextPostProcessor.CleanupPunctuation(result.Text);
+
                 Log.Info($"Transcribed text ({result.Text.Length} chars): \"{result.Text}\"");
 
                 if (_settingsService.Settings.CopyToClipboard)
                 {
-                    Log.Debug("Copying to clipboard");
+                    // Update clipboard with full text (overwrites first-segment partial if multi-segment)
+                    Log.Debug("Copying full text to clipboard");
                     bool clipboardSuccess = false;
                     Application.Current.Dispatcher.Invoke(() =>
                     {
@@ -532,13 +517,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                     if (_settingsService.Settings.AutoPaste && clipboardSuccess)
                     {
-                        // Brief settle time for focus restoration — transcription is already done
+                        // Run paste on thread pool so Thread.Sleep calls don't block UI thread.
+                        // Overlay stays visible during paste — hiding it would cause focus changes.
                         Log.Debug("Auto-pasting at cursor");
-                        await Task.Delay(80);
-                        SimulatePaste();
+                        var textForClipboard = result.Text;
+                        await Task.Run(() => _autoPasteService.PasteToTargetWindow(
+                            ensureClipboardText: () =>
+                            {
+                                // Re-set clipboard right before Ctrl+V — focus switching can
+                                // cause some apps to clear or claim the clipboard.
+                                Application.Current.Dispatcher.Invoke(() =>
+                                {
+                                    _clipboardService.SetText(textForClipboard);
+                                });
+                            }));
                     }
                 }
 
+                StatusText = "Copied to clipboard";
+
+                // History update + disk persist — fire-and-forget, don't block status reset
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     History.Insert(0, new TranscriptionHistoryItem
@@ -548,16 +546,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         Duration = result.Duration
                     });
 
-                    if (History.Count > 50)
+                    if (History.Count > Constants.MaxHistoryEntries)
                     {
                         History.RemoveAt(History.Count - 1);
                     }
-
-                    // Persist to disk
-                    SaveHistoryToDisk();
                 });
-
-                StatusText = "Copied to clipboard";
+                _ = Task.Run(SaveHistoryToDisk);
             }
             else
             {
@@ -565,13 +559,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 StatusText = result.ErrorMessage ?? "Transcription failed";
             }
 
+            // Hide overlay AFTER auto-paste completes — hiding before paste causes focus loss
             IsTranscribing = false;
-
-            await Task.Delay(400);
-            Log.Debug("Raising RequestHideOverlay");
             RequestHideOverlay?.Invoke(this, EventArgs.Empty);
 
-            await Task.Delay(200);
+            // Brief pause so user sees "Copied to clipboard" before resetting
+            await Task.Delay(100);
             if (!IsListening && !IsTranscribing)
             {
                 StatusText = "Ready";
@@ -593,233 +586,66 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Trims leading and trailing silence from audio samples.
+    /// Uses RMS energy in 100ms windows with a 200ms safety margin on each end.
+    /// Reduces audio Whisper must process — typically 10-25% faster inference.
+    /// </summary>
+    private static float[] TrimSilence(float[] samples, float threshold = 0.01f)
+    {
+        const int sampleRate = Constants.SampleRate;
+        const int windowSize = sampleRate / 10; // 100ms windows
+        const int marginSamples = sampleRate / 5; // 200ms safety margin
+
+        if (samples.Length < windowSize * 3)
+            return samples; // Too short to trim meaningfully
+
+        // Find first non-silent window from start
+        int start = 0;
+        for (int i = 0; i <= samples.Length - windowSize; i += windowSize)
+        {
+            float sumSquares = 0;
+            for (int j = 0; j < windowSize; j++)
+                sumSquares += samples[i + j] * samples[i + j];
+            float rms = MathF.Sqrt(sumSquares / windowSize);
+
+            if (rms > threshold)
+            {
+                start = Math.Max(0, i - marginSamples);
+                break;
+            }
+        }
+
+        // Find last non-silent window from end
+        int end = samples.Length;
+        for (int i = samples.Length - windowSize; i >= 0; i -= windowSize)
+        {
+            float sumSquares = 0;
+            for (int j = 0; j < windowSize; j++)
+                sumSquares += samples[i + j] * samples[i + j];
+            float rms = MathF.Sqrt(sumSquares / windowSize);
+
+            if (rms > threshold)
+            {
+                end = Math.Min(samples.Length, i + windowSize + marginSamples);
+                break;
+            }
+        }
+
+        if (start >= end || (start == 0 && end == samples.Length))
+            return samples; // Nothing to trim
+
+        var trimmed = samples[start..end];
+        var trimmedDuration = trimmed.Length / (float)sampleRate;
+        var originalDuration = samples.Length / (float)sampleRate;
+        Log.Info($"Silence trimmed: {originalDuration:F1}s → {trimmedDuration:F1}s (removed {originalDuration - trimmedDuration:F1}s)");
+        return trimmed;
+    }
+
     private void OnAudioLevelChanged(object? sender, float level)
     {
         // InvokeAsync (fire-and-forget) so the NAudio callback thread never blocks on UI
         Application.Current.Dispatcher.InvokeAsync(() => AudioLevel = level);
-    }
-
-    private void SimulatePaste()
-    {
-        // Robust auto-paste approach:
-        // 1. Wait for modifier keys to be released (user just pressed Alt+Q)
-        // 2. Restore focus to the target window we captured when recording started
-        // 3. Verify clipboard contains our text
-        // 4. Small delay for window activation to complete
-        // 5. Send Ctrl+V with retry
-
-        try
-        {
-            Log.Debug($"SimulatePaste starting. Target window: {_targetWindowHandle}");
-
-            // Validate target window
-            if (_targetWindowHandle == IntPtr.Zero || !IsWindow(_targetWindowHandle))
-            {
-                Log.Warning("Target window handle is invalid");
-                return;
-            }
-
-            // Wait for modifier keys (especially Alt from Alt+Q hotkey) to be released
-            WaitForModifierKeysRelease();
-
-            // Verify clipboard is ready
-            if (!VerifyClipboardReady())
-            {
-                Log.Warning("Clipboard not ready after waiting");
-            }
-
-            // Restore focus to the original target window
-            if (!RestoreFocusToTargetWindow())
-            {
-                Log.Warning("Failed to restore focus, attempting paste anyway");
-            }
-
-            // Small delay for window activation to complete
-            Thread.Sleep(100);
-
-            // Verify focus one more time
-            var currentForeground = GetForegroundWindow();
-            if (currentForeground != _targetWindowHandle)
-            {
-                Log.Warning($"Focus mismatch before paste. Current: {currentForeground}, Target: {_targetWindowHandle}");
-                // Try one more time
-                SetForegroundWindow(_targetWindowHandle);
-                Thread.Sleep(50);
-            }
-
-            // Send Ctrl+V
-            SendCtrlV();
-
-            Log.Info("Auto-paste completed");
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Failed to simulate paste", ex);
-        }
-    }
-
-    private bool VerifyClipboardReady()
-    {
-        // Give clipboard a moment to stabilize and verify it has content
-        for (int i = 0; i < 5; i++)
-        {
-            try
-            {
-                bool hasText = false;
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    hasText = System.Windows.Clipboard.ContainsText();
-                });
-
-                if (hasText)
-                {
-                    Log.Debug($"Clipboard verified ready on attempt {i + 1}");
-                    return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Debug($"Clipboard check attempt {i + 1} failed: {ex.Message}");
-            }
-            Thread.Sleep(20);
-        }
-        return false;
-    }
-
-    private bool RestoreFocusToTargetWindow()
-    {
-        try
-        {
-            Log.Debug($"Restoring focus to window: {_targetWindowHandle}");
-
-            // Check if window is minimized and restore it
-            if (IsIconic(_targetWindowHandle))
-            {
-                Log.Debug("Window is minimized, restoring...");
-                ShowWindow(_targetWindowHandle, SW_RESTORE);
-                Thread.Sleep(50);
-            }
-
-            // Get our thread and target thread IDs for attaching input
-            uint currentThreadId = GetCurrentThreadId();
-            uint targetThreadId = GetWindowThreadProcessId(_targetWindowHandle, out _);
-
-            Log.Debug($"Current thread: {currentThreadId}, Target thread: {targetThreadId}");
-
-            bool attached = false;
-            if (currentThreadId != targetThreadId)
-            {
-                attached = AttachThreadInput(currentThreadId, targetThreadId, true);
-                Log.Debug($"AttachThreadInput result: {attached}");
-            }
-
-            try
-            {
-                // Allow any process to set foreground window
-                AllowSetForegroundWindow(ASFW_ANY);
-
-                // Bring window to top
-                BringWindowToTop(_targetWindowHandle);
-
-                // Set foreground window
-                var result = SetForegroundWindow(_targetWindowHandle);
-                Log.Debug($"SetForegroundWindow result: {result}");
-
-                // Check what window is actually in foreground now
-                var currentForeground = GetForegroundWindow();
-                var success = currentForeground == _targetWindowHandle;
-                Log.Debug($"Current foreground after restore: {currentForeground}, Target: {_targetWindowHandle}, Match: {success}");
-                return success;
-            }
-            finally
-            {
-                // Detach thread input
-                if (attached)
-                {
-                    AttachThreadInput(currentThreadId, targetThreadId, false);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Failed to restore focus to target window", ex);
-            return false;
-        }
-    }
-
-    private void WaitForModifierKeysRelease()
-    {
-        // Wait up to 500ms for Alt, Ctrl, Shift to be released
-        // This is critical because the user just pressed Alt+Q to stop recording
-        var timeout = DateTime.Now.AddMilliseconds(500);
-        while (DateTime.Now < timeout)
-        {
-            bool altPressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-            bool ctrlPressed = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            bool shiftPressed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-
-            if (!altPressed && !ctrlPressed && !shiftPressed)
-            {
-                Log.Debug("All modifier keys released");
-                return;
-            }
-
-            Thread.Sleep(10);
-        }
-        Log.Warning("Timeout waiting for modifier keys to release");
-    }
-
-    private void SendCtrlV()
-    {
-        var inputs = new INPUT[4];
-
-        // Get the size once and log it for debugging
-        int inputSize = INPUT.Size;
-        Log.Debug($"INPUT struct size: {inputSize} bytes");
-
-        // Ctrl down
-        inputs[0] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[0].u.ki.wVk = VK_CONTROL;
-        inputs[0].u.ki.wScan = 0;
-        inputs[0].u.ki.dwFlags = 0;
-        inputs[0].u.ki.time = 0;
-        inputs[0].u.ki.dwExtraInfo = IntPtr.Zero;
-
-        // V down
-        inputs[1] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[1].u.ki.wVk = VK_V;
-        inputs[1].u.ki.wScan = 0;
-        inputs[1].u.ki.dwFlags = 0;
-        inputs[1].u.ki.time = 0;
-        inputs[1].u.ki.dwExtraInfo = IntPtr.Zero;
-
-        // V up
-        inputs[2] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[2].u.ki.wVk = VK_V;
-        inputs[2].u.ki.wScan = 0;
-        inputs[2].u.ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs[2].u.ki.time = 0;
-        inputs[2].u.ki.dwExtraInfo = IntPtr.Zero;
-
-        // Ctrl up
-        inputs[3] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[3].u.ki.wVk = VK_CONTROL;
-        inputs[3].u.ki.wScan = 0;
-        inputs[3].u.ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs[3].u.ki.time = 0;
-        inputs[3].u.ki.dwExtraInfo = IntPtr.Zero;
-
-        var result = SendInput((uint)inputs.Length, inputs, inputSize);
-
-        if (result != inputs.Length)
-        {
-            var error = Marshal.GetLastWin32Error();
-            Log.Error($"SendInput failed. Sent: {result}/{inputs.Length}, Error: {error}, Size: {inputSize}");
-        }
-        else
-        {
-            Log.Debug($"Ctrl+V sent successfully ({result} inputs)");
-        }
     }
 
     [RelayCommand]
@@ -898,6 +724,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _volumeDuckingService.DuckLevel = settings.VolumeDuckLevel;
         }
         _settingsService.Settings.HotkeyKey = settings.HotkeyKey;
+
+        // Save vocabulary settings
+        _settingsService.Settings.UseCustomVocabulary = settings.UseCustomVocabulary;
+        _settingsService.Settings.CustomVocabulary = settings.CustomVocabulary;
+        _settingsService.Settings.TextReplacements = settings.TextReplacements;
+
         _settingsService.Save();
 
         _audioCaptureService.SelectDevice(settings.SelectedMicrophoneId);
@@ -967,19 +799,4 @@ public class TranscriptionHistoryItem
 
     public string Preview => Text.Length > 60 ? Text[..57] + "..." : Text;
     public string TimeDisplay => Timestamp.ToString("HH:mm:ss");
-}
-
-public enum ToastType
-{
-    Info,
-    Success,
-    Warning,
-    Tip
-}
-
-public class ToastEventArgs : EventArgs
-{
-    public string Message { get; init; } = "";
-    public ToastType Type { get; init; } = ToastType.Info;
-    public int DurationMs { get; init; } = 3000;
 }

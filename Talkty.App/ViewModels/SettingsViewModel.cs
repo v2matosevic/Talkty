@@ -95,48 +95,21 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _downloadTimeRemaining = "";
 
-    // Model download status for each profile
+    // Vocabulary
     [ObservableProperty]
-    private bool _tinyModelDownloaded;
+    private bool _useCustomVocabulary = true;
 
     [ObservableProperty]
-    private bool _baseModelDownloaded;
+    private string _customVocabularyText = "";
 
-    [ObservableProperty]
-    private bool _smallModelDownloaded;
-
-    [ObservableProperty]
-    private bool _mediumModelDownloaded;
-
-    [ObservableProperty]
-    private bool _largeModelDownloaded;
-
-    [ObservableProperty]
-    private bool _largeTurboModelDownloaded;
-
-    [ObservableProperty]
-    private bool _distilLargeV3ModelDownloaded;
-
-    [ObservableProperty]
-    private bool _senseVoiceModelDownloaded;
+    // Data-driven model collections
+    public ObservableCollection<ModelProfileViewModel> LowEndModels { get; } = [];
+    public ObservableCollection<ModelProfileViewModel> MidRangeModels { get; } = [];
+    public ObservableCollection<ModelProfileViewModel> HighEndModels { get; } = [];
+    private readonly List<ModelProfileViewModel> _allModels = [];
 
     public event EventHandler<AppSettings>? SettingsSaved;
     public event EventHandler? CloseRequested;
-
-    // All available model profiles, organized by category
-    public IReadOnlyList<ModelProfile> AvailableProfiles { get; } =
-    [
-        // Recommended models first
-        ModelProfile.LargeTurbo,     // Best multilingual balance
-        ModelProfile.DistilLargeV3,  // Fastest English
-        ModelProfile.SenseVoice,     // Ultra fast, 50+ languages
-        // Classic Whisper models
-        ModelProfile.Tiny,
-        ModelProfile.Base,
-        ModelProfile.Small,
-        ModelProfile.Medium,
-        ModelProfile.Large
-    ];
 
     public IReadOnlyList<LanguageOption> AvailableLanguages { get; } =
     [
@@ -172,9 +145,44 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         _audioCaptureService.AudioLevelChanged += OnAudioLevelChanged;
 
+        InitializeModelProfiles();
         LoadSettings();
         LoadAudioDevices();
         RefreshModelStatus();
+    }
+
+    private void InitializeModelProfiles()
+    {
+        // Low-End PCs (4GB RAM)
+        AddModel(LowEndModels, ModelProfile.Tiny, "Tiny", "English only, fastest (75 MB)");
+        AddModel(LowEndModels, ModelProfile.Base, "Base", "English only, fast (142 MB)");
+
+        // Mid-Range PCs (8GB RAM)
+        AddModel(MidRangeModels, ModelProfile.Small, "Small", "English only, balanced (466 MB)");
+        AddModel(MidRangeModels, ModelProfile.SmallQ5, "Small Lite", "English, quantized for CPU (190 MB)", "Quantized", "#06B6D4");
+        AddModel(MidRangeModels, ModelProfile.DistilLargeV3, "Distil Large v3", "English only, fastest Whisper (756 MB)", "Best English", "#F59E0B");
+
+        // High-End PCs (16GB+ RAM, GPU)
+        AddModel(HighEndModels, ModelProfile.LargeTurbo, "Large v3 Turbo", "99+ languages, 6x faster than Large (1.6 GB)", "Recommended", "#8B5CF6");
+        AddModel(HighEndModels, ModelProfile.Medium, "Medium", "English only, accurate (1.5 GB)");
+        AddModel(HighEndModels, ModelProfile.MediumQ5, "Medium Lite", "English, quantized for CPU (539 MB)", "Quantized", "#06B6D4");
+        AddModel(HighEndModels, ModelProfile.SenseVoice, "SenseVoice", "zh/en/ja/ko, 15x faster than Whisper (1 GB)", "Ultra Fast", "#10B981");
+        AddModel(HighEndModels, ModelProfile.Large, "Large v3", "99+ languages, best accuracy (3.1 GB)");
+        AddModel(HighEndModels, ModelProfile.LargeTurboQ5, "Large Turbo Lite", "Multilingual, quantized for CPU (574 MB)", "Quantized", "#06B6D4");
+    }
+
+    private void AddModel(ObservableCollection<ModelProfileViewModel> category, ModelProfile profile, string name, string description, string? badge = null, string badgeColor = "#8B5CF6")
+    {
+        var vm = new ModelProfileViewModel
+        {
+            Profile = profile,
+            Name = name,
+            Description = description,
+            BadgeText = badge,
+            BadgeColor = badgeColor
+        };
+        category.Add(vm);
+        _allModels.Add(vm);
     }
 
     partial void OnSelectedProfileChanged(ModelProfile value)
@@ -186,35 +194,25 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     public void RefreshModelStatus()
     {
-        TinyModelDownloaded = _settingsService.ModelExists(ModelProfile.Tiny);
-        BaseModelDownloaded = _settingsService.ModelExists(ModelProfile.Base);
-        SmallModelDownloaded = _settingsService.ModelExists(ModelProfile.Small);
-        MediumModelDownloaded = _settingsService.ModelExists(ModelProfile.Medium);
-        LargeModelDownloaded = _settingsService.ModelExists(ModelProfile.Large);
-        LargeTurboModelDownloaded = _settingsService.ModelExists(ModelProfile.LargeTurbo);
-        DistilLargeV3ModelDownloaded = _settingsService.ModelExists(ModelProfile.DistilLargeV3);
-        SenseVoiceModelDownloaded = _settingsService.ModelExists(ModelProfile.SenseVoice);
+        foreach (var model in _allModels)
+        {
+            model.IsDownloaded = _settingsService.ModelExists(model.Profile);
+        }
     }
 
-    public bool IsSelectedModelDownloaded => SelectedProfile switch
-    {
-        ModelProfile.Tiny => TinyModelDownloaded,
-        ModelProfile.Base => BaseModelDownloaded,
-        ModelProfile.Small => SmallModelDownloaded,
-        ModelProfile.Medium => MediumModelDownloaded,
-        ModelProfile.Large => LargeModelDownloaded,
-        ModelProfile.LargeTurbo => LargeTurboModelDownloaded,
-        ModelProfile.DistilLargeV3 => DistilLargeV3ModelDownloaded,
-        ModelProfile.SenseVoice => SenseVoiceModelDownloaded,
-        _ => false
-    };
-
-    public bool AnyModelNotDownloaded =>
-        !TinyModelDownloaded || !BaseModelDownloaded || !SmallModelDownloaded ||
-        !MediumModelDownloaded || !LargeModelDownloaded || !LargeTurboModelDownloaded ||
-        !DistilLargeV3ModelDownloaded || !SenseVoiceModelDownloaded;
+    public bool IsSelectedModelDownloaded =>
+        _allModels.FirstOrDefault(m => m.Profile == SelectedProfile)?.IsDownloaded ?? false;
 
     public string SelectedModelSizeDisplay => SelectedProfile.GetSizeDisplay();
+
+    [RelayCommand]
+    public void SelectModel(ModelProfileViewModel? model)
+    {
+        if (model != null)
+        {
+            SelectedProfile = model.Profile;
+        }
+    }
 
     private void OnAudioLevelChanged(object? sender, float level)
     {
@@ -244,6 +242,17 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         HotkeyModifier = settings.HotkeyModifier;
         HotkeyKey = settings.HotkeyKey;
         UpdateHotkeyText();
+
+        // Load vocabulary settings
+        UseCustomVocabulary = settings.UseCustomVocabulary;
+        if (settings.CustomVocabulary is { Count: > 0 })
+        {
+            CustomVocabularyText = string.Join(", ", settings.CustomVocabulary);
+        }
+        else
+        {
+            CustomVocabularyText = string.Join(", ", DefaultVocabulary.CodingTerms);
+        }
     }
 
     private void UpdateHotkeyText()
@@ -374,7 +383,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 DownloadStatusText = "Download complete!";
                 RefreshModelStatus();
                 OnPropertyChanged(nameof(IsSelectedModelDownloaded));
-                OnPropertyChanged(nameof(AnyModelNotDownloaded));
             }
             else
             {
@@ -452,6 +460,17 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
 
         var languageCode = SelectedLanguage?.Code ?? "auto";
+
+        // Parse vocabulary text back to list
+        List<string>? vocabularyList = null;
+        if (!string.IsNullOrWhiteSpace(CustomVocabularyText))
+        {
+            vocabularyList = CustomVocabularyText
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+        }
+
         var settings = new AppSettings
         {
             ModelProfile = SelectedProfile,
@@ -466,11 +485,21 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             VolumeDuckLevel = VolumeDuckPercent / 100f,
             ModelsPath = ModelsPath,
             HotkeyModifier = HotkeyModifier,
-            HotkeyKey = HotkeyKey
+            HotkeyKey = HotkeyKey,
+            UseCustomVocabulary = UseCustomVocabulary,
+            CustomVocabulary = vocabularyList
         };
 
         SettingsSaved?.Invoke(this, settings);
         CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    public void ResetVocabularyToDefaults()
+    {
+        CustomVocabularyText = string.Join(", ", DefaultVocabulary.CodingTerms);
+        UseCustomVocabulary = true;
+        Log.Info("Vocabulary reset to defaults");
     }
 
     [RelayCommand]

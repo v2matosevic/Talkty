@@ -20,7 +20,12 @@ public enum ModelProfile
     DistilLargeV3,  // distil-large-v3 - Fastest English, near Large accuracy
 
     // SenseVoice (Alibaba) - 50+ languages, 15x faster than Whisper-Large
-    SenseVoice
+    SenseVoice,
+
+    // Quantized models — smaller download, faster inference, ~same accuracy
+    SmallQ5,        // small.en quantized - 190 MB vs 466 MB, ideal for CPU
+    LargeTurboQ5,   // large-v3-turbo quantized - 574 MB vs 1.6 GB, ideal for CPU multilingual
+    MediumQ5        // medium.en quantized - 539 MB vs 1.5 GB, ideal for CPU
 }
 
 /// <summary>
@@ -39,13 +44,6 @@ public static class ModelProfileExtensions
     /// </summary>
     public static TranscriptionEngine GetEngine(this ModelProfile profile) => profile switch
     {
-        ModelProfile.Tiny => TranscriptionEngine.Whisper,
-        ModelProfile.Base => TranscriptionEngine.Whisper,
-        ModelProfile.Small => TranscriptionEngine.Whisper,
-        ModelProfile.Medium => TranscriptionEngine.Whisper,
-        ModelProfile.Large => TranscriptionEngine.Whisper,
-        ModelProfile.LargeTurbo => TranscriptionEngine.Whisper,
-        ModelProfile.DistilLargeV3 => TranscriptionEngine.Whisper,
         ModelProfile.SenseVoice => TranscriptionEngine.SherpaOnnx,
         _ => TranscriptionEngine.Whisper
     };
@@ -63,6 +61,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => "ggml-large-v3-turbo.bin",
         ModelProfile.DistilLargeV3 => "ggml-distil-large-v3.bin",
         ModelProfile.SenseVoice => "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
+        ModelProfile.SmallQ5 => "ggml-small.en-q5_1.bin",
+        ModelProfile.LargeTurboQ5 => "ggml-large-v3-turbo-q5_0.bin",
+        ModelProfile.MediumQ5 => "ggml-medium.en-q5_0.bin",
         _ => "ggml-tiny.en.bin"
     };
 
@@ -79,6 +80,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => "Large v3 Turbo (1.6 GB) - Fast & Multilingual",
         ModelProfile.DistilLargeV3 => "Distil Large v3 (756 MB) - Fastest English",
         ModelProfile.SenseVoice => "SenseVoice (1 GB) - Ultra Fast",
+        ModelProfile.SmallQ5 => "Small Lite (190 MB) - Fast English, Low RAM",
+        ModelProfile.LargeTurboQ5 => "Large Turbo Lite (574 MB) - Fast Multilingual, Low RAM",
+        ModelProfile.MediumQ5 => "Medium Lite (539 MB) - Accurate English, Low RAM",
         _ => "Unknown"
     };
 
@@ -95,6 +99,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => "99+ languages. 6x faster than Large, recommended for multilingual.",
         ModelProfile.DistilLargeV3 => "English only. Near-Large accuracy at 6x speed.",
         ModelProfile.SenseVoice => "50+ languages. 15x faster than Whisper-Large. Alibaba model.",
+        ModelProfile.SmallQ5 => "English only. Quantized for speed — ideal for CPU-only systems.",
+        ModelProfile.LargeTurboQ5 => "99+ languages. Quantized — best for CPU/iGPU systems.",
+        ModelProfile.MediumQ5 => "English only. Quantized for speed — good accuracy on slower hardware.",
         _ => ""
     };
 
@@ -113,6 +120,10 @@ public static class ModelProfileExtensions
         ModelProfile.DistilLargeV3 => "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin",
         // SherpaOnnx models - these are directories, handled differently
         ModelProfile.SenseVoice => "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+        // Quantized models from HuggingFace
+        ModelProfile.SmallQ5 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin",
+        ModelProfile.LargeTurboQ5 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+        ModelProfile.MediumQ5 => "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en-q5_0.bin",
         _ => ""
     };
 
@@ -129,6 +140,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => 1_620_000_000, // ~1.6 GB
         ModelProfile.DistilLargeV3 => 756_000_000, // ~756 MB
         ModelProfile.SenseVoice => 1_050_000_000, // ~1 GB (compressed archive)
+        ModelProfile.SmallQ5 => 190_000_000,    // ~190 MB
+        ModelProfile.LargeTurboQ5 => 574_000_000, // ~574 MB
+        ModelProfile.MediumQ5 => 539_000_000,   // ~539 MB
         _ => 0
     };
 
@@ -145,6 +159,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => "1.6 GB",
         ModelProfile.DistilLargeV3 => "756 MB",
         ModelProfile.SenseVoice => "1 GB",
+        ModelProfile.SmallQ5 => "190 MB",
+        ModelProfile.LargeTurboQ5 => "574 MB",
+        ModelProfile.MediumQ5 => "539 MB",
         _ => "Unknown"
     };
 
@@ -153,13 +170,9 @@ public static class ModelProfileExtensions
     /// </summary>
     public static string[] GetSupportedLanguages(this ModelProfile profile) => profile switch
     {
-        ModelProfile.Tiny => ["en"],
-        ModelProfile.Base => ["en"],
-        ModelProfile.Small => ["en"],
-        ModelProfile.Medium => ["en"],
         ModelProfile.Large => GetWhisperMultilingualLanguages(),
         ModelProfile.LargeTurbo => GetWhisperMultilingualLanguages(),
-        ModelProfile.DistilLargeV3 => ["en"],
+        ModelProfile.LargeTurboQ5 => GetWhisperMultilingualLanguages(),
         ModelProfile.SenseVoice => ["zh", "en", "ja", "ko", "yue", "auto"],
         _ => ["en"]
     };
@@ -180,6 +193,7 @@ public static class ModelProfileExtensions
     {
         ModelProfile.Large => true,
         ModelProfile.LargeTurbo => true,
+        ModelProfile.LargeTurboQ5 => true,
         ModelProfile.SenseVoice => true,
         _ => false
     };
@@ -197,6 +211,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => 4,
         ModelProfile.DistilLargeV3 => 5,
         ModelProfile.SenseVoice => 5,
+        ModelProfile.SmallQ5 => 4,
+        ModelProfile.LargeTurboQ5 => 5,
+        ModelProfile.MediumQ5 => 3,
         _ => 3
     };
 
@@ -213,6 +230,9 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => 4,
         ModelProfile.DistilLargeV3 => 4,
         ModelProfile.SenseVoice => 4,
+        ModelProfile.SmallQ5 => 3,
+        ModelProfile.LargeTurboQ5 => 4,
+        ModelProfile.MediumQ5 => 4,
         _ => 3
     };
 
@@ -221,8 +241,10 @@ public static class ModelProfileExtensions
     /// </summary>
     public static bool IsRecommended(this ModelProfile profile) => profile switch
     {
-        ModelProfile.LargeTurbo => true,    // Best multilingual balance
-        ModelProfile.DistilLargeV3 => true, // Best English
+        ModelProfile.LargeTurbo => true,      // Best multilingual balance (GPU)
+        ModelProfile.DistilLargeV3 => true,   // Best English (GPU)
+        ModelProfile.LargeTurboQ5 => true,    // Best multilingual balance (CPU)
+        ModelProfile.SmallQ5 => true,         // Best for low-power CPU systems
         _ => false
     };
 

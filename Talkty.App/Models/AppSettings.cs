@@ -30,6 +30,24 @@ public class AppSettings
     /// </summary>
     public float VolumeDuckLevel { get; set; } = 0.20f;
 
+    /// <summary>
+    /// Whether to use the custom vocabulary prompt during transcription.
+    /// </summary>
+    public bool UseCustomVocabulary { get; set; } = true;
+
+    /// <summary>
+    /// Custom vocabulary terms passed to Whisper's initial_prompt to bias
+    /// transcription toward correct spelling of technical jargon.
+    /// </summary>
+    public List<string>? CustomVocabulary { get; set; }
+
+    /// <summary>
+    /// Post-transcription text replacements for words Whisper consistently misrecognizes.
+    /// Key = misheard text (case-insensitive), Value = correct replacement.
+    /// Applied deterministically after transcription for 100% reliability.
+    /// </summary>
+    public Dictionary<string, string>? TextReplacements { get; set; }
+
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;
     public Key HotkeyKey { get; set; } = Key.Q;

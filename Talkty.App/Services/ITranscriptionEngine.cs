@@ -14,15 +14,21 @@ public record TranscriptionOptions
     public string Language { get; init; } = "en";
 
     /// <summary>
-    /// Whether to translate the transcription to English.
-    /// Only supported by some models (Whisper multilingual).
-    /// </summary>
-    public bool TranslateToEnglish { get; init; } = false;
-
-    /// <summary>
     /// Timeout for transcription operation in milliseconds.
     /// </summary>
     public int TimeoutMs { get; init; } = 30000;
+
+    /// <summary>
+    /// Optional vocabulary prompt to bias transcription toward specific terms
+    /// (e.g., coding jargon, proper nouns). Passed as Whisper's initial_prompt.
+    /// </summary>
+    public string? VocabularyPrompt { get; init; }
+
+    /// <summary>
+    /// Callback fired when the first non-empty segment is ready.
+    /// Allows the caller to copy partial text to clipboard before full transcription completes.
+    /// </summary>
+    public Action<string>? OnFirstSegment { get; init; }
 }
 
 /// <summary>

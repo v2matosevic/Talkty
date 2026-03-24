@@ -59,8 +59,12 @@ public class VolumeDuckingService : IVolumeDuckingService
                 return;
             }
 
-            // Cancel any ongoing fade
-            _fadeCts?.Cancel();
+            // Cancel and dispose any ongoing fade CTS before creating a new one
+            if (_fadeCts != null)
+            {
+                _fadeCts.Cancel();
+                _fadeCts.Dispose();
+            }
             _fadeCts = new CancellationTokenSource();
             ct = _fadeCts.Token;
             duckLevel = _duckLevel;
@@ -123,8 +127,12 @@ public class VolumeDuckingService : IVolumeDuckingService
                 return;
             }
 
-            // Cancel any ongoing fade
-            _fadeCts?.Cancel();
+            // Cancel and dispose any ongoing fade CTS before creating a new one
+            if (_fadeCts != null)
+            {
+                _fadeCts.Cancel();
+                _fadeCts.Dispose();
+            }
             _fadeCts = new CancellationTokenSource();
             ct = _fadeCts.Token;
             originalVolume = _originalVolume;

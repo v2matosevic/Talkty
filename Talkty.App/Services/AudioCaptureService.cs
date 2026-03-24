@@ -1,4 +1,3 @@
-using System.IO;
 using System.Runtime.InteropServices;
 using NAudio.Wave;
 using Talkty.App.Models;
@@ -8,9 +7,7 @@ namespace Talkty.App.Services;
 public class AudioCaptureService : IAudioCaptureService
 {
     private WaveInEvent? _waveIn;
-    private MemoryStream? _audioStream;
-    private WaveFileWriter? _waveWriter;
-    // Float samples accumulated directly during recording — eliminates WAV encode/decode round-trip
+    // Float samples accumulated directly during recording — no WAV encode/decode round-trip
     private List<float> _floatSamples = [];
     private string? _selectedDeviceId;
     private readonly object _recordingLock = new();
@@ -54,8 +51,6 @@ public class AudioCaptureService : IAudioCaptureService
 
             lock (_dataLock)
             {
-                _audioStream = new MemoryStream();
-
                 int deviceNumber = 0;
                 if (!string.IsNullOrEmpty(_selectedDeviceId) && int.TryParse(_selectedDeviceId, out int parsedId))
                 {
@@ -67,14 +62,13 @@ public class AudioCaptureService : IAudioCaptureService
                 _waveIn = new WaveInEvent
                 {
                     DeviceNumber = deviceNumber,
-                    WaveFormat = new WaveFormat(16000, 16, 1) // 16kHz, 16-bit, mono for Whisper
+                    WaveFormat = new WaveFormat(Constants.SampleRate, 16, 1) // 16kHz, 16-bit, mono for Whisper
                 };
 
                 Log.Debug($"WaveFormat: {_waveIn.WaveFormat.SampleRate}Hz, {_waveIn.WaveFormat.BitsPerSample}bit, {_waveIn.WaveFormat.Channels}ch");
 
-                _waveWriter = new WaveFileWriter(_audioStream, _waveIn.WaveFormat);
                 // Pre-allocate for 2 minutes of audio to avoid list resizing during recording
-                _floatSamples = new List<float>(16000 * 120);
+                _floatSamples = new List<float>(Constants.SampleRate * 120);
             }
 
             _waveIn.DataAvailable += OnDataAvailable;
@@ -114,29 +108,9 @@ public class AudioCaptureService : IAudioCaptureService
 
     public byte[] GetRecordedAudio()
     {
-        Log.Debug("GetRecordedAudio called");
-
-        lock (_dataLock)
-        {
-            if (_audioStream == null)
-            {
-                Log.Warning("GetRecordedAudio: no audio stream");
-                return [];
-            }
-
-            try
-            {
-                _waveWriter?.Flush();
-                var bytes = _audioStream.ToArray();
-                Log.Debug($"GetRecordedAudio: {bytes.Length} bytes");
-                return bytes;
-            }
-            catch (Exception ex)
-            {
-                Log.Error("Error getting recorded audio", ex);
-                return [];
-            }
-        }
+        // Legacy method kept for interface compatibility — use GetRecordedAudioAsFloat() instead
+        Log.Warning("GetRecordedAudio called — this path is unused, use GetRecordedAudioAsFloat()");
+        return [];
     }
 
     public float[] GetRecordedAudioAsFloat()
@@ -152,7 +126,7 @@ public class AudioCaptureService : IAudioCaptureService
             }
 
             var result = _floatSamples.ToArray();
-            Log.Info($"Returning {result.Length} float samples ({result.Length / 16000.0:F2}s)");
+            Log.Info($"Returning {result.Length} float samples ({result.Length / (double)Constants.SampleRate:F2}s)");
             return result;
         }
     }
@@ -167,7 +141,6 @@ public class AudioCaptureService : IAudioCaptureService
             float max = 0;
             lock (_dataLock)
             {
-                _waveWriter?.Write(e.Buffer, 0, e.BytesRecorded);
                 foreach (var s in shorts)
                 {
                     var f = s / 32768f;
@@ -179,9 +152,9 @@ public class AudioCaptureService : IAudioCaptureService
 
             AudioLevelChanged?.Invoke(this, max);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors during recording
+            Log.Warning($"Error in audio data callback: {ex.Message}");
         }
     }
 
@@ -191,18 +164,6 @@ public class AudioCaptureService : IAudioCaptureService
         if (e.Exception != null)
         {
             Log.Error("Recording stopped with exception", e.Exception);
-        }
-
-        lock (_dataLock)
-        {
-            try
-            {
-                _waveWriter?.Flush();
-            }
-            catch
-            {
-                // Ignore
-            }
         }
     }
 
@@ -219,15 +180,6 @@ public class AudioCaptureService : IAudioCaptureService
                 _waveIn.Dispose();
                 _waveIn = null;
             }
-        }
-
-        lock (_dataLock)
-        {
-            _waveWriter?.Dispose();
-            _waveWriter = null;
-
-            _audioStream?.Dispose();
-            _audioStream = null;
         }
 
         GC.SuppressFinalize(this);

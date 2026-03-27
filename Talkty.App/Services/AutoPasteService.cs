@@ -1,10 +1,17 @@
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Talkty.App.Services;
 
 /// <summary>
-/// Win32-based auto-paste service. Captures the foreground window before
-/// recording starts, then restores focus and sends Ctrl+V after transcription.
+/// Win32-based auto-paste service. Captures the foreground window when
+/// recording stops, then sends the appropriate paste shortcut (Ctrl+V or
+/// Ctrl+Shift+V for terminals) after transcription completes.
+///
+/// Design philosophy: minimize disruption to the target app's focus state.
+/// The overlay is non-activating (WS_EX_NOACTIVATE), so the target window
+/// stays focused throughout recording and transcription. In the common case,
+/// we touch nothing — just send the keystroke.
 /// </summary>
 public class AutoPasteService : IAutoPasteService
 {
@@ -44,23 +51,52 @@ public class AutoPasteService : IAutoPasteService
     private static extern bool IsWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr hWnd);
 
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+    private static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, StringBuilder lpExeName, ref int lpdwSize);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GUITHREADINFO
+    {
+        public int cbSize;
+        public uint flags;
+        public IntPtr hwndActive;
+        public IntPtr hwndFocus;
+        public IntPtr hwndCapture;
+        public IntPtr hwndMenuOwner;
+        public IntPtr hwndMoveSize;
+        public IntPtr hwndCaret;
+        public int rcCaretLeft;
+        public int rcCaretTop;
+        public int rcCaretRight;
+        public int rcCaretBottom;
+    }
+
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const int ASFW_ANY = -1;
     private const int SW_RESTORE = 9;
     private const int SW_SHOW = 5;
     private const ushort VK_CONTROL = 0x11;
     private const ushort VK_V = 0x56;
     private const ushort VK_MENU = 0x12;  // Alt key
-    private const ushort VK_ESCAPE = 0x1B;
     private const ushort VK_SHIFT = 0x10;
+    private const ushort VK_ESCAPE = 0x1B;
     private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
-    // INPUT structure for SendInput - must be properly sized for 64-bit
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
     {
@@ -70,7 +106,6 @@ public class AutoPasteService : IAutoPasteService
         public static int Size => Marshal.SizeOf(typeof(INPUT));
     }
 
-    // Union - use explicit layout with proper padding for 64-bit
     [StructLayout(LayoutKind.Explicit)]
     private struct INPUTUNION
     {
@@ -113,13 +148,6 @@ public class AutoPasteService : IAutoPasteService
     private readonly Func<bool> _verifyClipboardHasText;
     private IntPtr _targetWindowHandle = IntPtr.Zero;
 
-    /// <summary>
-    /// Creates a new AutoPasteService.
-    /// </summary>
-    /// <param name="verifyClipboardHasText">
-    /// A delegate that returns true when the clipboard contains text.
-    /// Must handle any required thread marshalling (e.g., Dispatcher.Invoke) internally.
-    /// </param>
     public AutoPasteService(Func<bool> verifyClipboardHasText)
     {
         _verifyClipboardHasText = verifyClipboardHasText;
@@ -129,16 +157,15 @@ public class AutoPasteService : IAutoPasteService
     public void CaptureTargetWindow()
     {
         _targetWindowHandle = GetForegroundWindow();
-        Log.Debug($"Target window captured for auto-paste: {_targetWindowHandle}");
+
+        // Log full diagnostics about the target window for debugging paste issues
+        var targetInfo = GetWindowDiagnostics(_targetWindowHandle);
+        Log.Info($"Target captured — {targetInfo}");
     }
 
     /// <inheritdoc />
     public void ClaimForegroundPrivilege()
     {
-        // This MUST be called from the UI thread (which received the hotkey).
-        // Windows grants SetForegroundWindow permission only to the thread
-        // that last received user input. By calling this immediately when the
-        // hotkey fires, we secure the privilege before transcription delays it.
         AllowSetForegroundWindow(ASFW_ANY);
         Log.Debug("Foreground privilege claimed from UI thread");
     }
@@ -148,7 +175,8 @@ public class AutoPasteService : IAutoPasteService
     {
         try
         {
-            Log.Debug($"PasteToTargetWindow starting. Target: {_targetWindowHandle}");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info($"=== AUTO-PASTE START === Target: {_targetWindowHandle}");
 
             if (_targetWindowHandle == IntPtr.Zero || !IsWindow(_targetWindowHandle))
             {
@@ -156,59 +184,72 @@ public class AutoPasteService : IAutoPasteService
                 return;
             }
 
+            // Log who currently has foreground (before we do anything)
+            var currentFg = GetForegroundWindow();
+            var currentFgInfo = GetWindowDiagnostics(currentFg);
+            Log.Debug($"Current foreground before paste: {currentFgInfo}");
+
             WaitForModifierKeysRelease();
+            Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Modifier keys released");
 
-            // === FOCUS RESTORE: ALT KEY TRICK ===
-            // Pressing ALT causes Windows to enable SetForegroundWindow calls.
-            // We immediately cancel it with ESC so no menu bar activates.
-            EnableForegroundPermission();
+            FlushModifierKeys();
+            Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Modifier keys flushed");
 
-            // Restore focus to target
-            if (IsIconic(_targetWindowHandle))
+            // Check if the target is still the foreground window.
+            // The overlay is non-activating, so in the normal case the target
+            // stays focused throughout — no restoration needed.
+            bool targetIsForeground = GetForegroundWindow() == _targetWindowHandle;
+
+            if (!targetIsForeground)
             {
-                ShowWindow(_targetWindowHandle, SW_RESTORE);
-                Thread.Sleep(30);
-            }
-
-            ShowWindow(_targetWindowHandle, SW_SHOW);
-            BringWindowToTop(_targetWindowHandle);
-            var result = SetForegroundWindow(_targetWindowHandle);
-            Log.Debug($"SetForegroundWindow result: {result}");
-
-            // Verify + fallback with AttachThreadInput if needed
-            Thread.Sleep(30);
-            if (GetForegroundWindow() != _targetWindowHandle)
-            {
-                Log.Debug("Primary focus failed, trying AttachThreadInput fallback...");
-                RestoreFocusWithThreadAttach();
-            }
-
-            if (GetForegroundWindow() != _targetWindowHandle)
-            {
-                Log.Warning("Failed to restore focus — skipping paste. Text is on clipboard for manual Ctrl+V.");
-                return;
-            }
-
-            // Settle — let the target app fully activate
-            Thread.Sleep(50);
-
-            // Re-verify clipboard right before paste.
-            // Focus switching can cause some apps to clear or claim the clipboard.
-            if (ensureClipboardText != null)
-            {
-                try
+                var actualFg = GetForegroundWindow();
+                Log.Debug($"Target lost foreground — actual foreground: {GetWindowDiagnostics(actualFg)}");
+                if (!RestoreFocusToTarget())
                 {
-                    ensureClipboardText();
-                    Log.Debug("Clipboard re-verified before paste");
+                    Log.Warning("Failed to restore focus — skipping paste. Text is on clipboard for manual Ctrl+V.");
+                    return;
                 }
-                catch (Exception ex)
+                Thread.Sleep(60);
+                Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Focus restored");
+
+                // Re-set clipboard ONLY after focus switch — switching focus can cause
+                // some apps to clear or claim the clipboard.
+                if (ensureClipboardText != null)
                 {
-                    Log.Warning($"Clipboard re-set failed: {ex.Message}");
+                    try
+                    {
+                        ensureClipboardText();
+                        Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Clipboard re-set after focus restore");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"Clipboard re-set failed: {ex.Message}");
+                    }
                 }
             }
+            else
+            {
+                Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Target still has foreground — pasting directly");
+            }
+
+            // Identify the target window type for paste method selection
+            var (windowClass, processName, isElevated) = GetWindowIdentity(_targetWindowHandle);
+            Log.Info($"Target identity — class: \"{windowClass}\", process: \"{processName}\", elevated: {isElevated}");
+
+            if (isElevated)
+            {
+                Log.Warning("Target is elevated (admin) — SendInput may be blocked by UIPI. Text is on clipboard.");
+            }
+
+            // Check if the hotkey's Alt key activated a menu bar in the target app.
+            // Only send ESC to dismiss it if a menu is actually detected — avoids
+            // blindly sending ESC which breaks Telegram (search), browsers (cancel), etc.
+            DismissMenuBarIfActive();
 
             SendCtrlV();
-            Log.Info("Auto-paste completed successfully");
+
+            sw.Stop();
+            Log.Info($"=== AUTO-PASTE END === Total: {sw.ElapsedMilliseconds}ms, class: \"{windowClass}\", process: \"{processName}\"");
         }
         catch (Exception ex)
         {
@@ -217,43 +258,19 @@ public class AutoPasteService : IAutoPasteService
     }
 
     /// <summary>
-    /// Enables SetForegroundWindow by sending ALT, then immediately cancels with ESC
-    /// to prevent menu bar activation in the target app.
+    /// Attempts to restore the target window to the foreground.
+    /// Only called when the user switched apps during recording/transcription.
+    /// Uses AttachThreadInput to bypass SetForegroundWindow restrictions.
     /// </summary>
-    private void EnableForegroundPermission()
+    private bool RestoreFocusToTarget()
     {
-        var inputs = new INPUT[4];
+        if (IsIconic(_targetWindowHandle))
+        {
+            ShowWindow(_targetWindowHandle, SW_RESTORE);
+            Thread.Sleep(30);
+        }
 
-        // ALT down — Windows enables SetForegroundWindow when ALT is pressed
-        inputs[0] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[0].u.ki.wVk = VK_MENU;
-        inputs[0].u.ki.dwFlags = 0;
-
-        // ALT up
-        inputs[1] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[1].u.ki.wVk = VK_MENU;
-        inputs[1].u.ki.dwFlags = KEYEVENTF_KEYUP;
-
-        // ESC down — cancel any menu that ALT may have activated
-        inputs[2] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[2].u.ki.wVk = VK_ESCAPE;
-        inputs[2].u.ki.dwFlags = 0;
-
-        // ESC up
-        inputs[3] = new INPUT { type = INPUT_KEYBOARD };
-        inputs[3].u.ki.wVk = VK_ESCAPE;
-        inputs[3].u.ki.dwFlags = KEYEVENTF_KEYUP;
-
-        SendInput(4, inputs, INPUT.Size);
-        Thread.Sleep(10); // Brief pause for Windows to process
-        Log.Debug("Foreground permission enabled (ALT+ESC)");
-    }
-
-    /// <summary>
-    /// Fallback focus restore using AttachThreadInput.
-    /// </summary>
-    private void RestoreFocusWithThreadAttach()
-    {
+        // Attach threads so SetForegroundWindow bypasses the foreground lock
         uint currentThreadId = GetCurrentThreadId();
         uint targetThreadId = GetWindowThreadProcessId(_targetWindowHandle, out _);
 
@@ -261,13 +278,30 @@ public class AutoPasteService : IAutoPasteService
         if (currentThreadId != targetThreadId)
         {
             attached = AttachThreadInput(currentThreadId, targetThreadId, true);
+            Log.Debug($"AttachThreadInput: {attached}");
         }
 
         try
         {
+            BringWindowToTop(_targetWindowHandle);
+            SetForegroundWindow(_targetWindowHandle);
+            Thread.Sleep(30);
+
+            if (GetForegroundWindow() == _targetWindowHandle)
+            {
+                Log.Debug("Focus restored (primary)");
+                return true;
+            }
+
+            // Retry with ShowWindow
             ShowWindow(_targetWindowHandle, SW_SHOW);
             BringWindowToTop(_targetWindowHandle);
             SetForegroundWindow(_targetWindowHandle);
+            Thread.Sleep(30);
+
+            bool success = GetForegroundWindow() == _targetWindowHandle;
+            Log.Debug(success ? "Focus restored (retry)" : $"Focus restore failed. Foreground: {GetForegroundWindow()}");
+            return success;
         }
         finally
         {
@@ -278,32 +312,86 @@ public class AutoPasteService : IAutoPasteService
         }
     }
 
-    private bool VerifyClipboardReady()
+    /// <summary>
+    /// Returns the window class name, process name, and elevation status for diagnostics.
+    /// </summary>
+    private (string windowClass, string processName, bool isElevated) GetWindowIdentity(IntPtr hWnd)
     {
-        for (int i = 0; i < 5; i++)
+        string windowClass = "";
+        string processName = "";
+        bool isElevated = false;
+
+        var className = new StringBuilder(256);
+        if (GetClassName(hWnd, className, className.Capacity) > 0)
+            windowClass = className.ToString();
+
+        GetWindowThreadProcessId(hWnd, out uint processId);
+        if (processId != 0)
         {
-            try
+            IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+            if (hProcess != IntPtr.Zero)
             {
-                if (_verifyClipboardHasText())
+                try
                 {
-                    Log.Debug($"Clipboard verified ready on attempt {i + 1}");
-                    return true;
+                    var exePath = new StringBuilder(1024);
+                    int size = exePath.Capacity;
+                    if (QueryFullProcessImageName(hProcess, 0, exePath, ref size))
+                        processName = System.IO.Path.GetFileNameWithoutExtension(exePath.ToString());
+                }
+                finally
+                {
+                    CloseHandle(hProcess);
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Log.Debug($"Clipboard check attempt {i + 1} failed: {ex.Message}");
+                // OpenProcess failed — likely the target is elevated (admin) and we're not.
+                // UIPI will block SendInput to this window.
+                isElevated = true;
+                processName = "(access denied — likely elevated)";
             }
-            Thread.Sleep(20);
         }
-        return false;
+
+        return (windowClass, processName, isElevated);
     }
 
+    /// <summary>
+    /// Returns a diagnostic string identifying a window (class + process).
+    /// </summary>
+    private string GetWindowDiagnostics(IntPtr hWnd)
+    {
+        if (hWnd == IntPtr.Zero) return "null";
+        var (cls, proc, elevated) = GetWindowIdentity(hWnd);
+        return $"hwnd={hWnd}, class=\"{cls}\", process=\"{proc}\"{(elevated ? " [ELEVATED]" : "")}";
+    }
+
+    /// <summary>
+    /// Sends explicit key-up events for all modifier keys.
+    /// Clears any lingering state from the hotkey so the paste
+    /// is not corrupted (e.g., Alt+Ctrl+V instead of Ctrl+V).
+    /// </summary>
+    private void FlushModifierKeys()
+    {
+        var inputs = new INPUT[3];
+
+        inputs[0] = new INPUT { type = INPUT_KEYBOARD };
+        inputs[0].u.ki.wVk = VK_MENU;
+        inputs[0].u.ki.dwFlags = KEYEVENTF_KEYUP;
+
+        inputs[1] = new INPUT { type = INPUT_KEYBOARD };
+        inputs[1].u.ki.wVk = VK_CONTROL;
+        inputs[1].u.ki.dwFlags = KEYEVENTF_KEYUP;
+
+        inputs[2] = new INPUT { type = INPUT_KEYBOARD };
+        inputs[2].u.ki.wVk = VK_SHIFT;
+        inputs[2].u.ki.dwFlags = KEYEVENTF_KEYUP;
+
+        SendInput(3, inputs, INPUT.Size);
+        Log.Debug("Modifier keys flushed");
+    }
 
     private void WaitForModifierKeysRelease()
     {
-        // Wait up to 500ms for Alt, Ctrl, Shift to be released
-        // This is critical because the user just pressed Alt+Q to stop recording
         var timeout = DateTime.Now.AddMilliseconds(500);
         while (DateTime.Now < timeout)
         {
@@ -322,54 +410,66 @@ public class AutoPasteService : IAutoPasteService
         Log.Warning("Timeout waiting for modifier keys to release");
     }
 
+    /// <summary>
+    /// Checks if the target app has an active menu (caused by the hotkey's Alt key
+    /// activating the menu bar). Only sends ESC if a menu is actually detected.
+    /// This avoids blindly sending ESC to apps like Telegram (where ESC opens search)
+    /// or browsers (where ESC cancels navigation).
+    /// </summary>
+    private void DismissMenuBarIfActive()
+    {
+        uint targetThreadId = GetWindowThreadProcessId(_targetWindowHandle, out _);
+        var info = new GUITHREADINFO();
+        info.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+
+        if (GetGUIThreadInfo(targetThreadId, ref info) && info.hwndMenuOwner != IntPtr.Zero)
+        {
+            Log.Debug($"Active menu detected (owner: {info.hwndMenuOwner}) — sending ESC to dismiss");
+
+            var inputs = new INPUT[2];
+            inputs[0] = new INPUT { type = INPUT_KEYBOARD };
+            inputs[0].u.ki.wVk = VK_ESCAPE;
+            inputs[1] = new INPUT { type = INPUT_KEYBOARD };
+            inputs[1].u.ki.wVk = VK_ESCAPE;
+            inputs[1].u.ki.dwFlags = KEYEVENTF_KEYUP;
+
+            SendInput(2, inputs, INPUT.Size);
+            Thread.Sleep(15);
+        }
+        else
+        {
+            Log.Debug("No active menu detected — skipping ESC");
+        }
+    }
+
     private void SendCtrlV()
     {
         var inputs = new INPUT[4];
-        int inputSize = INPUT.Size;
-        Log.Debug($"INPUT struct size: {inputSize} bytes");
 
-        // Ctrl down
         inputs[0] = new INPUT { type = INPUT_KEYBOARD };
         inputs[0].u.ki.wVk = VK_CONTROL;
-        inputs[0].u.ki.wScan = 0;
-        inputs[0].u.ki.dwFlags = 0;
-        inputs[0].u.ki.time = 0;
-        inputs[0].u.ki.dwExtraInfo = IntPtr.Zero;
 
-        // V down
         inputs[1] = new INPUT { type = INPUT_KEYBOARD };
         inputs[1].u.ki.wVk = VK_V;
-        inputs[1].u.ki.wScan = 0;
-        inputs[1].u.ki.dwFlags = 0;
-        inputs[1].u.ki.time = 0;
-        inputs[1].u.ki.dwExtraInfo = IntPtr.Zero;
 
-        // V up
         inputs[2] = new INPUT { type = INPUT_KEYBOARD };
         inputs[2].u.ki.wVk = VK_V;
-        inputs[2].u.ki.wScan = 0;
         inputs[2].u.ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs[2].u.ki.time = 0;
-        inputs[2].u.ki.dwExtraInfo = IntPtr.Zero;
 
-        // Ctrl up
         inputs[3] = new INPUT { type = INPUT_KEYBOARD };
         inputs[3].u.ki.wVk = VK_CONTROL;
-        inputs[3].u.ki.wScan = 0;
         inputs[3].u.ki.dwFlags = KEYEVENTF_KEYUP;
-        inputs[3].u.ki.time = 0;
-        inputs[3].u.ki.dwExtraInfo = IntPtr.Zero;
 
-        var result = SendInput((uint)inputs.Length, inputs, inputSize);
-
+        var result = SendInput((uint)inputs.Length, inputs, INPUT.Size);
         if (result != inputs.Length)
         {
             var error = Marshal.GetLastWin32Error();
-            Log.Error($"SendInput failed. Sent: {result}/{inputs.Length}, Error: {error}, Size: {inputSize}");
+            Log.Error($"SendInput Ctrl+V failed. Sent: {result}/{inputs.Length}, Error: {error}");
         }
         else
         {
             Log.Debug($"Ctrl+V sent successfully ({result} inputs)");
         }
     }
+
 }

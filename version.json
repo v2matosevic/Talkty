@@ -1,5 +1,5 @@
 {
-  "version": "1.0.9",
+  "version": "1.0.10",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Custom vocabulary for coding, reliable auto-paste (ALT key trick), smart sentence joining, code cleanup and optimization"
+  "release_notes": "Reliable auto-paste across all apps — fixed Telegram search bar activation, eliminated 3s clipboard delays, conditional menu bar dismissal for VS Code terminals"
 }

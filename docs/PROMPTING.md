@@ -46,15 +46,23 @@ transcription is used.
 
 | Order | Model (OpenRouter slug) | Price in/out ($/M) | Why |
 |------|--------------------------|--------------------|-----|
-| 1 (primary) | `google/gemini-3.1-flash-lite` | ~$0.25 / — | Fastest TTFT, Google EU edge → low latency from Europe |
-| 2 (fallback) | `deepseek/deepseek-v4-flash` | $0.09 / $0.18 | Ultra-cheap, fast, non-reasoning |
-| 3 (last resort) | `z-ai/glm-4.7-flash` | $0.06 / $0.40 | Strong quality, but measured **~15.8s** from the EU |
+| 1 (primary) | `minimax/minimax-m3` | $0.30 / $1.20 | Top-tier instruction-following (Artificial Analysis Intelligence **44**) at a flash-tier price; standard (non-reasoning) instruct model → chosen for **fidelity** on the completeness-critical rewrite. Provider-pinned for speed (see below). |
+| 2 (fallback) | `google/gemini-3.1-flash-lite` | ~$0.25 / $1.50 | Fast TTFT, Google EU edge, instruction-tuned/extraction-optimized → low-latency safety net |
+| 3 (last resort) | `deepseek/deepseek-v4-flash` | $0.09 / $0.18 | Ultra-cheap, fast |
 
-> **Ordering note (latency finding):** the chain is ordered **fastest-first**. In testing,
-> `z-ai/glm-4.7-flash` took **~15.8s** for a single refinement — Z.ai's servers sit far from Europe
-> (the same geography tax we measured on cloud transcription). Gemini (Google EU edge) leads;
-> GLM is kept only as a last-resort fallback. The per-attempt timeout is **12s** so a slow model
-> drops through quickly instead of hanging.
+> **Primary = fidelity, fallbacks = speed.** The completeness rewrite (preserve every detail) is
+> instruction-following-heavy, so the primary is the strongest instruction-follower we can run cheaply:
+> `minimax/minimax-m3` (Artificial Analysis Intelligence 44, a *non-reasoning* instruct model — no
+> thinking-token latency tax). It is **multi-hosted on OpenRouter at very different speeds**, so the
+> request sets `provider: { sort: "throughput" }` to land on a fast host (Together/Makora ~90–100 t/s)
+> and avoid a slow route reintroducing a GLM-style geography tax. Its one tradeoff is decode speed
+> (~62–100 t/s vs a Gemini flash EU edge's ~150–200+), felt mainly on long prompts — hence the
+> fast Google-EU-edge fallback. The per-attempt timeout is **12s** so a slow/stalled model drops
+> through quickly instead of hanging.
+>
+> *History:* the chain was previously Gemini-flash-lite-first (latency-optimized) with `z-ai/glm-4.7-flash`
+> as a last resort; GLM measured **~15.8s** from the EU and its slug was later retired. The pivot to an
+> M3 primary followed the completeness upgrade — fidelity became the priority over the last second of latency.
 
 ### Why these models (and not a "reasoning" model)
 
@@ -80,17 +88,33 @@ The refinement quality lives in the system prompt in `PromptRefinementService.Sy
 engineered from current coding-agent prompt-engineering practice. Keep this section and the code
 in sync.
 
-**Scale to the request size** (the biggest quality lever): a trivial one-liner (rename, log line,
+**Lose nothing — completeness is the #1 job** (the biggest quality lever, and the one most prone to
+regress). Dictation rambles, but the small concrete details buried in it — exact file/function names,
+values, ordering, preferences, edge cases, and throwaway asides ("oh, and make sure it still works on
+mobile") — are the whole point of the request. The model **reformats** speech into a prompt; it never
+**summarizes** it. Anything the developer said that carries an instruction, requirement, constraint,
+preference, example, value, or caveat must survive into the output. It may strip only pure speech noise
+(disfluencies, repetitions, abandoned thinking-out-loud) and resolve self-corrections to the final
+intent ("make it red, no wait, blue" → blue). When unsure whether a phrase is noise or substance, it
+keeps it. There is **no word cap** — length tracks the input: a one-liner stays one line, a detailed
+ramble becomes a long, thorough prompt. This was added after omission ("it loses the small things I
+mentioned") was the top quality complaint.
+
+**Scale the structure — not the content — to the request size**: a trivial one-liner (rename, log line,
 typo) becomes a single direct imperative sentence — *no* headings. Only substantial, multi-file, or
-non-obvious requests get the full structure. Never pad a small ask into a big template. (Anthropic:
+non-obvious requests get the full structure. Never pad a small ask into a big template. Scaling controls
+how much *scaffolding* is added, never how much of the developer's content is kept. (Anthropic:
 *"if you could describe the diff in one sentence, skip the plan."*)
 
 **Output structure** (substantial requests) — markdown sections, only when the input supports them:
 
 - **Task** — the goal in one or two imperative sentences.
 - **Context** — stack, specific files/paths/components/functions, and existing patterns to follow.
-- **Requirements** — specific, actionable bullet points.
+- **Requirements** — every distinct thing asked for, one bullet per detail (never two asks merged into
+  one vague bullet). This is where the small details live.
 - **Constraints** — what must NOT change, libraries not to add, scope not to creep into.
+- **Notes** — any detail/preference/aside that matters but fits no section above; the catch-all that
+  stops small-but-important asides from being dropped.
 - **Verify** — how the agent proves it worked (named test, build, expected behavior).
 
 **Adapts to the request *type*:**
@@ -104,13 +128,15 @@ non-obvious requests get the full structure. Never pad a small ask into a big te
 
 **Principles encoded in the prompt:**
 
-1. **Faithful, not inventive.** Never add features, libraries, dependencies, or scope the speaker
-   didn't mention. On genuine ambiguity, emit a `> Clarify: …` note instead of guessing.
+1. **Faithful AND complete.** Add nothing the speaker didn't say (no features, libraries, dependencies,
+   or scope); drop nothing they did. On genuine ambiguity, emit a `> Clarify: …` note instead of
+   guessing *or* silently dropping the detail.
 2. **Preserve technical identifiers verbatim** — file names, paths, function/variable names, tools.
 3. **Prefer existing patterns** — follow codebase conventions, reuse existing utilities over new ones.
 4. **Avoid over-engineering** — no speculative abstraction, defensive code, or tests for impossible
-   cases; minimal, focused diffs.
-5. **Be direct and concise** — imperative voice, no filler, ~150–300 words (far less for small asks).
+   cases; minimal, focused diffs. (Trims the *model's* additions only — never the developer's own asks.)
+5. **Be direct** — imperative voice, no filler. Length follows the input; **no word cap** (small asks
+   stay short, detailed asks run long — never compress to hit a count).
 6. **Clean, paste-ready output** — only the prompt text; no preamble, quotes, or code fences.
 
 ### Research basis
@@ -126,7 +152,8 @@ These choices follow Anthropic's own Claude Code guidance and current coding-age
 - **Explore → plan → implement → verify** for non-trivial work; separate refactors from features.
 - **Avoid over-engineering** — chasing every possible gap leads to needless abstraction, defensive
   code, and tests for cases that can't happen.
-- Directness and a ~150–300 word target for substantial tasks.
+- Directness, but **no length cap** — completeness wins over brevity; the prompt is as long as the
+  dictation's detail requires (a word target was found to cause the model to drop real details).
 
 Sources: [Anthropic — Claude Code best practices](https://code.claude.com/docs/en/best-practices),
 [Anthropic — prompt engineering](https://platform.claude.com/docs/en/docs/build-with-claude/prompt-engineering/overview),

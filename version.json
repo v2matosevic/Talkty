@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Cloud transcription via OpenRouter (opt-in) — GPT-4o Transcribe, Whisper, Qwen and more for higher accuracy when you want it; local Whisper stays the private, offline default. New 'Prompting' mode turns your dictation into a clean, structured prompt for coding AI agents like Claude Code and Cursor, with a fast model fallback chain. Fixed a clipboard stall that delayed pasting. Your API key is stored encrypted on-device (Windows DPAPI)."
+  "release_notes": "Prompting mode now keeps the small details. The dictation-to-prompt rewrite was losing specifics, asides, and edge cases when condensing; it now preserves every concrete instruction, value, and caveat you mention (reformat, not summarize) and switched to a higher-fidelity model (MiniMax M3) for the expansion. Local Whisper stays the private, offline default."
 }

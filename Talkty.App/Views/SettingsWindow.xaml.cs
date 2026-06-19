@@ -104,6 +104,9 @@ public partial class SettingsWindow : Window
     private void ToggleHighEnd_Click(object sender, MouseButtonEventArgs e) =>
         ToggleSection(HighEndList, HighEndArrow);
 
+    private void ToggleCloud_Click(object sender, MouseButtonEventArgs e) =>
+        ToggleSection(CloudContent, CloudArrow);
+
     private static void ToggleSection(UIElement list, System.Windows.Controls.TextBlock arrow)
     {
         if (list.Visibility == Visibility.Visible)

@@ -91,7 +91,12 @@ public class SherpaOnnxEngine : ITranscriptionEngine
         var config = new SherpaOnnx.OfflineRecognizerConfig();
         config.ModelConfig = new SherpaOnnx.OfflineModelConfig();
         config.ModelConfig.Debug = 0;
-        config.ModelConfig.NumThreads = Environment.ProcessorCount;
+        // Physical-core estimate (not logical) — sherpa-onnx is compute-bound like whisper.cpp,
+        // and hyperthreading causes cache thrashing rather than throughput gains.
+        var logicalCores = Environment.ProcessorCount;
+        var threads = Math.Min(Constants.WhisperMaxThreads, Math.Max(1, logicalCores / 2));
+        config.ModelConfig.NumThreads = threads;
+        Log.Debug($"SherpaOnnx threads: {logicalCores} logical → {threads} used");
 
         // Always use CPU for sherpa-onnx (GPU requires specific builds)
         config.ModelConfig.Provider = "cpu";

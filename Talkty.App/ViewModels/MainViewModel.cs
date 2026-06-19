@@ -18,6 +18,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IUpdateService _updateService;
     private readonly IVolumeDuckingService? _volumeDuckingService;
     private readonly IAutoPasteService _autoPasteService;
+    private readonly IPromptRefinementService? _promptRefinementService;
+
+    // Linked across a single recording -> transcription cycle. ESC cancels it mid-flight,
+    // which aborts both the NAudio capture (if still recording) and the Whisper decode.
+    private CancellationTokenSource? _transcriptionCts;
 
     [ObservableProperty]
     private string _statusText = "Ready";
@@ -42,6 +47,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private float _audioLevel;
+
+    /// <summary>
+    /// When true, the completed transcription is expanded into a structured coding-agent prompt
+    /// before output. Mirrored from the overlay "Prompting" toggle; resets each recording.
+    /// </summary>
+    [ObservableProperty]
+    private bool _promptMode;
 
     [ObservableProperty]
     private ObservableCollection<TranscriptionHistoryItem> _history = [];
@@ -72,7 +84,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IClipboardService clipboardService,
         IUpdateService? updateService = null,
         IVolumeDuckingService? volumeDuckingService = null,
-        IAutoPasteService? autoPasteService = null)
+        IAutoPasteService? autoPasteService = null,
+        IPromptRefinementService? promptRefinementService = null)
     {
         Log.Info("MainViewModel constructor starting");
 
@@ -83,15 +96,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _updateService = updateService ?? new UpdateService();
         _volumeDuckingService = volumeDuckingService;
         _autoPasteService = autoPasteService ?? throw new ArgumentNullException(nameof(autoPasteService));
+        _promptRefinementService = promptRefinementService;
 
         _audioCaptureService.AudioLevelChanged += OnAudioLevelChanged;
         Log.Debug("AudioLevelChanged event handler attached");
 
-        LoadSettingsAndModel();
+        // Fire-and-forget startup load. Top-level try/catch inside the method is the only
+        // safety net — don't convert to await; the constructor can't be async.
+        _ = LoadSettingsAndModelAsync();
         Log.Info("MainViewModel constructor completed");
     }
 
-    private async void LoadSettingsAndModel()
+    private async Task LoadSettingsAndModelAsync()
     {
         try
         {
@@ -125,6 +141,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 _transcriptionService.SetVocabularyPrompt(DefaultVocabulary.PromptContext);
             }
+
+            // Forward the decrypted cloud API key to the transcription engine AND the prompt
+            // refiner — both call OpenRouter.
+            var cloudKey = ApiKeyProtector.Unprotect(settings.OpenRouterApiKeyEncrypted);
+            _transcriptionService.SetCloudApiKey(cloudKey);
+            _promptRefinementService?.SetApiKey(cloudKey);
 
             await LoadModelAsync(settings.ModelProfile, settings.UseGpu);
 
@@ -202,6 +224,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         Log.Info($"LoadModelAsync starting for profile: {profile}, UseGpu: {useGpu}");
 
+        // Cloud profiles have no local file, no GPU, no download — handle separately.
+        if (profile.IsCloud())
+        {
+            await LoadCloudModelAsync(profile);
+            return;
+        }
+
         var modelPath = _settingsService.GetModelPath(profile);
         Log.Debug($"Model path: {modelPath}");
 
@@ -262,6 +291,70 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Loads a cloud (OpenRouter) profile: no download or file check — just validates the
+    /// API key and marks the remote model ready. Requires an OpenRouter key in Settings.
+    /// </summary>
+    private async Task LoadCloudModelAsync(ModelProfile profile)
+    {
+        Log.Info($"LoadCloudModelAsync for {profile} ({profile.GetOpenRouterModelId()})");
+
+        var apiKey = ApiKeyProtector.Unprotect(_settingsService.Settings.OpenRouterApiKeyEncrypted);
+        _transcriptionService.SetCloudApiKey(apiKey);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            Log.Warning("Cloud model selected but no OpenRouter API key configured");
+            StatusText = "Add your OpenRouter API key in Settings";
+            BackendInfo = "Cloud model needs an API key";
+            IsModelLoaded = false;
+            RequestShowToast?.Invoke(this, new ToastEventArgs
+            {
+                Message = "Add your OpenRouter API key in Settings to use cloud models",
+                Type = ToastType.Warning,
+                DurationMs = 5000
+            });
+            return;
+        }
+
+        IsModelLoading = true;
+        StatusText = "Connecting to cloud...";
+        try
+        {
+            IsModelLoaded = await _transcriptionService.LoadModelAsync(profile, "", false);
+
+            if (IsModelLoaded)
+            {
+                Log.Info($"Cloud model ready: {_transcriptionService.BackendInfo}");
+                StatusText = "Ready";
+                BackendInfo = _transcriptionService.BackendInfo ?? "";
+                ModelProfileDisplay = profile.GetDisplayName();
+                RequestShowToast?.Invoke(this, new ToastEventArgs
+                {
+                    Message = $"Cloud model ready: {profile.GetDisplayName()}",
+                    Type = ToastType.Success,
+                    DurationMs = 3000
+                });
+            }
+            else
+            {
+                Log.Error($"Cloud model failed to load. Info: {_transcriptionService.BackendInfo}");
+                StatusText = "Failed to connect cloud model";
+                BackendInfo = _transcriptionService.BackendInfo ?? "";
+                RequestShowToast?.Invoke(this, new ToastEventArgs
+                {
+                    Message = "Cloud model unavailable — check your API key",
+                    Type = ToastType.Warning,
+                    DurationMs = 4000
+                });
+            }
+        }
+        finally
+        {
+            IsModelLoading = false;
+        }
+    }
+
     [RelayCommand]
     public void ToggleListening()
     {
@@ -305,18 +398,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public void CancelRecording()
     {
-        if (!IsListening)
+        if (!IsListening && !IsTranscribing)
         {
-            Log.Debug("CancelRecording called but not listening");
+            Log.Debug("CancelRecording called but not active");
             return;
         }
 
-        Log.Info(">>> RECORDING CANCELLED (ESC) <<<");
+        Log.Info(">>> CANCELLED (ESC) <<<");
 
         try
         {
-            // Stop recording without getting audio
-            _audioCaptureService.StopRecording();
+            // Cancel the token — aborts in-flight Whisper decode if transcribing
+            try { _transcriptionCts?.Cancel(); }
+            catch (ObjectDisposedException) { /* already completed */ }
+
+            // Stop recording without getting audio (no-op if already stopped)
+            if (IsListening)
+            {
+                _audioCaptureService.StopRecording();
+            }
             IsListening = false;
 
             // Restore volume if ducked
@@ -367,6 +467,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 volumeDucked = true;
             }
 
+            // Fresh cancellation source for this recording -> transcription cycle.
+            // Disposed by the transcription path or CancelRecording.
+            _transcriptionCts?.Dispose();
+            _transcriptionCts = new CancellationTokenSource();
+
             Log.Debug("Calling AudioCaptureService.StartRecording()");
             _audioCaptureService.StartRecording();
             IsListening = true;
@@ -403,9 +508,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // transcription (~1s later), the privilege expires and paste fails.
             _autoPasteService.ClaimForegroundPrivilege();
 
-            Log.Debug("Calling AudioCaptureService.StopRecording()");
-            _audioCaptureService.StopRecording();
-
             // Restore system volume if ducking is enabled (always try, service handles "not ducked" case)
             if (_settingsService.Settings.DuckVolumeWhileRecording && _volumeDuckingService != null)
             {
@@ -417,6 +519,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             IsTranscribing = true;
             StatusText = "Transcribing...";
             RecordingStopped?.Invoke(this, EventArgs.Empty);
+
+            // Stop recording AND wait for NAudio's in-flight buffers to be delivered.
+            // Without this flush, the last 200-400ms of speech is lost — exactly "the last
+            // part of what I said" in the user's transcript.
+            Log.Debug("Calling AudioCaptureService.StopRecordingAndFlushAsync()");
+            await _audioCaptureService.StopRecordingAndFlushAsync(Constants.RecordingFlushTimeoutMs);
 
             Log.Debug("Getting recorded audio samples");
             var audioSamples = _audioCaptureService.GetRecordedAudioAsFloat();
@@ -460,9 +568,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 {
                     try
                     {
+                        // Strip hallucinations first — otherwise "Thanks for watching" can
+                        // hit the clipboard before the full-pass clean runs.
+                        text = TextPostProcessor.StripHallucinations(text);
+
                         // Apply post-processing to streamed segment too
                         if (textReplacements is { Count: > 0 })
                             text = TextPostProcessor.ApplyReplacements(text, textReplacements);
+
+                        if (string.IsNullOrWhiteSpace(text))
+                        {
+                            Log.Debug("First segment empty after cleanup — skipping clipboard");
+                            return;
+                        }
 
                         Application.Current.Dispatcher.Invoke(() =>
                         {
@@ -477,7 +595,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 };
             }
 
-            var result = await _transcriptionService.TranscribeAsync(audioSamples, language, default, onFirstSegment, vocabularyPrompt);
+            var cancellationToken = _transcriptionCts?.Token ?? default;
+            var result = await _transcriptionService.TranscribeAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt);
             var elapsed = DateTime.Now - startTime;
 
             Log.Info($"Transcription completed in {elapsed.TotalSeconds:F1}s. Success: {result.Success}");
@@ -503,6 +622,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 result.Text = TextPostProcessor.CleanupPunctuation(result.Text);
 
                 Log.Info($"Transcribed text ({result.Text.Length} chars): \"{result.Text}\"");
+
+                // Prompt mode: expand the transcription into a structured coding-agent prompt
+                // before it hits the clipboard/paste. Falls back to the raw text on any failure.
+                if (PromptMode)
+                {
+                    if (_promptRefinementService?.IsConfigured == true)
+                    {
+                        StatusText = "Refining prompt...";
+                        var refined = await _promptRefinementService.RefineAsync(result.Text, cancellationToken);
+                        if (!string.IsNullOrWhiteSpace(refined))
+                        {
+                            Log.Info($"Prompt mode: expanded into agent prompt ({result.Text.Length} → {refined.Length} chars)");
+                            result.Text = refined;
+                        }
+                        else
+                        {
+                            Log.Warning("Prompt refinement returned nothing — using raw transcription");
+                        }
+                    }
+                    else
+                    {
+                        Log.Warning("Prompt mode on but no OpenRouter key — skipping refinement");
+                        RequestShowToast?.Invoke(this, new ToastEventArgs
+                        {
+                            Message = "Add your OpenRouter API key in Settings to use Prompting",
+                            Type = ToastType.Warning,
+                            DurationMs = 4000
+                        });
+                    }
+                }
 
                 if (_settingsService.Settings.CopyToClipboard)
                 {
@@ -555,8 +704,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
             else
             {
-                Log.Warning($"Transcription failed or empty. Error: {result.ErrorMessage}");
-                StatusText = result.ErrorMessage ?? "Transcription failed";
+                // Surface cancellation distinctly from generic failures
+                if (_transcriptionCts?.IsCancellationRequested == true)
+                {
+                    Log.Info("Transcription cancelled via ESC");
+                    StatusText = "Cancelled";
+                }
+                else
+                {
+                    Log.Warning($"Transcription failed or empty. Error: {result.ErrorMessage}");
+                    StatusText = result.ErrorMessage ?? "Transcription failed";
+                }
             }
 
             // Hide overlay AFTER auto-paste completes — hiding before paste causes focus loss
@@ -591,11 +749,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Uses RMS energy in 100ms windows with a 200ms safety margin on each end.
     /// Reduces audio Whisper must process — typically 10-25% faster inference.
     /// </summary>
-    private static float[] TrimSilence(float[] samples, float threshold = 0.01f)
+    private static float[] TrimSilence(float[] samples, float threshold = Constants.SilenceThreshold)
     {
         const int sampleRate = Constants.SampleRate;
-        const int windowSize = sampleRate / 10; // 100ms windows
-        const int marginSamples = sampleRate / 5; // 200ms safety margin
+        const int windowSize = Constants.SilenceWindowSamples;
+        const int marginSamples = Constants.SilenceMarginSamples;
 
         if (samples.Length < windowSize * 3)
             return samples; // Too short to trim meaningfully
@@ -710,7 +868,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _settingsService.Settings.SelectedMicrophoneId = settings.SelectedMicrophoneId;
         _settingsService.Settings.CopyToClipboard = settings.CopyToClipboard;
         _settingsService.Settings.AutoPaste = settings.AutoPaste;
-        _settingsService.Settings.ShowNotification = settings.ShowNotification;
         _settingsService.Settings.Language = settings.Language;
         _settingsService.Settings.AutoDetectLanguage = settings.AutoDetectLanguage;
         _settingsService.Settings.UseGpu = settings.UseGpu;
@@ -730,9 +887,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _settingsService.Settings.CustomVocabulary = settings.CustomVocabulary;
         _settingsService.Settings.TextReplacements = settings.TextReplacements;
 
+        // Cloud API key (already encrypted by the settings dialog before it reaches here)
+        _settingsService.Settings.OpenRouterApiKeyEncrypted = settings.OpenRouterApiKeyEncrypted;
+
         _settingsService.Save();
 
         _audioCaptureService.SelectDevice(settings.SelectedMicrophoneId);
+
+        // Re-forward the (decrypted) cloud key so the live cloud engine + prompt refiner pick up changes.
+        var updatedKey = ApiKeyProtector.Unprotect(settings.OpenRouterApiKeyEncrypted);
+        _transcriptionService.SetCloudApiKey(updatedKey);
+        _promptRefinementService?.SetApiKey(updatedKey);
 
         // Reload model if profile or GPU setting changed
         bool profileChanged = previousProfile != settings.ModelProfile;
@@ -783,6 +948,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 Log.Debug("Disposing VolumeDuckingService");
                 volumeDisposable.Dispose();
             }
+
+            _transcriptionCts?.Dispose();
 
             Log.Info("MainViewModel disposed");
         }

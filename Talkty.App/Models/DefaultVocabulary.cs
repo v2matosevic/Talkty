@@ -9,17 +9,14 @@ namespace Talkty.App.Models;
 public static class DefaultVocabulary
 {
     /// <summary>
-    /// Contextual prompt for Whisper's initial_prompt. Written as natural sentences
-    /// rather than a word list — Whisper's decoder responds much better to context
-    /// that reads like real speech. Keep under ~200 tokens for best results.
+    /// Contextual prompt for Whisper's initial_prompt. Deliberately short — Whisper
+    /// REGURGITATES prompt content during silence or ambiguous audio, so every extra
+    /// term in here is a hallucination risk. Only include terms that Whisper genuinely
+    /// mishears (acoustically ambiguous proper nouns). Everything else relies on the
+    /// deterministic replacement layer, which can't hallucinate.
     /// </summary>
     public static string PromptContext { get; } =
-        "Claude is an AI assistant by Anthropic. " +
-        "I'm coding with React, Vue, Next.js, TypeScript, and Node.js. " +
-        "Using kubectl for Kubernetes, Docker, Terraform, and nginx. " +
-        "The backend uses PostgreSQL, Redis, GraphQL, FastAPI, and Express. " +
-        "Deploying to AWS, Vercel, and Cloudflare with CI/CD via GitHub Actions. " +
-        "Tools include VS Code, ESLint, Prettier, Jest, and Playwright.";
+        "I'm coding with Claude from Anthropic, using kubectl, PostgreSQL, and TypeScript.";
 
     /// <summary>
     /// Post-transcription text replacements for words that Whisper consistently misrecognizes.

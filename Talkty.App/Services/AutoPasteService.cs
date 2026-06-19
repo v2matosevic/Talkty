@@ -5,8 +5,7 @@ namespace Talkty.App.Services;
 
 /// <summary>
 /// Win32-based auto-paste service. Captures the foreground window when
-/// recording stops, then sends the appropriate paste shortcut (Ctrl+V or
-/// Ctrl+Shift+V for terminals) after transcription completes.
+/// recording stops, then sends Ctrl+V after transcription completes.
 ///
 /// Design philosophy: minimize disruption to the target app's focus state.
 /// The overlay is non-activating (WS_EX_NOACTIVATE), so the target window
@@ -145,21 +144,23 @@ public class AutoPasteService : IAutoPasteService
 
     #endregion
 
-    private readonly Func<bool> _verifyClipboardHasText;
+    // Written on UI thread (CaptureTargetWindow), read on thread pool (PasteToTargetWindow).
+    // Access via Volatile.Read/Write so the CLR memory model guarantees visibility — atomic
+    // IntPtr access on x64 is incidental, not guaranteed by the spec.
     private IntPtr _targetWindowHandle = IntPtr.Zero;
 
-    public AutoPasteService(Func<bool> verifyClipboardHasText)
+    public AutoPasteService()
     {
-        _verifyClipboardHasText = verifyClipboardHasText;
     }
 
     /// <inheritdoc />
     public void CaptureTargetWindow()
     {
-        _targetWindowHandle = GetForegroundWindow();
+        var handle = GetForegroundWindow();
+        Volatile.Write(ref _targetWindowHandle, handle);
 
         // Log full diagnostics about the target window for debugging paste issues
-        var targetInfo = GetWindowDiagnostics(_targetWindowHandle);
+        var targetInfo = GetWindowDiagnostics(handle);
         Log.Info($"Target captured — {targetInfo}");
     }
 
@@ -173,12 +174,14 @@ public class AutoPasteService : IAutoPasteService
     /// <inheritdoc />
     public void PasteToTargetWindow(Action? ensureClipboardText = null)
     {
+        // Snapshot the handle once — we're on thread pool, UI thread could reassign mid-flight.
+        var target = Volatile.Read(ref _targetWindowHandle);
         try
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            Log.Info($"=== AUTO-PASTE START === Target: {_targetWindowHandle}");
+            Log.Info($"=== AUTO-PASTE START === Target: {target}");
 
-            if (_targetWindowHandle == IntPtr.Zero || !IsWindow(_targetWindowHandle))
+            if (target == IntPtr.Zero || !IsWindow(target))
             {
                 Log.Warning("Target window handle is invalid — text is on clipboard");
                 return;
@@ -198,18 +201,18 @@ public class AutoPasteService : IAutoPasteService
             // Check if the target is still the foreground window.
             // The overlay is non-activating, so in the normal case the target
             // stays focused throughout — no restoration needed.
-            bool targetIsForeground = GetForegroundWindow() == _targetWindowHandle;
+            bool targetIsForeground = GetForegroundWindow() == target;
 
             if (!targetIsForeground)
             {
                 var actualFg = GetForegroundWindow();
                 Log.Debug($"Target lost foreground — actual foreground: {GetWindowDiagnostics(actualFg)}");
-                if (!RestoreFocusToTarget())
+                if (!RestoreFocusToTarget(target))
                 {
                     Log.Warning("Failed to restore focus — skipping paste. Text is on clipboard for manual Ctrl+V.");
                     return;
                 }
-                Thread.Sleep(60);
+                Thread.Sleep(Constants.PasteFocusRetryDelayMs);
                 Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Focus restored");
 
                 // Re-set clipboard ONLY after focus switch — switching focus can cause
@@ -233,7 +236,7 @@ public class AutoPasteService : IAutoPasteService
             }
 
             // Identify the target window type for paste method selection
-            var (windowClass, processName, isElevated) = GetWindowIdentity(_targetWindowHandle);
+            var (windowClass, processName, isElevated) = GetWindowIdentity(target);
             Log.Info($"Target identity — class: \"{windowClass}\", process: \"{processName}\", elevated: {isElevated}");
 
             if (isElevated)
@@ -244,7 +247,7 @@ public class AutoPasteService : IAutoPasteService
             // Check if the hotkey's Alt key activated a menu bar in the target app.
             // Only send ESC to dismiss it if a menu is actually detected — avoids
             // blindly sending ESC which breaks Telegram (search), browsers (cancel), etc.
-            DismissMenuBarIfActive();
+            DismissMenuBarIfActive(target);
 
             SendCtrlV();
 
@@ -262,17 +265,17 @@ public class AutoPasteService : IAutoPasteService
     /// Only called when the user switched apps during recording/transcription.
     /// Uses AttachThreadInput to bypass SetForegroundWindow restrictions.
     /// </summary>
-    private bool RestoreFocusToTarget()
+    private bool RestoreFocusToTarget(IntPtr target)
     {
-        if (IsIconic(_targetWindowHandle))
+        if (IsIconic(target))
         {
-            ShowWindow(_targetWindowHandle, SW_RESTORE);
-            Thread.Sleep(30);
+            ShowWindow(target, SW_RESTORE);
+            Thread.Sleep(Constants.PasteFocusRestoreDelayMs);
         }
 
         // Attach threads so SetForegroundWindow bypasses the foreground lock
         uint currentThreadId = GetCurrentThreadId();
-        uint targetThreadId = GetWindowThreadProcessId(_targetWindowHandle, out _);
+        uint targetThreadId = GetWindowThreadProcessId(target, out _);
 
         bool attached = false;
         if (currentThreadId != targetThreadId)
@@ -283,23 +286,23 @@ public class AutoPasteService : IAutoPasteService
 
         try
         {
-            BringWindowToTop(_targetWindowHandle);
-            SetForegroundWindow(_targetWindowHandle);
-            Thread.Sleep(30);
+            BringWindowToTop(target);
+            SetForegroundWindow(target);
+            Thread.Sleep(Constants.PasteFocusRestoreDelayMs);
 
-            if (GetForegroundWindow() == _targetWindowHandle)
+            if (GetForegroundWindow() == target)
             {
                 Log.Debug("Focus restored (primary)");
                 return true;
             }
 
             // Retry with ShowWindow
-            ShowWindow(_targetWindowHandle, SW_SHOW);
-            BringWindowToTop(_targetWindowHandle);
-            SetForegroundWindow(_targetWindowHandle);
-            Thread.Sleep(30);
+            ShowWindow(target, SW_SHOW);
+            BringWindowToTop(target);
+            SetForegroundWindow(target);
+            Thread.Sleep(Constants.PasteFocusRestoreDelayMs);
 
-            bool success = GetForegroundWindow() == _targetWindowHandle;
+            bool success = GetForegroundWindow() == target;
             Log.Debug(success ? "Focus restored (retry)" : $"Focus restore failed. Foreground: {GetForegroundWindow()}");
             return success;
         }
@@ -392,7 +395,7 @@ public class AutoPasteService : IAutoPasteService
 
     private void WaitForModifierKeysRelease()
     {
-        var timeout = DateTime.Now.AddMilliseconds(500);
+        var timeout = DateTime.Now.AddMilliseconds(Constants.PasteModifierReleaseTimeoutMs);
         while (DateTime.Now < timeout)
         {
             bool altPressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
@@ -405,7 +408,7 @@ public class AutoPasteService : IAutoPasteService
                 return;
             }
 
-            Thread.Sleep(10);
+            Thread.Sleep(Constants.PasteModifierPollMs);
         }
         Log.Warning("Timeout waiting for modifier keys to release");
     }
@@ -416,9 +419,9 @@ public class AutoPasteService : IAutoPasteService
     /// This avoids blindly sending ESC to apps like Telegram (where ESC opens search)
     /// or browsers (where ESC cancels navigation).
     /// </summary>
-    private void DismissMenuBarIfActive()
+    private void DismissMenuBarIfActive(IntPtr target)
     {
-        uint targetThreadId = GetWindowThreadProcessId(_targetWindowHandle, out _);
+        uint targetThreadId = GetWindowThreadProcessId(target, out _);
         var info = new GUITHREADINFO();
         info.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
 

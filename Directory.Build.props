@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Single source of truth for the Talkty version — version.txt at repo root.
+
+    Propagates to:
+      - Talkty.App.csproj        (automatic via MSBuild inheritance of <Version>)
+      - installer/TalktySetup.iss (Inno reads version.txt at preprocess time)
+      - version.json              (STILL MANUAL — keep this file in sync at release time)
+  -->
+  <PropertyGroup>
+    <TalktyVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)version.txt').Trim())</TalktyVersion>
+    <Version>$(TalktyVersion)</Version>
+    <AssemblyVersion>$(TalktyVersion).0</AssemblyVersion>
+    <FileVersion>$(TalktyVersion).0</FileVersion>
+  </PropertyGroup>
+</Project>

@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Talkty.App", "Talkty.App\Talkty.App.csproj", "{429C876C-BCD3-4547-BA9F-D0DA6CAF8223}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Talkty.Tests", "Talkty.Tests\Talkty.Tests.csproj", "{07311E2F-D9F7-4788-8AF0-19D80046807D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{429C876C-BCD3-4547-BA9F-D0DA6CAF8223}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{429C876C-BCD3-4547-BA9F-D0DA6CAF8223}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{429C876C-BCD3-4547-BA9F-D0DA6CAF8223}.Release|Any CPU.Build.0 = Release|Any CPU
+		{07311E2F-D9F7-4788-8AF0-19D80046807D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{07311E2F-D9F7-4788-8AF0-19D80046807D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{07311E2F-D9F7-4788-8AF0-19D80046807D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{07311E2F-D9F7-4788-8AF0-19D80046807D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -19,6 +19,13 @@ public partial class OverlayViewModel : ObservableObject
     [ObservableProperty]
     private string _elapsedTime = "00:00";
 
+    /// <summary>
+    /// When true, this recording is treated as an AI-agent prompt: the transcription is expanded
+    /// into a structured prompt before output. Toggled via the "Prompting" button on the pill.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPromptMode;
+
     private DateTime _startTime;
     private System.Windows.Threading.DispatcherTimer? _timer;
 

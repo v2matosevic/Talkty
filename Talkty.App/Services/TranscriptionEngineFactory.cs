@@ -26,6 +26,7 @@ public static class TranscriptionEngineFactory
         {
             TranscriptionEngine.Whisper => new WhisperEngine(),
             TranscriptionEngine.SherpaOnnx => new SherpaOnnxEngine(),
+            TranscriptionEngine.OpenRouter => new OpenRouterEngine(),
             _ => throw new ArgumentException($"Unknown engine type: {engineType}")
         };
     }
@@ -34,7 +35,7 @@ public static class TranscriptionEngineFactory
     /// Gets all available engine types.
     /// </summary>
     public static IReadOnlyList<TranscriptionEngine> GetAvailableEngines() =>
-        [TranscriptionEngine.Whisper, TranscriptionEngine.SherpaOnnx];
+        [TranscriptionEngine.Whisper, TranscriptionEngine.SherpaOnnx, TranscriptionEngine.OpenRouter];
 
     /// <summary>
     /// Gets all model profiles for a given engine type.

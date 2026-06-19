@@ -1,7 +1,6 @@
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Tar;
 using SharpCompress.Common;
@@ -68,8 +67,6 @@ public interface IModelDownloadService
         CancellationToken cancellationToken = default);
 
     void CancelDownload();
-
-    Task<bool> VerifyModelIntegrityAsync(ModelProfile profile, string modelPath);
 }
 
 public class ModelDownloadService : IModelDownloadService
@@ -445,64 +442,6 @@ public class ModelDownloadService : IModelDownloadService
     public void CancelDownload()
     {
         _cts?.Cancel();
-    }
-
-    public async Task<bool> VerifyModelIntegrityAsync(ModelProfile profile, string modelPath)
-    {
-        return await Task.Run(() => VerifyModelIntegritySync(profile, modelPath));
-    }
-
-    private bool VerifyModelIntegritySync(ModelProfile profile, string modelPath)
-    {
-        var expectedHash = profile.GetExpectedSha256();
-        if (string.IsNullOrEmpty(expectedHash))
-        {
-            Log.Warning($"No expected hash defined for {profile}, skipping integrity check");
-            return true; // No hash to verify against
-        }
-
-        if (!File.Exists(modelPath))
-        {
-            Log.Error($"Model file not found for integrity check: {modelPath}");
-            return false;
-        }
-
-        try
-        {
-            Log.Debug($"Computing SHA256 for {modelPath}...");
-            var actualHash = ComputeSha256Sync(modelPath);
-            var matches = string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase);
-
-            if (matches)
-            {
-                Log.Info($"SHA256 verified for {profile}: {actualHash}");
-            }
-            else
-            {
-                Log.Error($"SHA256 mismatch for {profile}. Expected: {expectedHash}, Got: {actualHash}");
-            }
-
-            return matches;
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"Failed to compute SHA256 for {modelPath}", ex);
-            return false;
-        }
-    }
-
-    private static async Task<string> ComputeSha256Async(string filePath)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
-        var hashBytes = await SHA256.HashDataAsync(stream);
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
-    }
-
-    private static string ComputeSha256Sync(string filePath)
-    {
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920);
-        var hashBytes = SHA256.HashData(stream);
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
     private static void CleanupTempFile(string tempPath)

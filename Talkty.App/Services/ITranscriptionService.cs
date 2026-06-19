@@ -33,6 +33,12 @@ public interface ITranscriptionService : IDisposable
     void SetVocabularyPrompt(string? prompt);
 
     /// <summary>
+    /// Sets the (decrypted) OpenRouter API key used by the cloud engine. Forwarded to the
+    /// engine on creation, mirroring <see cref="SetVocabularyPrompt"/>. Pass null to clear.
+    /// </summary>
+    void SetCloudApiKey(string? apiKey);
+
+    /// <summary>
     /// Whether a model is currently loaded and ready.
     /// </summary>
     bool IsModelLoaded { get; }

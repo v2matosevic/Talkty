@@ -23,6 +23,10 @@ public class SettingsService : ISettingsService
     public AppSettings Settings { get; private set; } = new();
     public bool IsFirstRun { get; private set; }
 
+    // Serializes concurrent SaveHistory calls — back-to-back transcriptions could otherwise
+    // race on the temp-file rename and leave history.json corrupt or truncated.
+    private readonly SemaphoreSlim _historyWriteLock = new(1, 1);
+
     public void Load()
     {
         Log.Info("Loading settings...");
@@ -125,6 +129,7 @@ public class SettingsService : ISettingsService
 
     public void SaveHistory(List<TranscriptionHistoryEntry> history)
     {
+        _historyWriteLock.Wait();
         try
         {
             EnsureDirectoriesExist();
@@ -139,6 +144,10 @@ public class SettingsService : ISettingsService
         {
             Log.Error($"Failed to save history: {ex.Message}", ex);
         }
+        finally
+        {
+            _historyWriteLock.Release();
+        }
     }
 
     public string GetModelsDirectory() => Settings.ModelsPath;
@@ -150,6 +159,12 @@ public class SettingsService : ISettingsService
 
     public bool ModelExists(ModelProfile profile)
     {
+        // Cloud models live on the OpenRouter API — there is nothing to download locally.
+        if (profile.IsCloud())
+        {
+            return true;
+        }
+
         var path = GetModelPath(profile);
 
         // SherpaOnnx models are directories (extracted from archives)

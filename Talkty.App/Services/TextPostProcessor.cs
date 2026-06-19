@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace Talkty.App.Services;
@@ -11,23 +12,36 @@ namespace Talkty.App.Services;
 /// </summary>
 public static partial class TextPostProcessor
 {
+    // Non-speech tokens — Whisper inserts these for background sounds or when input is
+    // silence/noise. They're never real speech, safe to strip anywhere in the transcript.
     [GeneratedRegex(
-        @"(?:\s*(?:Thanks? (?:you |for (?:watching|listening))?\.?|" +
-        @"Bye\.?|" +
-        @"See you\.?|" +
-        @"Subscribe\.?|" +
-        @"Please (?:subscribe|like)\.?|" +
-        @"\[(?:MUSIC|BLANK_AUDIO|SILENCE|APPLAUSE)\]|" +
-        @"\((?:music|silence|applause|laughing|laughter)\)|" +
-        @"♪+|" +
-        @"\.{3,}|" +
-        @"you\.?\s*$))",
+        @"\s*\[(?:MUSIC|BLANK_AUDIO|SILENCE|APPLAUSE)\]\s*|" +
+        @"\s*\((?:music|silence|applause|laughing|laughter)\)\s*|" +
+        @"\s*♪+\s*",
         RegexOptions.IgnoreCase | RegexOptions.Compiled)]
-    private static partial Regex HallucinationPattern();
+    private static partial Regex NonSpeechTokens();
+
+    // End-of-transcript hallucinations — Whisper auto-completes silence/ambiguous audio with
+    // YouTube-style closings. ONLY strip when these are the trailing content (anchored to $)
+    // and match the full phrase. A bare "Thank you" or "Bye" at end is kept — users say those.
+    // The leading terminator is CAPTURED so the replacement can preserve it — otherwise we
+    // eat the period that ended the real sentence before the hallucination.
+    [GeneratedRegex(
+        @"([.!?])?\s+(?:Thank(?:s| you)? for (?:watching|listening)|" +
+        @"Please (?:subscribe|like(?:\s+and\s+subscribe)?)|" +
+        @"Subscribe to (?:my|the) channel|" +
+        @"Don'?t forget to (?:subscribe|like))\.?\s*$|" +
+        @"^(?:Thank(?:s| you)? for (?:watching|listening)|" +
+        @"Please (?:subscribe|like(?:\s+and\s+subscribe)?)|" +
+        @"Subscribe to (?:my|the) channel|" +
+        @"Don'?t forget to (?:subscribe|like))\.?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex EndOfTranscriptHallucination();
 
     // Matches a sentence-ending period followed by a lowercase word — indicates a false sentence break.
     // "I want to build. a new feature" → the period before "a" is a false break from a pause.
-    [GeneratedRegex(@"\.(\s+)([a-z])", RegexOptions.Compiled)]
+    // The negative lookbehind prevents matching the last dot of an ellipsis (user-intended "...").
+    [GeneratedRegex(@"(?<!\.)\.(\s+)([a-z])", RegexOptions.Compiled)]
     private static partial Regex FalseSentenceBreak();
 
     // Matches leading/trailing ellipsis that Whisper adds to continued segments.
@@ -38,9 +52,20 @@ public static partial class TextPostProcessor
     [GeneratedRegex(@"  +", RegexOptions.Compiled)]
     private static partial Regex MultipleSpaces();
 
-    // Matches double/triple periods that aren't ellipsis.
-    [GeneratedRegex(@"\.{2}(?!\.)", RegexOptions.Compiled)]
+    // Matches exactly 2 periods — not 3+ (which is a user-intended ellipsis).
+    // Both lookbehind AND lookahead are needed: without the lookbehind, the engine
+    // still matches positions 2-3 of "..." because only the trailing side is guarded.
+    [GeneratedRegex(@"(?<!\.)\.{2}(?!\.)", RegexOptions.Compiled)]
     private static partial Regex DoublePeriod();
+
+    // Cache of compiled word-boundary regexes per replacement pattern.
+    // Without this, every transcription recompiles ~44 regexes from scratch.
+    private static readonly ConcurrentDictionary<string, Regex> ReplacementRegexCache = new();
+
+    private static Regex GetReplacementRegex(string pattern) =>
+        ReplacementRegexCache.GetOrAdd(pattern, static p =>
+            new Regex(@"\b" + Regex.Escape(p) + @"\b",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled));
 
     /// <summary>
     /// Joins Whisper segments intelligently. Whisper adds terminal punctuation to each segment,
@@ -157,9 +182,7 @@ public static partial class TextPostProcessor
             if (string.IsNullOrWhiteSpace(pattern))
                 continue;
 
-            var regex = new Regex(
-                @"\b" + Regex.Escape(pattern) + @"\b",
-                RegexOptions.IgnoreCase);
+            var regex = GetReplacementRegex(pattern);
 
             result = regex.Replace(result, match =>
             {
@@ -181,14 +204,21 @@ public static partial class TextPostProcessor
     }
 
     /// <summary>
-    /// Strips common Whisper hallucinations that appear at audio boundaries.
+    /// Strips common Whisper hallucinations. Conservative by design:
+    /// - Non-speech tokens ([MUSIC], ♪ etc.) are stripped anywhere
+    /// - YouTube-style closings ("Thanks for watching") only at end-of-transcript
+    /// - Bare words like "Bye", "Subscribe", "you" are preserved (users say these)
     /// </summary>
     public static string StripHallucinations(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return text;
 
-        var cleaned = HallucinationPattern().Replace(text, "").Trim();
+        var cleaned = NonSpeechTokens().Replace(text, " ");
+        // $1 preserves the captured sentence terminator (if any) that preceded the hallucination.
+        // When no terminator was captured (start-of-text branch), $1 is empty — the whole phrase goes.
+        cleaned = EndOfTranscriptHallucination().Replace(cleaned, "$1");
+        cleaned = MultipleSpaces().Replace(cleaned, " ").Trim();
 
         if (cleaned != text.Trim())
         {

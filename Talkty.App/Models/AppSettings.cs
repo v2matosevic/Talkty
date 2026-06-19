@@ -8,7 +8,6 @@ public class AppSettings
     public string? SelectedMicrophoneId { get; set; }
     public bool CopyToClipboard { get; set; } = true;
     public bool AutoPaste { get; set; } = false;
-    public bool ShowNotification { get; set; } = false;
     public string Language { get; set; } = "en";
     public bool AutoDetectLanguage { get; set; } = false;
     public string ModelsPath { get; set; } = string.Empty;
@@ -48,6 +47,13 @@ public class AppSettings
     /// </summary>
     public Dictionary<string, string>? TextReplacements { get; set; }
 
+    /// <summary>
+    /// OpenRouter API key for cloud transcription, stored ENCRYPTED (Windows DPAPI, CurrentUser).
+    /// Never holds plaintext on disk. Encrypt via <c>ApiKeyProtector.Protect</c> before assigning;
+    /// decrypt via <c>ApiKeyProtector.Unprotect</c> at point of use.
+    /// </summary>
+    public string? OpenRouterApiKeyEncrypted { get; set; }
+
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;
     public Key HotkeyKey { get; set; } = Key.Q;
@@ -59,9 +65,6 @@ public class AppSettings
 public class UserHints
 {
     public bool HasSeenTrayMinimizeHint { get; set; }
-    public bool HasSeenFirstRecordingHint { get; set; }
-    public bool HasSeenAutoPasteHint { get; set; }
-    public bool HasSeenModelDownloadHint { get; set; }
     public int AppLaunchCount { get; set; }
 }
 

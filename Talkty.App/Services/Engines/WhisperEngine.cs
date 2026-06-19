@@ -288,9 +288,10 @@ public class WhisperEngine : ITranscriptionEngine
                     Log.Info($"WhisperProcessor built. Threads: {threads}");
                     CurrentProfile = profile;
 
-                    // Warmup: run a tiny transcription to prime JIT, GPU memory, and internal buffers.
-                    // First real transcription will be noticeably faster after this.
-                    WarmupProcessor();
+                    // Warmup runs OFF the load path — fire-and-forget. UI sees "Ready" immediately;
+                    // first real transcription pays a small cold-start cost if it beats warmup, but
+                    // that's rare and better than blocking model load.
+                    _ = Task.Run(WarmupProcessor);
 
                     return true;
                 }
@@ -309,24 +310,26 @@ public class WhisperEngine : ITranscriptionEngine
     /// This warms up JIT compilation, GPU memory allocation, and internal whisper.cpp buffers
     /// so the first real transcription doesn't pay a cold-start penalty.
     /// </summary>
-    private void WarmupProcessor()
+    private async Task WarmupProcessor()
     {
-        if (_processor == null) return;
+        // Snapshot the processor ref under the lock so we don't race with a reload/dispose.
+        WhisperProcessor? processor;
+        lock (_lock)
+        {
+            processor = _processor;
+        }
+        if (processor == null) return;
 
         try
         {
             var warmupStart = DateTime.Now;
             // 0.5 seconds of silence at 16kHz — primes JIT, GPU memory, internal buffers
-            var silence = new float[8000];
+            var silence = new float[Constants.WhisperWarmupSamples];
             using var cts = new CancellationTokenSource(5000);
-            var task = Task.Run(async () =>
+            await foreach (var segment in processor.ProcessAsync(silence, cts.Token))
             {
-                await foreach (var segment in _processor.ProcessAsync(silence, cts.Token))
-                {
-                    // Discard — we only care about priming the pipeline
-                }
-            }, cts.Token);
-            task.Wait(cts.Token);
+                // Discard — we only care about priming the pipeline
+            }
             var warmupTime = DateTime.Now - warmupStart;
             Log.Info($"Processor warmup completed in {warmupTime.TotalMilliseconds:F0}ms");
         }
@@ -488,7 +491,7 @@ public class WhisperEngine : ITranscriptionEngine
     {
         var logicalCores = Environment.ProcessorCount;
         var estimatedPhysicalCores = Math.Max(1, logicalCores / 2);
-        var threads = Math.Min(8, estimatedPhysicalCores);
+        var threads = Math.Min(Constants.WhisperMaxThreads, estimatedPhysicalCores);
         Log.Debug($"Thread selection: {logicalCores} logical cores → {estimatedPhysicalCores} estimated physical → using {threads}");
         return threads;
     }

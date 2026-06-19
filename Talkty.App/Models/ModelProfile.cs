@@ -25,7 +25,14 @@ public enum ModelProfile
     // Quantized models — smaller download, faster inference, ~same accuracy
     SmallQ5,        // small.en quantized - 190 MB vs 466 MB, ideal for CPU
     LargeTurboQ5,   // large-v3-turbo quantized - 574 MB vs 1.6 GB, ideal for CPU multilingual
-    MediumQ5        // medium.en quantized - 539 MB vs 1.5 GB, ideal for CPU
+    MediumQ5,       // medium.en quantized - 539 MB vs 1.5 GB, ideal for CPU
+
+    // Cloud (OpenRouter API) — opt-in, NOT offline, per-use cost. Local Whisper stays the default.
+    CloudGpt4oTranscribe,       // openai/gpt-4o-transcribe — top accuracy, robust to jargon
+    CloudGpt4oMiniTranscribe,   // openai/gpt-4o-mini-transcribe — fast & cheap
+    CloudWhisperLargeV3,        // openai/whisper-large-v3 — multilingual, accurate
+    CloudWhisperLargeV3Turbo,   // openai/whisper-large-v3-turbo — multilingual, faster
+    CloudQwen3Asr               // qwen/qwen3-asr-flash-2026-02-10 — lowest cost
 }
 
 /// <summary>
@@ -34,7 +41,8 @@ public enum ModelProfile
 public enum TranscriptionEngine
 {
     Whisper,        // Whisper.net (whisper.cpp)
-    SherpaOnnx      // sherpa-onnx (SenseVoice, Moonshine)
+    SherpaOnnx,     // sherpa-onnx (SenseVoice, Moonshine)
+    OpenRouter      // OpenRouter cloud API (GPT-4o Transcribe, Whisper, Qwen, ...)
 }
 
 public static class ModelProfileExtensions
@@ -45,7 +53,32 @@ public static class ModelProfileExtensions
     public static TranscriptionEngine GetEngine(this ModelProfile profile) => profile switch
     {
         ModelProfile.SenseVoice => TranscriptionEngine.SherpaOnnx,
+        ModelProfile.CloudGpt4oTranscribe
+            or ModelProfile.CloudGpt4oMiniTranscribe
+            or ModelProfile.CloudWhisperLargeV3
+            or ModelProfile.CloudWhisperLargeV3Turbo
+            or ModelProfile.CloudQwen3Asr => TranscriptionEngine.OpenRouter,
         _ => TranscriptionEngine.Whisper
+    };
+
+    /// <summary>
+    /// Whether this profile runs against the cloud (OpenRouter) rather than a local model.
+    /// Cloud profiles skip the download / GPU / on-disk-file machinery.
+    /// </summary>
+    public static bool IsCloud(this ModelProfile profile) =>
+        profile.GetEngine() == TranscriptionEngine.OpenRouter;
+
+    /// <summary>
+    /// The OpenRouter model slug for a cloud profile (empty for local profiles).
+    /// </summary>
+    public static string GetOpenRouterModelId(this ModelProfile profile) => profile switch
+    {
+        ModelProfile.CloudGpt4oTranscribe => "openai/gpt-4o-transcribe",
+        ModelProfile.CloudGpt4oMiniTranscribe => "openai/gpt-4o-mini-transcribe",
+        ModelProfile.CloudWhisperLargeV3 => "openai/whisper-large-v3",
+        ModelProfile.CloudWhisperLargeV3Turbo => "openai/whisper-large-v3-turbo",
+        ModelProfile.CloudQwen3Asr => "qwen/qwen3-asr-flash-2026-02-10",
+        _ => ""
     };
 
     /// <summary>
@@ -83,6 +116,11 @@ public static class ModelProfileExtensions
         ModelProfile.SmallQ5 => "Small Lite (190 MB) - Fast English, Low RAM",
         ModelProfile.LargeTurboQ5 => "Large Turbo Lite (574 MB) - Fast Multilingual, Low RAM",
         ModelProfile.MediumQ5 => "Medium Lite (539 MB) - Accurate English, Low RAM",
+        ModelProfile.CloudGpt4oTranscribe => "GPT-4o Transcribe (Cloud) - Top Accuracy",
+        ModelProfile.CloudGpt4oMiniTranscribe => "GPT-4o Mini Transcribe (Cloud) - Fast & Cheap",
+        ModelProfile.CloudWhisperLargeV3 => "Whisper Large V3 (Cloud) - Multilingual",
+        ModelProfile.CloudWhisperLargeV3Turbo => "Whisper Large V3 Turbo (Cloud) - Fast Multilingual",
+        ModelProfile.CloudQwen3Asr => "Qwen3 ASR Flash (Cloud) - Lowest Cost",
         _ => "Unknown"
     };
 
@@ -102,6 +140,11 @@ public static class ModelProfileExtensions
         ModelProfile.SmallQ5 => "English only. Quantized for speed — ideal for CPU-only systems.",
         ModelProfile.LargeTurboQ5 => "99+ languages. Quantized — best for CPU/iGPU systems.",
         ModelProfile.MediumQ5 => "English only. Quantized for speed — good accuracy on slower hardware.",
+        ModelProfile.CloudGpt4oTranscribe => "Cloud API. Highest accuracy, robust to accents & technical jargon. Needs OpenRouter key.",
+        ModelProfile.CloudGpt4oMiniTranscribe => "Cloud API. Fast and inexpensive, strong everyday quality. Needs OpenRouter key.",
+        ModelProfile.CloudWhisperLargeV3 => "Cloud API. 99+ languages, high accuracy, no local compute. Needs OpenRouter key.",
+        ModelProfile.CloudWhisperLargeV3Turbo => "Cloud API. 99+ languages, faster variant. Needs OpenRouter key.",
+        ModelProfile.CloudQwen3Asr => "Cloud API. Lowest cost per minute, robust in noise. Needs OpenRouter key.",
         _ => ""
     };
 
@@ -162,6 +205,11 @@ public static class ModelProfileExtensions
         ModelProfile.SmallQ5 => "190 MB",
         ModelProfile.LargeTurboQ5 => "574 MB",
         ModelProfile.MediumQ5 => "539 MB",
+        ModelProfile.CloudGpt4oTranscribe
+            or ModelProfile.CloudGpt4oMiniTranscribe
+            or ModelProfile.CloudWhisperLargeV3
+            or ModelProfile.CloudWhisperLargeV3Turbo
+            or ModelProfile.CloudQwen3Asr => "Cloud",
         _ => "Unknown"
     };
 
@@ -174,6 +222,12 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => GetWhisperMultilingualLanguages(),
         ModelProfile.LargeTurboQ5 => GetWhisperMultilingualLanguages(),
         ModelProfile.SenseVoice => ["zh", "en", "ja", "ko", "yue", "auto"],
+        // Cloud transcription models are all multilingual.
+        ModelProfile.CloudGpt4oTranscribe
+            or ModelProfile.CloudGpt4oMiniTranscribe
+            or ModelProfile.CloudWhisperLargeV3
+            or ModelProfile.CloudWhisperLargeV3Turbo
+            or ModelProfile.CloudQwen3Asr => GetWhisperMultilingualLanguages(),
         _ => ["en"]
     };
 
@@ -195,6 +249,11 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => true,
         ModelProfile.LargeTurboQ5 => true,
         ModelProfile.SenseVoice => true,
+        ModelProfile.CloudGpt4oTranscribe
+            or ModelProfile.CloudGpt4oMiniTranscribe
+            or ModelProfile.CloudWhisperLargeV3
+            or ModelProfile.CloudWhisperLargeV3Turbo
+            or ModelProfile.CloudQwen3Asr => true,
         _ => false
     };
 
@@ -214,6 +273,12 @@ public static class ModelProfileExtensions
         ModelProfile.SmallQ5 => 4,
         ModelProfile.LargeTurboQ5 => 5,
         ModelProfile.MediumQ5 => 3,
+        // Cloud: no local compute, but bounded by network round-trip.
+        ModelProfile.CloudGpt4oTranscribe
+            or ModelProfile.CloudGpt4oMiniTranscribe
+            or ModelProfile.CloudWhisperLargeV3
+            or ModelProfile.CloudWhisperLargeV3Turbo
+            or ModelProfile.CloudQwen3Asr => 4,
         _ => 3
     };
 
@@ -233,6 +298,11 @@ public static class ModelProfileExtensions
         ModelProfile.SmallQ5 => 3,
         ModelProfile.LargeTurboQ5 => 4,
         ModelProfile.MediumQ5 => 4,
+        ModelProfile.CloudGpt4oTranscribe => 5,
+        ModelProfile.CloudWhisperLargeV3 => 5,
+        ModelProfile.CloudGpt4oMiniTranscribe => 4,
+        ModelProfile.CloudWhisperLargeV3Turbo => 4,
+        ModelProfile.CloudQwen3Asr => 4,
         _ => 3
     };
 
@@ -241,10 +311,11 @@ public static class ModelProfileExtensions
     /// </summary>
     public static bool IsRecommended(this ModelProfile profile) => profile switch
     {
-        ModelProfile.LargeTurbo => true,      // Best multilingual balance (GPU)
-        ModelProfile.DistilLargeV3 => true,   // Best English (GPU)
-        ModelProfile.LargeTurboQ5 => true,    // Best multilingual balance (CPU)
-        ModelProfile.SmallQ5 => true,         // Best for low-power CPU systems
+        ModelProfile.LargeTurbo => true,           // Best multilingual balance (GPU)
+        ModelProfile.DistilLargeV3 => true,        // Best English (GPU)
+        ModelProfile.LargeTurboQ5 => true,         // Best multilingual balance (CPU)
+        ModelProfile.SmallQ5 => true,              // Best for low-power CPU systems
+        ModelProfile.CloudGpt4oTranscribe => true, // Best cloud quality
         _ => false
     };
 
@@ -261,18 +332,4 @@ public static class ModelProfileExtensions
         "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha",
         "ba", "jw", "su", "auto"
     ];
-
-    /// <summary>
-    /// SHA256 hash for model file integrity verification (Whisper models only).
-    /// Note: These may change on HuggingFace, so we don't strictly enforce them.
-    /// </summary>
-    public static string? GetExpectedSha256(this ModelProfile profile) => profile switch
-    {
-        ModelProfile.Tiny => "c78c86eb1a8faa21b369bcd33207cc90d64e9b97ee73eba7e77c6c8a0d9edf1e",
-        ModelProfile.Base => "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
-        ModelProfile.Small => "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-        ModelProfile.Medium => "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
-        ModelProfile.Large => "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
-        _ => null
-    };
 }

@@ -104,7 +104,7 @@
                                                     <Border.Background>
                                                         <SolidColorBrush Color="#10B981" Opacity="0.2"/>
                                                     </Border.Background>
-                                                    <TextBlock Text="Downloaded" FontSize="9" Foreground="#10B981"/>
+                                                    <TextBlock Text="{Binding StatusBadgeText}" FontSize="9" Foreground="#10B981"/>
                                                 </Border>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{StaticResource Zinc500Brush}" Margin="0,2,0,0"/>
@@ -198,6 +198,42 @@
                                 </Grid>
                             </Border>
                             <ItemsControl ItemsSource="{Binding HighEndModels}" ItemTemplate="{StaticResource ModelItemTemplate}" x:Name="HighEndList"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- CLOUD (API) — online models via OpenRouter, requires a key (collapsed by default) -->
+                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleCloud_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="CLOUD (API) — ONLINE, NEEDS KEY" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Zinc500Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="▸" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="CloudArrow"/>
+                                </Grid>
+                            </Border>
+                            <StackPanel x:Name="CloudContent" Visibility="Collapsed">
+                                <ItemsControl ItemsSource="{Binding CloudModels}" ItemTemplate="{StaticResource ModelItemTemplate}"/>
+                                <!-- OpenRouter API key -->
+                                <Border Background="{StaticResource Zinc950Brush}" CornerRadius="8" Padding="14" Margin="14,6,14,14">
+                                    <StackPanel>
+                                        <TextBlock Text="OpenRouter API key" FontSize="12" Foreground="{StaticResource Zinc200Brush}" Margin="0,0,0,6"/>
+                                        <TextBox Text="{Binding OpenRouterApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontSize="11"
+                                                 FontFamily="{StaticResource FontMono}"
+                                                 Padding="8,6"/>
+                                        <TextBlock FontSize="10"
+                                                   Foreground="{StaticResource Zinc600Brush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,6,0,0"
+                                                   Text="Stored encrypted on this PC (Windows DPAPI). Get a key at openrouter.ai/keys. Cloud models send audio to OpenRouter and cost per use — local models stay fully offline."/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 
@@ -451,9 +487,6 @@
                                       Margin="0,0,0,12"/>
                             <CheckBox Content="Auto-paste at cursor"
                                       IsChecked="{Binding AutoPaste}"
-                                      Margin="0,0,0,12"/>
-                            <CheckBox Content="Show notification"
-                                      IsChecked="{Binding ShowNotification}"
                                       Margin="0,0,0,12"/>
                             <CheckBox Content="Lower volume while recording"
                                       IsChecked="{Binding DuckVolumeWhileRecording}"

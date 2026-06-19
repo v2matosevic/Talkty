@@ -107,6 +107,51 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
+
+                <!-- "Prompting" icon toggle — a sparkle glyph revealed on hover (or while active).
+                     When on, the transcription is expanded into a structured coding-agent prompt.
+                     Bare glyph (no chip) to match the wave-bar / timer style of the pill. -->
+                <ToggleButton x:Name="PromptButton"
+                              IsChecked="{Binding IsPromptMode, Mode=TwoWay}"
+                              Margin="10,0,2,0"
+                              VerticalAlignment="Center"
+                              Cursor="Hand"
+                              Focusable="False"
+                              ToolTip="Prompting — turn your transcription into a structured prompt for a coding AI agent">
+                    <ToggleButton.Style>
+                        <Style TargetType="ToggleButton">
+                            <!-- Hidden by default; revealed when the pill is hovered or mode is active. -->
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Setter Property="Foreground" Value="#A1A1AA"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="2">
+                                            <!-- 4-point sparkle (AI) glyph; fill follows Foreground. -->
+                                            <Path Width="15" Height="15" Stretch="Uniform"
+                                                  Fill="{TemplateBinding Foreground}"
+                                                  Data="M9,0.5 L10.5,6.6 L16.5,8 L10.5,9.4 L9,15.5 L7.5,9.4 L1.5,8 L7.5,6.6 Z"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="#E4E4E7"/>
+                                </Trigger>
+                                <!-- Active state: stay visible, accent purple (matches the pill's transcribing color). -->
+                                <DataTrigger Binding="{Binding IsPromptMode}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Setter Property="Foreground" Value="#8B5CF6"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ToggleButton.Style>
+                </ToggleButton>
             </StackPanel>
         </Border>
     </Border>

@@ -19,6 +19,7 @@ public class TranscriptionService : ITranscriptionService
     public IReadOnlyList<string> SupportedLanguages => _currentEngine?.SupportedLanguages ?? ["en"];
 
     private string? _pendingVocabularyPrompt;
+    private string? _pendingApiKey;
 
     public void SetVocabularyPrompt(string? prompt)
     {
@@ -27,6 +28,16 @@ public class TranscriptionService : ITranscriptionService
         if (_currentEngine is Engines.WhisperEngine whisper)
         {
             whisper.SetVocabularyPrompt(prompt);
+        }
+    }
+
+    public void SetCloudApiKey(string? apiKey)
+    {
+        _pendingApiKey = apiKey;
+        // If the cloud engine already exists, forward to it
+        if (_currentEngine is Engines.OpenRouterEngine openRouter)
+        {
+            openRouter.SetApiKey(apiKey);
         }
     }
 
@@ -63,6 +74,12 @@ public class TranscriptionService : ITranscriptionService
                         if (_pendingVocabularyPrompt != null && _currentEngine is Engines.WhisperEngine newWhisper)
                         {
                             newWhisper.SetVocabularyPrompt(_pendingVocabularyPrompt);
+                        }
+
+                        // Forward pending API key to a new cloud engine
+                        if (_currentEngine is Engines.OpenRouterEngine newOpenRouter)
+                        {
+                            newOpenRouter.SetApiKey(_pendingApiKey);
                         }
                     }
                 }

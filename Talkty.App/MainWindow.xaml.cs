@@ -65,17 +65,11 @@ public partial class MainWindow : Window
         var volumeDuckingService = new VolumeDuckingService();
         Log.Debug("VolumeDuckingService created");
 
-        // AutoPasteService: clipboard verification runs on UI thread via Dispatcher
-        var autoPasteService = new AutoPasteService(() =>
-        {
-            bool hasText = false;
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                hasText = System.Windows.Clipboard.ContainsText();
-            });
-            return hasText;
-        });
+        var autoPasteService = new AutoPasteService();
         Log.Debug("AutoPasteService created");
+
+        var promptRefinementService = new PromptRefinementService();
+        Log.Debug("PromptRefinementService created");
 
         // Initialize ViewModel
         Log.Info("Creating MainViewModel...");
@@ -85,7 +79,8 @@ public partial class MainWindow : Window
             transcriptionService,
             clipboardService,
             volumeDuckingService: volumeDuckingService,
-            autoPasteService: autoPasteService);
+            autoPasteService: autoPasteService,
+            promptRefinementService: promptRefinementService);
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;
@@ -272,6 +267,13 @@ public partial class MainWindow : Window
                 _overlayWindow.ViewModel.IsTranscribing = false;
                 _overlayWindow.ViewModel.StatusText = "Listening...";
                 _overlayWindow.ViewModel.StartTimer();
+
+                // Reset & wire the "Prompting" toggle for this recording (detach first to avoid dupes)
+                _overlayWindow.ViewModel.PropertyChanged -= OnOverlayPromptModeChanged;
+                _overlayWindow.ViewModel.IsPromptMode = false;
+                _viewModel.PromptMode = false;
+                _overlayWindow.ViewModel.PropertyChanged += OnOverlayPromptModeChanged;
+
                 _overlayWindow.Show();
                 Log.Info("OverlayWindow shown");
 
@@ -322,6 +324,19 @@ public partial class MainWindow : Window
                     _overlayWindow.ViewModel.StatusText = "Cancelled";
                 }
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors the overlay's "Prompting" toggle into the MainViewModel so the transcription
+    /// pipeline knows to expand this recording into a structured agent prompt.
+    /// </summary>
+    private void OnOverlayPromptModeChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(OverlayViewModel.IsPromptMode) && _overlayWindow?.ViewModel != null)
+        {
+            _viewModel.PromptMode = _overlayWindow.ViewModel.IsPromptMode;
+            Log.Info($"Prompt mode toggled: {_viewModel.PromptMode}");
         }
     }
 

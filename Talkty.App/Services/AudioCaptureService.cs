@@ -12,6 +12,9 @@ public class AudioCaptureService : IAudioCaptureService
     private string? _selectedDeviceId;
     private readonly object _recordingLock = new();
     private readonly object _dataLock = new();
+    // Signals when NAudio has flushed all in-flight buffers. Without awaiting this,
+    // StopRecording -> GetRecordedAudioAsFloat loses the last 200-400ms of audio.
+    private TaskCompletionSource<bool>? _stopCompletion;
 
     public event EventHandler<float>? AudioLevelChanged;
 
@@ -71,6 +74,9 @@ public class AudioCaptureService : IAudioCaptureService
                 _floatSamples = new List<float>(Constants.SampleRate * 120);
             }
 
+            // Fresh completion source for this recording's flush signal
+            _stopCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
             _waveIn.DataAvailable += OnDataAvailable;
             _waveIn.RecordingStopped += OnRecordingStopped;
 
@@ -102,8 +108,52 @@ public class AudioCaptureService : IAudioCaptureService
                 Log.Error("Error stopping recording", ex);
             }
 
-            Log.Debug("Recording stopped");
+            Log.Debug("Recording stopped (not awaiting flush)");
         }
+    }
+
+    public async Task<bool> StopRecordingAndFlushAsync(int timeoutMs = 500)
+    {
+        TaskCompletionSource<bool>? tcs;
+        lock (_recordingLock)
+        {
+            if (!IsRecording)
+            {
+                Log.Warning("StopRecordingAndFlushAsync called but not recording");
+                return false;
+            }
+
+            Log.Info("StopRecordingAndFlushAsync");
+            IsRecording = false;
+            tcs = _stopCompletion;
+
+            try
+            {
+                // NAudio signals the worker thread to stop and flush remaining buffers.
+                // The actual delivery happens asynchronously — OnRecordingStopped fires last.
+                _waveIn?.StopRecording();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Error stopping recording", ex);
+            }
+        }
+
+        if (tcs == null)
+        {
+            Log.Warning("No stop completion source — skipping flush wait");
+            return false;
+        }
+
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs)).ConfigureAwait(false);
+        if (completed == tcs.Task)
+        {
+            Log.Debug("Recording flush completed");
+            return true;
+        }
+
+        Log.Warning($"Recording flush timed out after {timeoutMs}ms — last audio may be truncated");
+        return false;
     }
 
     public byte[] GetRecordedAudio()
@@ -131,6 +181,10 @@ public class AudioCaptureService : IAudioCaptureService
         }
     }
 
+    // Scratch buffer reused across callbacks to avoid per-call allocation.
+    // Not thread-safe across callbacks — NAudio delivers DataAvailable serially on one thread.
+    private float[] _conversionBuffer = new float[4096];
+
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
         try
@@ -138,16 +192,23 @@ public class AudioCaptureService : IAudioCaptureService
             // Use MemoryMarshal to reinterpret bytes as shorts — zero-copy, no manual byte shifting
             var shorts = MemoryMarshal.Cast<byte, short>(e.Buffer.AsSpan(0, e.BytesRecorded));
 
+            if (_conversionBuffer.Length < shorts.Length)
+                _conversionBuffer = new float[shorts.Length];
+
+            // Convert shorts -> floats outside the data lock, and compute max in the same pass.
             float max = 0;
+            for (int i = 0; i < shorts.Length; i++)
+            {
+                var f = shorts[i] / 32768f;
+                _conversionBuffer[i] = f;
+                var abs = Math.Abs(f);
+                if (abs > max) max = abs;
+            }
+
+            // Single bulk append under lock — was one Add() per sample (16k/sec).
             lock (_dataLock)
             {
-                foreach (var s in shorts)
-                {
-                    var f = s / 32768f;
-                    _floatSamples.Add(f);
-                    var abs = Math.Abs(f);
-                    if (abs > max) max = abs;
-                }
+                _floatSamples.AddRange(new ReadOnlySpan<float>(_conversionBuffer, 0, shorts.Length));
             }
 
             AudioLevelChanged?.Invoke(this, max);
@@ -165,6 +226,10 @@ public class AudioCaptureService : IAudioCaptureService
         {
             Log.Error("Recording stopped with exception", e.Exception);
         }
+
+        // Release any caller awaiting StopRecordingAndFlushAsync.
+        // By this point NAudio has delivered all buffered DataAvailable callbacks.
+        _stopCompletion?.TrySetResult(true);
     }
 
     public void Dispose()

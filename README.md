@@ -2,7 +2,7 @@
 
 **Local speech-to-text for Windows, powered by Whisper.**
 
-Talkty transcribes your voice to text entirely on your device. No internet required. No data leaves your computer.
+Talkty transcribes your voice to text on your device — local and private by default, with optional cloud features when you want higher accuracy or AI-generated prompts.
 
 ---
 
@@ -15,12 +15,14 @@ Talkty transcribes your voice to text entirely on your device. No internet requi
 - **Customizable** - Choose model size and configure hotkey
 - **Multi-monitor** - Recording overlay appears on active screen
 - **Background operation** - Runs quietly in system tray
+- **Cloud transcription** *(opt-in)* - Optionally use OpenRouter models (GPT-4o Transcribe, Whisper, Qwen) for higher accuracy
+- **Prompting mode** *(opt-in)* - Turn your dictation into a structured prompt for coding AI agents (Claude Code, Cursor)
 
 ---
 
 ## Quick Start
 
-1. **Download** `TalktySetup-1.0.1.exe` from Releases
+1. **Download** `TalktySetup-1.1.0.exe` from Releases
 2. **Install** and launch Talkty
 3. **Download a model** in Settings (Base recommended)
 4. **Press Alt+Q** to record, speak, press again to stop
@@ -77,11 +79,13 @@ Access via gear icon or right-click tray icon → Settings.
 
 ## Privacy
 
-All processing is local:
+**Local transcription is fully private** — by default everything runs on-device:
 - Audio never leaves your device
-- No cloud services or internet required
+- No internet required for local models
 - Audio discarded after transcription
 - No telemetry or tracking
+
+**Opt-in cloud features** — if you enable **Cloud transcription** or **Prompting**, the relevant audio/text is sent to [OpenRouter](https://openrouter.ai) for processing. Both are **off by default**; your API key is stored encrypted on your device (Windows DPAPI). Leave them off to stay 100% local.
 
 ---
 
@@ -167,6 +171,12 @@ Talkty/
 ---
 
 ## Version History
+
+### v1.1.0 (June 2026)
+- **Cloud transcription (opt-in)** via OpenRouter — GPT-4o Transcribe, Whisper, Qwen and more for higher accuracy; local Whisper stays the offline default
+- **Prompting mode (opt-in)** — turn dictation into a structured prompt for coding AI agents, with a fast model fallback chain
+- API key stored encrypted on-device (Windows DPAPI)
+- Fixed a clipboard stall that delayed pasting
 
 ### v1.0.1 (December 2025)
 - Fixed microphone test button

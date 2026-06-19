@@ -38,9 +38,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _autoPaste;
 
     [ObservableProperty]
-    private bool _showNotification;
-
-    [ObservableProperty]
     private LanguageOption _selectedLanguage = new("auto", "Auto Detect");
 
     [ObservableProperty]
@@ -106,7 +103,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public ObservableCollection<ModelProfileViewModel> LowEndModels { get; } = [];
     public ObservableCollection<ModelProfileViewModel> MidRangeModels { get; } = [];
     public ObservableCollection<ModelProfileViewModel> HighEndModels { get; } = [];
+    public ObservableCollection<ModelProfileViewModel> CloudModels { get; } = [];
     private readonly List<ModelProfileViewModel> _allModels = [];
+
+    // Cloud (OpenRouter) API key — held in plaintext only in memory; persisted encrypted.
+    [ObservableProperty]
+    private string _openRouterApiKey = "";
 
     public event EventHandler<AppSettings>? SettingsSaved;
     public event EventHandler? CloseRequested;
@@ -169,6 +171,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         AddModel(HighEndModels, ModelProfile.SenseVoice, "SenseVoice", "zh/en/ja/ko, 15x faster than Whisper (1 GB)", "Ultra Fast", "#10B981");
         AddModel(HighEndModels, ModelProfile.Large, "Large v3", "99+ languages, best accuracy (3.1 GB)");
         AddModel(HighEndModels, ModelProfile.LargeTurboQ5, "Large Turbo Lite", "Multilingual, quantized for CPU (574 MB)", "Quantized", "#06B6D4");
+
+        // Cloud (OpenRouter API) — no download, runs online, needs an API key. Local Whisper stays the default.
+        AddModel(CloudModels, ModelProfile.CloudGpt4oTranscribe, "GPT-4o Transcribe", "Top accuracy, robust to accents & jargon", "Best Quality", "#8B5CF6");
+        AddModel(CloudModels, ModelProfile.CloudGpt4oMiniTranscribe, "GPT-4o Mini Transcribe", "Fast & inexpensive, great everyday quality", "Recommended", "#8B5CF6");
+        AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3, "Whisper Large V3", "99+ languages, high accuracy");
+        AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3Turbo, "Whisper Large V3 Turbo", "99+ languages, faster variant");
+        AddModel(CloudModels, ModelProfile.CloudQwen3Asr, "Qwen3 ASR Flash", "Lowest cost per minute, robust in noise", "Cheapest", "#10B981");
     }
 
     private void AddModel(ObservableCollection<ModelProfileViewModel> category, ModelProfile profile, string name, string description, string? badge = null, string badgeColor = "#8B5CF6")
@@ -179,7 +188,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             Name = name,
             Description = description,
             BadgeText = badge,
-            BadgeColor = badgeColor
+            BadgeColor = badgeColor,
+            IsCloud = profile.IsCloud()
         };
         category.Add(vm);
         _allModels.Add(vm);
@@ -228,7 +238,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         SelectedProfile = settings.ModelProfile;
         CopyToClipboard = settings.CopyToClipboard;
         AutoPaste = settings.AutoPaste;
-        ShowNotification = settings.ShowNotification;
 
         // Find matching language option by code, default to "auto"
         SelectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == settings.Language)
@@ -242,6 +251,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         HotkeyModifier = settings.HotkeyModifier;
         HotkeyKey = settings.HotkeyKey;
         UpdateHotkeyText();
+
+        // Decrypt the stored cloud API key for editing (kept in memory only as plaintext)
+        OpenRouterApiKey = ApiKeyProtector.Unprotect(settings.OpenRouterApiKeyEncrypted) ?? "";
 
         // Load vocabulary settings
         UseCustomVocabulary = settings.UseCustomVocabulary;
@@ -477,7 +489,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             SelectedMicrophoneId = SelectedAudioDevice?.Id,
             CopyToClipboard = CopyToClipboard,
             AutoPaste = AutoPaste,
-            ShowNotification = ShowNotification,
             Language = languageCode,
             AutoDetectLanguage = languageCode == "auto",
             UseGpu = UseGpu,
@@ -487,7 +498,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             HotkeyModifier = HotkeyModifier,
             HotkeyKey = HotkeyKey,
             UseCustomVocabulary = UseCustomVocabulary,
-            CustomVocabulary = vocabularyList
+            CustomVocabulary = vocabularyList,
+            // Encrypt the cloud API key before it leaves the dialog (DPAPI, CurrentUser).
+            OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect(
+                string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim())
         };
 
         SettingsSaved?.Invoke(this, settings);

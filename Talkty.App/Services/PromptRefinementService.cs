@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -20,21 +21,24 @@ public class PromptRefinementService : IPromptRefinementService
 {
     private const string Endpoint = "https://openrouter.ai/api/v1/chat/completions";
 
-    // Fallback chain (primary first). All are NON-reasoning instruct models — a dictation→prompt
+    // Default model chain (primary first). All are NON-reasoning instruct models — a dictation→prompt
     // rewrite is instruction-following, not problem-solving, so reasoning models would only add
     // "thinking" latency for marginal gain. Verify slugs against OpenRouter if a call 404s and the
     // chain skips a model.
-    private static readonly string[] Models =
+    //
+    // The user can override the PRIMARY via Settings (SetModel); the runtime chain then puts their
+    // choice first and keeps the rest of these as automatic fallbacks (see BuildChain).
+    private static readonly string[] DefaultModels =
     {
-        // Primary is minimax/minimax-m3 — top-tier instruction-following (Artificial Analysis
+        // Default primary is minimax/minimax-m3 — top-tier instruction-following (Artificial Analysis
         // Intelligence 44, above many closed models) at a flash-tier price, chosen for FIDELITY on the
         // completeness-critical rewrite. It is multi-hosted on OpenRouter at very different speeds, so
         // we pin provider sort=throughput (in the payload) to land on a fast host (Together/Makora
         // ~90-100 t/s) and avoid a slow route reintroducing a GLM-style latency tax. The fallbacks are
         // fast Google-EU-edge / cheap instruct models so a degraded primary still returns quickly.
-        "minimax/minimax-m3",           // primary    — top instruction-following (AA 44), non-reasoning; provider-pinned for speed
-        "google/gemini-3.1-flash-lite", // fallback 1  — fast, cheap, instruction-tuned, Google EU edge
-        "deepseek/deepseek-v4-flash",   // fallback 2  — ultra-cheap, fast
+        "minimax/minimax-m3",           // default primary — top instruction-following (AA 44), non-reasoning; provider-pinned for speed
+        "google/gemini-3.1-flash-lite", // fallback        — fast, cheap, instruction-tuned, Google EU edge
+        "deepseek/deepseek-v4-flash",   // fallback        — ultra-cheap, fast
     };
 
     // The meta-prompt that defines the feature. Grounded in Anthropic's Claude Code best-practices
@@ -126,6 +130,7 @@ public class PromptRefinementService : IPromptRefinementService
 
     private readonly object _lock = new();
     private string? _apiKey;
+    private string? _primaryModel;
 
     public bool IsConfigured
     {
@@ -135,6 +140,28 @@ public class PromptRefinementService : IPromptRefinementService
     public void SetApiKey(string? apiKey)
     {
         lock (_lock) { _apiKey = apiKey?.Trim(); }
+    }
+
+    public void SetModel(string? modelSlug)
+    {
+        lock (_lock) { _primaryModel = string.IsNullOrWhiteSpace(modelSlug) ? null : modelSlug.Trim(); }
+    }
+
+    /// <summary>
+    /// Builds the effective model chain: the user-chosen primary first (if any), then the default
+    /// models as fallbacks (de-duplicated). Falls back to the defaults when no override is set.
+    /// </summary>
+    private string[] BuildChain()
+    {
+        string? primary;
+        lock (_lock) { primary = _primaryModel; }
+
+        if (string.IsNullOrWhiteSpace(primary) ||
+            string.Equals(primary, DefaultModels[0], StringComparison.OrdinalIgnoreCase))
+            return DefaultModels;
+
+        var rest = DefaultModels.Where(m => !string.Equals(m, primary, StringComparison.OrdinalIgnoreCase));
+        return new[] { primary }.Concat(rest).ToArray();
     }
 
     public async Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default)
@@ -150,7 +177,8 @@ public class PromptRefinementService : IPromptRefinementService
         if (string.IsNullOrWhiteSpace(transcription))
             return null;
 
-        for (int i = 0; i < Models.Length; i++)
+        var chain = BuildChain();
+        for (int i = 0; i < chain.Length; i++)
         {
             // ESC cancels the whole chain (don't try the next model after a user cancel).
             if (cancellationToken.IsCancellationRequested)
@@ -159,7 +187,7 @@ public class PromptRefinementService : IPromptRefinementService
                 return null;
             }
 
-            var model = Models[i];
+            var model = chain[i];
             var (ok, content) = await TryRefineWithModel(model, key!, transcription, cancellationToken);
             if (ok && !string.IsNullOrWhiteSpace(content))
             {
@@ -168,7 +196,7 @@ public class PromptRefinementService : IPromptRefinementService
                 return content!.Trim();
             }
 
-            var next = i < Models.Length - 1 ? $"falling back to '{Models[i + 1]}'" : "no more fallbacks";
+            var next = i < chain.Length - 1 ? $"falling back to '{chain[i + 1]}'" : "no more fallbacks";
             Log.Warning($"Refinement model '{model}' failed/empty — {next}");
         }
 

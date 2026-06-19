@@ -15,6 +15,12 @@ public interface IPromptRefinementService
     void SetApiKey(string? apiKey);
 
     /// <summary>
+    /// Sets the preferred primary refinement model (OpenRouter slug). Null/empty restores the default.
+    /// The remaining built-in models stay as automatic fallbacks beneath the chosen one.
+    /// </summary>
+    void SetModel(string? modelSlug);
+
+    /// <summary>
     /// Expands the given transcription into a full, structured coding-agent prompt.
     /// Returns null on failure (caller should fall back to the raw transcription).
     /// </summary>

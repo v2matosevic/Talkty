@@ -95,17 +95,11 @@ public partial class SettingsWindow : Window
     }
 
     // Collapsible model section toggles
-    private void ToggleLowEnd_Click(object sender, MouseButtonEventArgs e) =>
-        ToggleSection(LowEndList, LowEndArrow);
-
-    private void ToggleMidRange_Click(object sender, MouseButtonEventArgs e) =>
-        ToggleSection(MidRangeList, MidRangeArrow);
-
-    private void ToggleHighEnd_Click(object sender, MouseButtonEventArgs e) =>
-        ToggleSection(HighEndList, HighEndArrow);
+    private void ToggleLocal_Click(object sender, MouseButtonEventArgs e) =>
+        ToggleSection(LocalList, LocalArrow);
 
     private void ToggleCloud_Click(object sender, MouseButtonEventArgs e) =>
-        ToggleSection(CloudContent, CloudArrow);
+        ToggleSection(CloudList, CloudArrow);
 
     private static void ToggleSection(UIElement list, System.Windows.Controls.TextBlock arrow)
     {

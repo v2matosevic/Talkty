@@ -147,6 +147,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var cloudKey = ApiKeyProtector.Unprotect(settings.OpenRouterApiKeyEncrypted);
             _transcriptionService.SetCloudApiKey(cloudKey);
             _promptRefinementService?.SetApiKey(cloudKey);
+            _promptRefinementService?.SetModel(settings.PromptingModel);
 
             await LoadModelAsync(settings.ModelProfile, settings.UseGpu);
 
@@ -898,6 +899,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var updatedKey = ApiKeyProtector.Unprotect(settings.OpenRouterApiKeyEncrypted);
         _transcriptionService.SetCloudApiKey(updatedKey);
         _promptRefinementService?.SetApiKey(updatedKey);
+        _promptRefinementService?.SetModel(settings.PromptingModel);
 
         // Reload model if profile or GPU setting changed
         bool profileChanged = previousProfile != settings.ModelProfile;

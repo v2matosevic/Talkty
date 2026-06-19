@@ -142,12 +142,17 @@
                         </DataTemplate>
                     </StackPanel.Resources>
 
-                    <!-- MODEL SELECTION — collapsible sections (click header to expand/collapse) -->
+                    <!-- TRANSCRIPTION MODEL — how your speech becomes text -->
+                    <TextBlock Text="TRANSCRIPTION MODEL"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource Zinc600Brush}"
+                               Margin="0,0,0,10"/>
 
-                    <!-- LOW-END PCs (collapsed by default) -->
+                    <!-- LOCAL — offline & free (expanded by default; recommended model is first) -->
                     <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
                         <StackPanel>
-                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleLowEnd_Click">
+                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleLocal_Click">
                                 <Border.Style>
                                     <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
                                         <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
@@ -155,54 +160,16 @@
                                 </Border.Style>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="LOW-END PCs (4GB RAM)" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Zinc500Brush}" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="▸" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="LowEndArrow"/>
+                                    <TextBlock Text="On your device — private &amp; free" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Zinc300Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="▾" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="LocalArrow"/>
                                 </Grid>
                             </Border>
-                            <ItemsControl ItemsSource="{Binding LowEndModels}" ItemTemplate="{StaticResource ModelItemTemplate}" Visibility="Collapsed" x:Name="LowEndList"/>
+                            <ItemsControl ItemsSource="{Binding LocalModels}" ItemTemplate="{StaticResource ModelItemTemplate}" x:Name="LocalList"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- MID-RANGE PCs (collapsed by default) -->
-                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
-                        <StackPanel>
-                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleMidRange_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="MID-RANGE PCs (8GB RAM)" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Zinc500Brush}" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="▸" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="MidRangeArrow"/>
-                                </Grid>
-                            </Border>
-                            <ItemsControl ItemsSource="{Binding MidRangeModels}" ItemTemplate="{StaticResource ModelItemTemplate}" Visibility="Collapsed" x:Name="MidRangeList"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- HIGH-END PCs (expanded by default — most users want these) -->
-                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
-                        <StackPanel>
-                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleHighEnd_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="HIGH-END PCs (16GB+ RAM, GPU)" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Zinc500Brush}" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="▾" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="HighEndArrow"/>
-                                </Grid>
-                            </Border>
-                            <ItemsControl ItemsSource="{Binding HighEndModels}" ItemTemplate="{StaticResource ModelItemTemplate}" x:Name="HighEndList"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- CLOUD (API) — online models via OpenRouter, requires a key (collapsed by default) -->
-                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
+                    <!-- CLOUD — online models via OpenRouter, requires a key (collapsed by default) -->
+                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,20">
                         <StackPanel>
                             <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleCloud_Click">
                                 <Border.Style>
@@ -212,28 +179,11 @@
                                 </Border.Style>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="CLOUD (API) — ONLINE, NEEDS KEY" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Zinc500Brush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Cloud — higher accuracy, needs API key" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Zinc300Brush}" VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1" Text="▸" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="CloudArrow"/>
                                 </Grid>
                             </Border>
-                            <StackPanel x:Name="CloudContent" Visibility="Collapsed">
-                                <ItemsControl ItemsSource="{Binding CloudModels}" ItemTemplate="{StaticResource ModelItemTemplate}"/>
-                                <!-- OpenRouter API key -->
-                                <Border Background="{StaticResource Zinc950Brush}" CornerRadius="8" Padding="14" Margin="14,6,14,14">
-                                    <StackPanel>
-                                        <TextBlock Text="OpenRouter API key" FontSize="12" Foreground="{StaticResource Zinc200Brush}" Margin="0,0,0,6"/>
-                                        <TextBox Text="{Binding OpenRouterApiKey, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontSize="11"
-                                                 FontFamily="{StaticResource FontMono}"
-                                                 Padding="8,6"/>
-                                        <TextBlock FontSize="10"
-                                                   Foreground="{StaticResource Zinc600Brush}"
-                                                   TextWrapping="Wrap"
-                                                   Margin="0,6,0,0"
-                                                   Text="Stored encrypted on this PC (Windows DPAPI). Get a key at openrouter.ai/keys. Cloud models send audio to OpenRouter and cost per use — local models stay fully offline."/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding CloudModels}" ItemTemplate="{StaticResource ModelItemTemplate}" Visibility="Collapsed" x:Name="CloudList"/>
                         </StackPanel>
                     </Border>
 
@@ -331,6 +281,61 @@
                                         HorizontalAlignment="Left"
                                         Padding="16,8"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- OPENROUTER API KEY — one key powers Cloud transcription AND Prompting -->
+                    <TextBlock Text="OPENROUTER API KEY"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource Zinc600Brush}"
+                               Margin="0,0,0,10"/>
+
+                    <Border Background="{StaticResource Zinc900Brush}"
+                            CornerRadius="10"
+                            Padding="14"
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBox Text="{Binding OpenRouterApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="11"
+                                     FontFamily="{StaticResource FontMono}"
+                                     Padding="8,6"/>
+                            <TextBlock FontSize="10"
+                                       Foreground="{StaticResource Zinc600Brush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"
+                                       Text="Powers Cloud transcription and Prompting. Stored encrypted on this PC (Windows DPAPI). Get a key at openrouter.ai/keys — cloud features send data to OpenRouter and cost per use; local transcription stays fully offline."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- PROMPTING — the model that rewrites dictation into a coding-agent prompt -->
+                    <TextBlock Text="PROMPTING"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource Zinc600Brush}"
+                               Margin="0,0,0,10"/>
+
+                    <Border Background="{StaticResource Zinc900Brush}"
+                            CornerRadius="10"
+                            Padding="14"
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="Prompt model"
+                                       FontSize="13"
+                                       Foreground="{StaticResource Zinc200Brush}"
+                                       Margin="0,0,0,8"/>
+                            <ComboBox ItemsSource="{Binding AvailablePromptModels}"
+                                      SelectedItem="{Binding SelectedPromptModel}"/>
+                            <TextBlock Text="{Binding SelectedPromptModel.Note}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource Zinc400Brush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"/>
+                            <TextBlock FontSize="10"
+                                       Foreground="{StaticResource Zinc600Brush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"
+                                       Text="With Prompting on (the sparkle on the recording pill), your dictation is rewritten into a structured prompt for a coding agent like Claude Code or Cursor. Uses your OpenRouter key above; falls back to the raw text if it fails."/>
                         </StackPanel>
                     </Border>
 

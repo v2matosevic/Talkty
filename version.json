@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Prompting mode now keeps the small details. The dictation-to-prompt rewrite was losing specifics, asides, and edge cases when condensing; it now preserves every concrete instruction, value, and caveat you mention (reformat, not summarize) and switched to a higher-fidelity model (MiniMax M3) for the expansion. Local Whisper stays the private, offline default."
+  "release_notes": "Settings cleanup. You can now pick the Prompting model right in Settings (MiniMax M3, Gemini, DeepSeek), and the model list is simpler — transcription models are grouped into Local (offline & free) and Cloud (needs key), with a dedicated OpenRouter API key section shared by both. Removed rarely-used models (Base, Small/Medium Lite, Medium, SenseVoice) to reduce clutter. Local Whisper stays the private, offline default."
 }

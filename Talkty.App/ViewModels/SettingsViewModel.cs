@@ -15,6 +15,15 @@ public record LanguageOption(string Code, string Name)
     public override string ToString() => Name;
 }
 
+/// <summary>
+/// A selectable model for the "Prompting" feature. <see cref="Slug"/> is the OpenRouter id sent to
+/// the refiner; <see cref="Name"/> is shown in the dropdown; <see cref="Note"/> is the one-line tradeoff.
+/// </summary>
+public record PromptModelOption(string Slug, string Name, string Note)
+{
+    public override string ToString() => Name;
+}
+
 public partial class SettingsViewModel : ObservableObject, IDisposable
 {
     private readonly ISettingsService _settingsService;
@@ -99,12 +108,25 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _customVocabularyText = "";
 
-    // Data-driven model collections
-    public ObservableCollection<ModelProfileViewModel> LowEndModels { get; } = [];
-    public ObservableCollection<ModelProfileViewModel> MidRangeModels { get; } = [];
-    public ObservableCollection<ModelProfileViewModel> HighEndModels { get; } = [];
+    // Data-driven model collections — local (offline, free) and cloud (online, needs key).
+    public ObservableCollection<ModelProfileViewModel> LocalModels { get; } = [];
     public ObservableCollection<ModelProfileViewModel> CloudModels { get; } = [];
     private readonly List<ModelProfileViewModel> _allModels = [];
+
+    // Prompting model picker — which OpenRouter model expands dictation into a coding-agent prompt.
+    // Slugs must match real OpenRouter models; the refiner keeps the others as automatic fallbacks.
+    private static readonly IReadOnlyList<PromptModelOption> PromptModels =
+    [
+        new("minimax/minimax-m3",           "MiniMax M3",             "Best fidelity — keeps every detail (recommended)"),
+        new("google/gemini-3.5-flash",      "Gemini 3.5 Flash",      "High quality, fast"),
+        new("google/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite", "Fastest, lowest latency"),
+        new("deepseek/deepseek-v4-flash",   "DeepSeek V4 Flash",     "Cheapest"),
+    ];
+
+    public IReadOnlyList<PromptModelOption> AvailablePromptModels => PromptModels;
+
+    [ObservableProperty]
+    private PromptModelOption _selectedPromptModel = PromptModels[0];
 
     // Cloud (OpenRouter) API key — held in plaintext only in memory; persisted encrypted.
     [ObservableProperty]
@@ -155,30 +177,38 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     private void InitializeModelProfiles()
     {
-        // Low-End PCs (4GB RAM)
-        AddModel(LowEndModels, ModelProfile.Tiny, "Tiny", "English only, fastest (75 MB)");
-        AddModel(LowEndModels, ModelProfile.Base, "Base", "English only, fast (142 MB)");
+        // LOCAL — offline & free. Ordered recommended-first so the best default sits at the top and
+        // users don't have to self-assess their hardware. Size is shown in each description.
+        AddModel(LocalModels, ModelProfile.LargeTurbo, "Large v3 Turbo", "99+ languages, fast — best all-round (1.6 GB)", "Recommended", "#8B5CF6");
+        AddModel(LocalModels, ModelProfile.DistilLargeV3, "Distil Large v3", "English only, fastest Whisper (756 MB)", "Best English", "#F59E0B");
+        AddModel(LocalModels, ModelProfile.Large, "Large v3", "99+ languages, highest accuracy, slowest (3.1 GB)", "Most Accurate", "#10B981");
+        AddModel(LocalModels, ModelProfile.LargeTurboQ5, "Large Turbo Lite", "99+ languages, quantized — best for CPU / low RAM (574 MB)", "Low RAM", "#06B6D4");
+        AddModel(LocalModels, ModelProfile.Small, "Small", "English only, balanced (466 MB)");
+        AddModel(LocalModels, ModelProfile.Tiny, "Tiny", "English only, fastest & smallest (75 MB)");
 
-        // Mid-Range PCs (8GB RAM)
-        AddModel(MidRangeModels, ModelProfile.Small, "Small", "English only, balanced (466 MB)");
-        AddModel(MidRangeModels, ModelProfile.SmallQ5, "Small Lite", "English, quantized for CPU (190 MB)", "Quantized", "#06B6D4");
-        AddModel(MidRangeModels, ModelProfile.DistilLargeV3, "Distil Large v3", "English only, fastest Whisper (756 MB)", "Best English", "#F59E0B");
-
-        // High-End PCs (16GB+ RAM, GPU)
-        AddModel(HighEndModels, ModelProfile.LargeTurbo, "Large v3 Turbo", "99+ languages, 6x faster than Large (1.6 GB)", "Recommended", "#8B5CF6");
-        AddModel(HighEndModels, ModelProfile.Medium, "Medium", "English only, accurate (1.5 GB)");
-        AddModel(HighEndModels, ModelProfile.MediumQ5, "Medium Lite", "English, quantized for CPU (539 MB)", "Quantized", "#06B6D4");
-        AddModel(HighEndModels, ModelProfile.SenseVoice, "SenseVoice", "zh/en/ja/ko, 15x faster than Whisper (1 GB)", "Ultra Fast", "#10B981");
-        AddModel(HighEndModels, ModelProfile.Large, "Large v3", "99+ languages, best accuracy (3.1 GB)");
-        AddModel(HighEndModels, ModelProfile.LargeTurboQ5, "Large Turbo Lite", "Multilingual, quantized for CPU (574 MB)", "Quantized", "#06B6D4");
-
-        // Cloud (OpenRouter API) — no download, runs online, needs an API key. Local Whisper stays the default.
+        // CLOUD (OpenRouter API) — no download, runs online, needs an API key. Local stays the private,
+        // offline default.
         AddModel(CloudModels, ModelProfile.CloudGpt4oTranscribe, "GPT-4o Transcribe", "Top accuracy, robust to accents & jargon", "Best Quality", "#8B5CF6");
         AddModel(CloudModels, ModelProfile.CloudGpt4oMiniTranscribe, "GPT-4o Mini Transcribe", "Fast & inexpensive, great everyday quality", "Recommended", "#8B5CF6");
         AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3, "Whisper Large V3", "99+ languages, high accuracy");
         AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3Turbo, "Whisper Large V3 Turbo", "99+ languages, faster variant");
         AddModel(CloudModels, ModelProfile.CloudQwen3Asr, "Qwen3 ASR Flash", "Lowest cost per minute, robust in noise", "Cheapest", "#10B981");
     }
+
+    /// <summary>
+    /// Models removed from the picker (Base, Medium, Medium Lite, Small Lite, SenseVoice) remain valid
+    /// enum values for backward-compat (settings persist the enum by NUMBER, so they must not be
+    /// reordered/removed). If a user still has one selected, surface the closest kept model instead.
+    /// </summary>
+    private static ModelProfile RemapRetiredProfile(ModelProfile profile) => profile switch
+    {
+        ModelProfile.Base => ModelProfile.Small,
+        ModelProfile.Medium => ModelProfile.LargeTurbo,
+        ModelProfile.MediumQ5 => ModelProfile.LargeTurboQ5,
+        ModelProfile.SmallQ5 => ModelProfile.Small,
+        ModelProfile.SenseVoice => ModelProfile.LargeTurbo,
+        _ => profile
+    };
 
     private void AddModel(ObservableCollection<ModelProfileViewModel> category, ModelProfile profile, string name, string description, string? badge = null, string badgeColor = "#8B5CF6")
     {
@@ -235,7 +265,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private void LoadSettings()
     {
         var settings = _settingsService.Settings;
-        SelectedProfile = settings.ModelProfile;
+        SelectedProfile = RemapRetiredProfile(settings.ModelProfile);
+
+        // Match the saved prompting model slug to an option; default to the first (best fidelity).
+        SelectedPromptModel = AvailablePromptModels.FirstOrDefault(m => m.Slug == settings.PromptingModel)
+                              ?? AvailablePromptModels[0];
+
         CopyToClipboard = settings.CopyToClipboard;
         AutoPaste = settings.AutoPaste;
 
@@ -501,7 +536,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             CustomVocabulary = vocabularyList,
             // Encrypt the cloud API key before it leaves the dialog (DPAPI, CurrentUser).
             OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect(
-                string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim())
+                string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim()),
+            PromptingModel = SelectedPromptModel?.Slug ?? PromptModels[0].Slug
         };
 
         SettingsSaved?.Invoke(this, settings);

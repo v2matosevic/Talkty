@@ -54,6 +54,13 @@ public class AppSettings
     /// </summary>
     public string? OpenRouterApiKeyEncrypted { get; set; }
 
+    /// <summary>
+    /// OpenRouter model slug the "Prompting" feature uses to expand dictation into a coding-agent
+    /// prompt. User-selectable in Settings; defaults to the highest-fidelity option. The refiner
+    /// keeps the remaining built-in models as automatic fallbacks regardless of this choice.
+    /// </summary>
+    public string PromptingModel { get; set; } = "minimax/minimax-m3";
+
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;
     public Key HotkeyKey { get; set; } = Key.Q;

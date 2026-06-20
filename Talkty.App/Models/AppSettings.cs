@@ -56,10 +56,12 @@ public class AppSettings
 
     /// <summary>
     /// OpenRouter model slug the "Prompting" feature uses to expand dictation into a coding-agent
-    /// prompt. User-selectable in Settings; defaults to the highest-fidelity option. The refiner
-    /// keeps the remaining built-in models as automatic fallbacks regardless of this choice.
+    /// prompt. User-selectable in Settings; defaults to the fastest, lowest-latency option (the
+    /// completeness guard auto-escalates to a stronger model if it ever summarizes, so speed is the
+    /// right default). The refiner keeps the remaining built-in models as automatic fallbacks
+    /// regardless of this choice.
     /// </summary>
-    public string PromptingModel { get; set; } = "minimax/minimax-m3";
+    public string PromptingModel { get; set; } = "google/gemini-3.1-flash-lite";
 
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;

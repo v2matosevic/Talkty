@@ -49,9 +49,9 @@ rest of this list stays on as automatic fallbacks (de-duplicated). The default c
 
 | Order | Model (OpenRouter slug) | Price in/out ($/M) | Why |
 |------|--------------------------|--------------------|-----|
-| 1 (primary) | `minimax/minimax-m3` | $0.30 / $1.20 | Top-tier instruction-following (Artificial Analysis Intelligence **44**) at a flash-tier price; standard (non-reasoning) instruct model → chosen for **fidelity** on the completeness-critical rewrite. Provider-pinned for speed (see below). |
+| 1 (primary) | `google/gemini-3.1-flash-lite` | ~$0.25 / $1.50 | **Fastest, lowest latency** (Google EU edge), instruction-tuned/extraction-optimized. The completeness guard makes speed the right default — a fast model that ever summarizes auto-escalates, so we don't pay fidelity-model latency up front. |
 | 2 (fallback) | `google/gemini-3.5-flash` | ~$0.30 / $2.50 | **Most reliable expander in real logs** — never timed out, always grew the input. The guard's quality-escalation target. |
-| 3 (fallback) | `google/gemini-3.1-flash-lite` | ~$0.25 / $1.50 | Fast TTFT, Google EU edge, instruction-tuned/extraction-optimized → low-latency safety net |
+| 3 (fallback) | `minimax/minimax-m3` | $0.30 / $1.20 | Top-tier instruction-following on paper (Artificial Analysis Intelligence **44**) but slower (multi-hosted) and observed to summarize → a fallback, not the default. Provider-pinned for speed (see below). |
 | 4 (last resort) | `deepseek/deepseek-v4-flash` | $0.09 / $0.18 | Ultra-cheap, fast |
 
 ### Completeness guard (anti-summarization)
@@ -75,19 +75,21 @@ rather than silently shipping a lossy prompt. Tuned from real logs — MiniMax M
 chars from a 578-char dictation** (ratio 0.34, caught and escalated); the Gemini family expanded
 (ratio > 1, passed).
 
-> **Primary = fidelity, fallbacks = speed.** The completeness rewrite (preserve every detail) is
-> instruction-following-heavy, so the primary is the strongest instruction-follower we can run cheaply:
-> `minimax/minimax-m3` (Artificial Analysis Intelligence 44, a *non-reasoning* instruct model — no
-> thinking-token latency tax). It is **multi-hosted on OpenRouter at very different speeds**, so the
-> request sets `provider: { sort: "throughput" }` to land on a fast host (Together/Makora ~90–100 t/s)
-> and avoid a slow route reintroducing a GLM-style geography tax. Its one tradeoff is decode speed
-> (~62–100 t/s vs a Gemini flash EU edge's ~150–200+), felt mainly on long prompts — hence the
-> fast Google-EU-edge fallback. The per-attempt timeout is **12s** so a slow/stalled model drops
-> through quickly instead of hanging.
+> **Primary = speed, fallbacks = quality (guard-protected).** Once the completeness guard exists, the
+> default no longer has to be the highest-fidelity model — it can be the *fastest* one, because any
+> detail-dropping result auto-escalates to a stronger model. So the primary is `google/gemini-3.1-flash-lite`
+> (fastest TTFT, Google EU edge, ~150–200+ t/s) and the first fallback is the proven-reliable
+> `google/gemini-3.5-flash`. Most calls finish on the fast primary; only the rare summarizing call pays
+> the escalation. `minimax/minimax-m3` (Artificial Analysis Intelligence 44, *non-reasoning*) sits below
+> as a fallback — strong on paper but multi-hosted and slower, so its request still pins
+> `provider: { sort: "throughput" }` to land on a fast host when it *is* used. The per-attempt timeout
+> is **12s** so a slow/stalled model drops through quickly instead of hanging.
 >
-> *History:* the chain was previously Gemini-flash-lite-first (latency-optimized) with `z-ai/glm-4.7-flash`
-> as a last resort; GLM measured **~15.8s** from the EU and its slug was later retired. The pivot to an
-> M3 primary followed the completeness upgrade — fidelity became the priority over the last second of latency.
+> *History:* originally Gemini-flash-lite-first (latency) with `z-ai/glm-4.7-flash` last (retired after
+> measuring ~15.8s from the EU). It then pivoted to a **MiniMax M3 primary** for the completeness upgrade
+> (fidelity over latency) — but real logs showed M3 going **0/2** (one 12s timeout, one 578→195-char
+> summarization), so once the completeness guard landed (v1.1.3) the default reverted to **flash-lite-first**
+> (v1.1.4): fast by default, quality on demand.
 
 ### Why these models (and not a "reasoning" model)
 

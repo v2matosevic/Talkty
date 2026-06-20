@@ -34,19 +34,20 @@ public class PromptRefinementService : IPromptRefinementService
     // choice first and keeps the rest of these as automatic fallbacks (see BuildChain).
     private static readonly string[] DefaultModels =
     {
-        // Default primary is minimax/minimax-m3 — top-tier instruction-following (Artificial Analysis
-        // Intelligence 44, above many closed models) at a flash-tier price, chosen for FIDELITY on the
-        // completeness-critical rewrite. It is multi-hosted on OpenRouter at very different speeds, so
-        // we pin provider sort=throughput (in the payload) to land on a fast host (Together/Makora
-        // ~90-100 t/s) and avoid a slow route reintroducing a GLM-style latency tax.
+        // Default primary is gemini-3.1-flash-lite — fastest, lowest latency (Google EU edge), and the
+        // completeness guard makes speed the right default: if a fast model ever summarizes, the chain
+        // escalates to a stronger one automatically, so we don't pay fidelity-model latency on every
+        // call up front. DefaultModels[0] doubles as the default primary in BuildChain.
         //
         // The FIRST fallback is gemini-3.5-flash — the most reliable expander in real logs (it never
-        // timed out and always grew the input), so when the primary times out OR trips the completeness
-        // guard (summarizes), the chain escalates straight to a high-quality model rather than a weaker
-        // one. The remaining fallbacks are the fast/cheap tiers for a last resort.
-        "minimax/minimax-m3",           // default primary — top instruction-following (AA 44), non-reasoning; provider-pinned for speed
+        // timed out and always grew the input), so when the primary trips the completeness guard
+        // (summarizes) or fails, the chain escalates straight to a high-quality model. MiniMax M3 sits
+        // below it: top instruction-following on paper (Artificial Analysis Intelligence 44) but slower
+        // (multi-hosted; provider sort=throughput is pinned in the payload to land on a fast host) and
+        // observed to summarize, so it's a fallback rather than the default. DeepSeek is the cheap last resort.
+        "google/gemini-3.1-flash-lite", // default primary — fastest, lowest latency, Google EU edge
         "google/gemini-3.5-flash",      // fallback #1     — most reliable expander in logs; quality escalation target for the guard
-        "google/gemini-3.1-flash-lite", // fallback #2     — fastest, lowest latency, Google EU edge
+        "minimax/minimax-m3",           // fallback #2     — top instruction-following (AA 44) but slower / can summarize; provider-pinned for speed
         "deepseek/deepseek-v4-flash",   // fallback #3     — ultra-cheap last resort
     };
 

@@ -115,11 +115,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     // Prompting model picker — which OpenRouter model expands dictation into a coding-agent prompt.
     // Slugs must match real OpenRouter models; the refiner keeps the others as automatic fallbacks.
+    // Recommended-first (PromptModels[0] is also the fallback default). Slug, not index, is persisted,
+    // so this list is safe to reorder.
     private static readonly IReadOnlyList<PromptModelOption> PromptModels =
     [
-        new("minimax/minimax-m3",           "MiniMax M3",             "Best fidelity — keeps every detail (recommended)"),
-        new("google/gemini-3.5-flash",      "Gemini 3.5 Flash",      "High quality, fast"),
-        new("google/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite", "Fastest, lowest latency"),
+        new("google/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite", "Fastest, lowest latency (recommended)"),
+        new("google/gemini-3.5-flash",      "Gemini 3.5 Flash",      "Highest-quality expansion, still fast"),
+        new("minimax/minimax-m3",           "MiniMax M3",            "Detail-focused, but slower"),
         new("deepseek/deepseek-v4-flash",   "DeepSeek V4 Flash",     "Cheapest"),
     ];
 

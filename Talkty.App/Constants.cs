@@ -90,6 +90,24 @@ public static class Constants
     /// </summary>
     public const int PromptRefinementTimeoutMs = 12000;
 
+    /// <summary>
+    /// Completeness guard for prompt refinement. The whole point of "Prompting" is to EXPAND a
+    /// dictation into a fuller, structured prompt — so a faithful rewrite of a substantial request is
+    /// essentially always longer than the raw speech (it adds headings/bullets while keeping every
+    /// detail). If a model instead returns something far SHORTER, it summarized and dropped the small
+    /// load-bearing details — a fidelity failure we treat like any other and fall through to the next
+    /// model in the chain. Only applied to substantial inputs so short asks (which legitimately produce
+    /// short prompts) never trip it. Tuned from real logs: MiniMax M3 once returned 195 chars from a
+    /// 578-char dictation (ratio 0.34) — caught; the Gemini family expanded (ratio &gt; 1) — passed.
+    /// </summary>
+    public const int PromptCompletenessMinInputChars = 400;
+
+    /// <summary>
+    /// Minimum acceptable output/input length ratio before a refinement is suspected of summarizing.
+    /// Filler/repetition trimming shaves maybe 10-30%; dropping below 0.6 means real content was cut.
+    /// </summary>
+    public const double PromptCompletenessMinOutputRatio = 0.6;
+
     // ─── Auto-paste ─────────────────────────────────────────────────────
 
     /// <summary>

@@ -54,6 +54,11 @@
     <Resource Include="Resources\tray.ico" />
   </ItemGroup>
 
+  <!-- Let the test project reach internal helpers (e.g. the prompt completeness guard). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Talkty.Tests" />
+  </ItemGroup>
+
   <!-- Copy CUDA runtime DLLs to output for GPU acceleration -->
   <!-- CUDA DLLs must be in main output directory so Windows DLL loader can find them -->
   <!-- when ggml-cuda-whisper.dll loads and needs cublas64_13.dll etc. -->

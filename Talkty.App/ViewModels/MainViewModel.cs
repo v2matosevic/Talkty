@@ -891,6 +891,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Cloud API key (already encrypted by the settings dialog before it reaches here)
         _settingsService.Settings.OpenRouterApiKeyEncrypted = settings.OpenRouterApiKeyEncrypted;
 
+        // Prompting model — persist the user's pick. Without this it was applied to the live refiner
+        // (SetModel below) but never written to disk, so it reset to the default on every restart.
+        _settingsService.Settings.PromptingModel = settings.PromptingModel;
+
         _settingsService.Save();
 
         _audioCaptureService.SelectDevice(settings.SelectedMicrophoneId);

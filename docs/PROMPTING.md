@@ -41,14 +41,39 @@ hotkey ─▶ record ─▶ transcribe (local or cloud)
 ## Model fallback chain
 
 Refinement tries these models in order. On **any** failure of one (unavailable, rate-limited,
-HTTP error, timeout, or empty response) it falls through to the next. If all fail, the raw
-transcription is used.
+HTTP error, timeout, empty response, **or a result that summarized instead of expanding** — see the
+completeness guard below) it falls through to the next. If all fail, the raw transcription is used.
+
+The user can override the **primary** via Settings ▸ Prompting; the chosen model is put first and the
+rest of this list stays on as automatic fallbacks (de-duplicated). The default chain:
 
 | Order | Model (OpenRouter slug) | Price in/out ($/M) | Why |
 |------|--------------------------|--------------------|-----|
 | 1 (primary) | `minimax/minimax-m3` | $0.30 / $1.20 | Top-tier instruction-following (Artificial Analysis Intelligence **44**) at a flash-tier price; standard (non-reasoning) instruct model → chosen for **fidelity** on the completeness-critical rewrite. Provider-pinned for speed (see below). |
-| 2 (fallback) | `google/gemini-3.1-flash-lite` | ~$0.25 / $1.50 | Fast TTFT, Google EU edge, instruction-tuned/extraction-optimized → low-latency safety net |
-| 3 (last resort) | `deepseek/deepseek-v4-flash` | $0.09 / $0.18 | Ultra-cheap, fast |
+| 2 (fallback) | `google/gemini-3.5-flash` | ~$0.30 / $2.50 | **Most reliable expander in real logs** — never timed out, always grew the input. The guard's quality-escalation target. |
+| 3 (fallback) | `google/gemini-3.1-flash-lite` | ~$0.25 / $1.50 | Fast TTFT, Google EU edge, instruction-tuned/extraction-optimized → low-latency safety net |
+| 4 (last resort) | `deepseek/deepseek-v4-flash` | $0.09 / $0.18 | Ultra-cheap, fast |
+
+### Completeness guard (anti-summarization)
+
+The point of Prompting is to **expand** dictation into a fuller, structured prompt — so a faithful
+rewrite of a substantial request is essentially always *longer* than the raw speech (it adds
+headings/bullets while keeping every detail). If a model instead returns something far **shorter**, it
+summarized and dropped the small load-bearing details — the #1 quality complaint. The guard treats
+that as a failure and **escalates to the next model**.
+
+- Triggers only when the input is substantial (≥ `Constants.PromptCompletenessMinInputChars` = 400
+  chars) — short asks legitimately produce short prompts and are never guarded.
+- Trips when output length < `PromptCompletenessMinOutputRatio` (0.6) × input length. Filler/repetition
+  trimming shaves 10–30%; dropping below 60% means real content was cut.
+- On the **last** model in the chain the result is kept anyway — a structured-but-short prompt still
+  beats raw transcription.
+
+This is what makes lower-tier models safe to pick as the primary: if a cheap model drops detail, the
+chain auto-recovers to a stronger one (the first fallback is the proven-reliable Gemini 3.5 Flash)
+rather than silently shipping a lossy prompt. Tuned from real logs — MiniMax M3 once returned **195
+chars from a 578-char dictation** (ratio 0.34, caught and escalated); the Gemini family expanded
+(ratio > 1, passed).
 
 > **Primary = fidelity, fallbacks = speed.** The completeness rewrite (preserve every detail) is
 > instruction-following-heavy, so the primary is the strongest instruction-follower we can run cheaply:
@@ -76,7 +101,7 @@ Cost is a non-issue at this volume: a refinement call is ~700 tokens, so even th
 here is a fraction of a cent per prompt. **Latency, not cost, is the deciding factor** — hence the
 Flash tier.
 
-To change the chain, edit `Models[]` in `Talkty.App/Services/PromptRefinementService.cs`. Verify
+To change the chain, edit `DefaultModels[]` in `Talkty.App/Services/PromptRefinementService.cs`. Verify
 any new slug against <https://openrouter.ai/models> first (a wrong slug just gets skipped as a
 failure and falls through).
 

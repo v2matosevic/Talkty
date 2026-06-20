@@ -15,6 +15,10 @@ namespace Talkty.App.Services;
 /// rate-limited, timeout, error, empty) it falls back to the next, then the next. This keeps the
 /// feature working even when one provider is degraded.
 ///
+/// A COMPLETENESS GUARD treats a suspiciously-short result (a model that summarized instead of
+/// expanding) as a failure too, escalating to the next model. This lets cheaper/lower-tier models be
+/// trusted as the primary: if one drops detail, the chain automatically recovers to a stronger model.
+///
 /// See docs/PROMPTING.md for the design rationale and the system-prompt engineering notes.
 /// </summary>
 public class PromptRefinementService : IPromptRefinementService
@@ -34,11 +38,16 @@ public class PromptRefinementService : IPromptRefinementService
         // Intelligence 44, above many closed models) at a flash-tier price, chosen for FIDELITY on the
         // completeness-critical rewrite. It is multi-hosted on OpenRouter at very different speeds, so
         // we pin provider sort=throughput (in the payload) to land on a fast host (Together/Makora
-        // ~90-100 t/s) and avoid a slow route reintroducing a GLM-style latency tax. The fallbacks are
-        // fast Google-EU-edge / cheap instruct models so a degraded primary still returns quickly.
+        // ~90-100 t/s) and avoid a slow route reintroducing a GLM-style latency tax.
+        //
+        // The FIRST fallback is gemini-3.5-flash — the most reliable expander in real logs (it never
+        // timed out and always grew the input), so when the primary times out OR trips the completeness
+        // guard (summarizes), the chain escalates straight to a high-quality model rather than a weaker
+        // one. The remaining fallbacks are the fast/cheap tiers for a last resort.
         "minimax/minimax-m3",           // default primary — top instruction-following (AA 44), non-reasoning; provider-pinned for speed
-        "google/gemini-3.1-flash-lite", // fallback        — fast, cheap, instruction-tuned, Google EU edge
-        "deepseek/deepseek-v4-flash",   // fallback        — ultra-cheap, fast
+        "google/gemini-3.5-flash",      // fallback #1     — most reliable expander in logs; quality escalation target for the guard
+        "google/gemini-3.1-flash-lite", // fallback #2     — fastest, lowest latency, Google EU edge
+        "deepseek/deepseek-v4-flash",   // fallback #3     — ultra-cheap last resort
     };
 
     // The meta-prompt that defines the feature. Grounded in Anthropic's Claude Code best-practices
@@ -188,20 +197,46 @@ public class PromptRefinementService : IPromptRefinementService
             }
 
             var model = chain[i];
+            bool isLast = i == chain.Length - 1;
             var (ok, content) = await TryRefineWithModel(model, key!, transcription, cancellationToken);
             if (ok && !string.IsNullOrWhiteSpace(content))
             {
+                // Completeness guard: a model that returned a far-shorter-than-input result summarized
+                // and dropped detail (the #1 quality complaint). Treat it as a failure and escalate to
+                // the next model — UNLESS this is the last one, where a structured-but-short prompt
+                // still beats raw transcription, so we keep it. Short inputs are never guarded.
+                if (!isLast && IsSuspectedSummary(transcription, content!))
+                {
+                    Log.Warning(
+                        $"Refinement model '{model}' summarized ({transcription.Length} → {content!.Trim().Length} chars, " +
+                        $"below {Constants.PromptCompletenessMinOutputRatio:P0} of input) — escalating to '{chain[i + 1]}'");
+                    continue;
+                }
+
                 if (i > 0)
                     Log.Info($"Prompt refined via fallback model #{i + 1} ({model})");
                 return content!.Trim();
             }
 
-            var next = i < chain.Length - 1 ? $"falling back to '{chain[i + 1]}'" : "no more fallbacks";
+            var next = !isLast ? $"falling back to '{chain[i + 1]}'" : "no more fallbacks";
             Log.Warning($"Refinement model '{model}' failed/empty — {next}");
         }
 
         Log.Error("All refinement models failed — caller falls back to raw transcription");
         return null;
+    }
+
+    /// <summary>
+    /// True when a refinement looks like a SUMMARY rather than an expansion: the input was substantial
+    /// (so we expected the prompt to grow) yet the output came back well under the input length. Pure
+    /// length heuristic — cheap, model-agnostic, and tuned from real logs (see Constants). Short inputs
+    /// are exempt because they legitimately produce short prompts.
+    /// </summary>
+    internal static bool IsSuspectedSummary(string input, string output)
+    {
+        if (input.Length < Constants.PromptCompletenessMinInputChars)
+            return false;
+        return output.Trim().Length < input.Length * Constants.PromptCompletenessMinOutputRatio;
     }
 
     /// <summary>

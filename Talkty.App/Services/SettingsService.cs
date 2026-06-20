@@ -203,6 +203,9 @@ public class SettingsService : ISettingsService
 public class TranscriptionHistoryEntry
 {
     public string Text { get; set; } = "";
+    // Original spoken transcription when the entry is a generated prompt; null otherwise. Nullable +
+    // optional so older history.json files (without this field) still deserialize cleanly.
+    public string? RawTranscription { get; set; }
     public DateTime Timestamp { get; set; }
     public double DurationSeconds { get; set; }
 }

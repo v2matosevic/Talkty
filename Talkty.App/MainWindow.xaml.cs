@@ -530,7 +530,19 @@ public partial class MainWindow : Window
         {
             Log.Debug($"History item clicked: {item.Preview}");
             _viewModel.CopyHistoryItemCommand.Execute(item);
-            Toast.Show("Copied to clipboard", ToastType.Success, 2000);
+            Toast.Show(item.IsPrompt ? "Copied prompt to clipboard" : "Copied to clipboard", ToastType.Success, 2000);
+        }
+    }
+
+    // Copy just the spoken transcription from a prompted history entry (the "You said:" line).
+    // Handled = true so the click doesn't also bubble to the whole-item (prompt) copy above.
+    private void HistoryTranscription_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is TranscriptionHistoryItem item)
+        {
+            _viewModel.CopyHistoryTranscriptionCommand.Execute(item);
+            Toast.Show("Copied transcription", ToastType.Success, 2000);
+            e.Handled = true;
         }
     }
 

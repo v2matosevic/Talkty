@@ -334,19 +334,54 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <TextBlock Grid.Column="0"
-                                                           Text="{Binding Preview}"
-                                                           FontSize="12"
-                                                           Foreground="{StaticResource Zinc200Brush}"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel Grid.Column="0">
+                                                    <!-- PROMPT badge — only on entries expanded by Prompting -->
+                                                    <Border x:Name="PromptBadge"
+                                                            Background="{StaticResource PromptAccentBrush}"
+                                                            CornerRadius="4"
+                                                            Padding="5,1"
+                                                            Margin="0,0,0,5"
+                                                            HorizontalAlignment="Left"
+                                                            Visibility="Collapsed">
+                                                        <TextBlock Text="PROMPT"
+                                                                   FontSize="9"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="White"/>
+                                                    </Border>
+
+                                                    <!-- What you actually said — click to copy just the transcription -->
+                                                    <TextBlock x:Name="TranscriptionLine"
+                                                               Visibility="Collapsed"
+                                                               Text="{Binding TranscriptionPreview, StringFormat='You said: {0}'}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource Zinc500Brush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Margin="0,0,0,3"
+                                                               Cursor="Hand"
+                                                               ToolTip="Click to copy the transcription"
+                                                               MouseLeftButtonUp="HistoryTranscription_Click"/>
+
+                                                    <!-- Final output: the generated prompt, or the transcription when Prompting was off -->
+                                                    <TextBlock Text="{Binding Preview}"
+                                                               FontSize="12"
+                                                               Foreground="{StaticResource Zinc200Brush}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+
                                                 <TextBlock Grid.Column="1"
                                                            Text="{Binding TimeDisplay}"
                                                            FontSize="10"
                                                            Foreground="{StaticResource Zinc600Brush}"
                                                            Margin="10,0,0,0"
-                                                           VerticalAlignment="Center"/>
+                                                           VerticalAlignment="Top"/>
                                             </Grid>
                                         </Border>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsPrompt}" Value="True">
+                                                <Setter TargetName="PromptBadge" Property="Visibility" Value="Visible"/>
+                                                <Setter TargetName="TranscriptionLine" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

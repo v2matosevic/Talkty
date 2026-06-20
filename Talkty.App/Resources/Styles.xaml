@@ -47,6 +47,8 @@
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource Zinc100}"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource White}"/>
     <SolidColorBrush x:Key="AccentMutedBrush" Color="{StaticResource Zinc400}"/>
+    <!-- Prompting accent — matches the active sparkle on the recording overlay. -->
+    <SolidColorBrush x:Key="PromptAccentBrush" Color="#8B5CF6"/>
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource Zinc50}"/>
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource Zinc400}"/>
     <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource Zinc600}"/>

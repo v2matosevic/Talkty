@@ -1,5 +1,5 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Faster Prompting by default. The default Prompting model is now Gemini 3.1 Flash Lite (fastest, lowest latency). Thanks to the completeness guard added in 1.1.3, if a fast model ever shortens your dictation instead of expanding it, Talkty automatically escalates to a stronger model — so you get speed by default and quality on demand. You can still pick any model in Settings, and your choice sticks across restarts."
+  "release_notes": "History now keeps both halves of a Prompting entry. When you use Prompting, the Recent list shows what you actually said (\"You said: …\") and the generated prompt together, marked with a PROMPT badge. Click the entry to copy the prompt, or click the \"You said\" line to copy just your original transcription. Plain (non-Prompting) transcriptions look the same as before."
 }

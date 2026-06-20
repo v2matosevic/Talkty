@@ -190,6 +190,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 History.Add(new TranscriptionHistoryItem
                 {
                     Text = entry.Text,
+                    RawTranscription = entry.RawTranscription,
                     Timestamp = entry.Timestamp,
                     Duration = TimeSpan.FromSeconds(entry.DurationSeconds)
                 });
@@ -209,6 +210,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var entries = History.Select(h => new TranscriptionHistoryEntry
             {
                 Text = h.Text,
+                RawTranscription = h.RawTranscription,
                 Timestamp = h.Timestamp,
                 DurationSeconds = h.Duration.TotalSeconds
             }).ToList();
@@ -626,16 +628,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 // Prompt mode: expand the transcription into a structured coding-agent prompt
                 // before it hits the clipboard/paste. Falls back to the raw text on any failure.
+                // When a prompt IS generated, keep the original transcription so history shows both.
+                string? rawTranscriptionForHistory = null;
                 if (PromptMode)
                 {
                     if (_promptRefinementService?.IsConfigured == true)
                     {
                         StatusText = "Refining prompt...";
+                        var rawTranscription = result.Text;
                         var refined = await _promptRefinementService.RefineAsync(result.Text, cancellationToken);
                         if (!string.IsNullOrWhiteSpace(refined))
                         {
                             Log.Info($"Prompt mode: expanded into agent prompt ({result.Text.Length} → {refined.Length} chars)");
                             result.Text = refined;
+                            rawTranscriptionForHistory = rawTranscription;
                         }
                         else
                         {
@@ -692,6 +698,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     History.Insert(0, new TranscriptionHistoryItem
                     {
                         Text = result.Text,
+                        RawTranscription = rawTranscriptionForHistory,
                         Timestamp = result.Timestamp,
                         Duration = result.Duration
                     });
@@ -856,6 +863,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand]
+    public void CopyHistoryTranscription(TranscriptionHistoryItem? item)
+    {
+        if (item != null)
+        {
+            Log.Debug($"Copying history transcription: {item.TranscriptionPreview}");
+            _clipboardService.SetText(item.Transcription);
+            StatusText = "Copied transcription";
+        }
+    }
+
     public void ApplySettings(AppSettings settings)
     {
         Log.Info($"ApplySettings: Profile={settings.ModelProfile}, Mic={settings.SelectedMicrophoneId}, UseGpu={settings.UseGpu}, Hotkey={settings.HotkeyModifier}+{settings.HotkeyKey}");
@@ -966,10 +984,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 public class TranscriptionHistoryItem
 {
+    /// <summary>Final output that was copied/pasted: the generated prompt when Prompting ran, else the transcription.</summary>
     public string Text { get; init; } = "";
+
+    /// <summary>The original spoken transcription — set ONLY when Prompting expanded it into a prompt, so an
+    /// entry carries both "what I said" and "the prompt the app generated". Null for plain transcriptions.</summary>
+    public string? RawTranscription { get; init; }
+
     public DateTime Timestamp { get; init; }
     public TimeSpan Duration { get; init; }
 
-    public string Preview => Text.Length > 60 ? Text[..57] + "..." : Text;
+    /// <summary>True when this entry was expanded by Prompting (it has both a transcription and a prompt).</summary>
+    public bool IsPrompt => !string.IsNullOrWhiteSpace(RawTranscription);
+
+    /// <summary>What the user actually said. For a prompted entry it's the raw field; otherwise Text already is it.</summary>
+    public string Transcription => IsPrompt ? RawTranscription! : Text;
+
+    public string Preview => Truncate(Text, 60);                       // final-output preview (prompt when prompted)
+    public string TranscriptionPreview => Truncate(Transcription, 100); // "what I said"
+    public string PromptPreview => Truncate(Text, 110);                // the generated prompt
     public string TimeDisplay => Timestamp.ToString("HH:mm:ss");
+
+    private static string Truncate(string s, int max) => s.Length > max ? s[..(max - 3)] + "..." : s;
 }

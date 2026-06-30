@@ -18,12 +18,20 @@ re-render after a tweak, run `pwsh sources/render.ps1` (needs Chrome).
 | `images/wordmark-light.png` | transparent | Wordmark for dark backgrounds. |
 | `images/wordmark-dark.png` | transparent | Wordmark for light backgrounds. |
 | `images/icon.png` | 1024 x 1024 | App mark (the wave bars on a dark tile). Avatars, favicons, store listings. |
+| `images/youtube-thumbnail.png` | 1280 x 720 | YouTube thumbnail (under 2 MB). `@2x.jpg` is a higher-res copy. |
 
 ## Posts
 
 - `posts/x.md` — launch thread and a single-post version.
 - `posts/linkedin.md` — LinkedIn announcement.
+- `posts/reddit.md` — tailored posts for r/LocalLLaMA, r/SideProject, r/opensource, r/macapps, r/windowsapps.
+- `posts/hackernews.md` — Show HN title and first comment.
+- `posts/producthunt.md` — tagline, description, maker comment, topics.
+- `posts/youtube.md` — title, description, chapters, pinned comment.
+- `posts/shorts-reels-tiktok.md` — captions and hashtags for the vertical video.
 - `posts/github-release.md` — release note draft.
+
+All copy is em-dash free and written to be posted as the maker, not as an ad.
 
 ## Video
 

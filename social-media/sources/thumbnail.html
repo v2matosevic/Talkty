@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="talkty.css">
+<style>
+html,body{width:1280px;height:720px;overflow:hidden;background:#08080a}
+.stage{position:relative;width:1280px;height:720px;overflow:hidden}
+.bg{position:absolute;inset:0;background:url('thumb-bg.png') center/cover no-repeat}
+.shade{position:absolute;inset:0;background:linear-gradient(90deg, rgba(7,7,9,.92) 26%, rgba(7,7,9,.45) 52%, rgba(7,7,9,.15) 72%)}
+.vig{position:absolute;inset:0;background:radial-gradient(130% 100% at 60% 40%, transparent 55%, rgba(0,0,0,.5))}
+/* lockup */
+.lockup{position:absolute;top:50px;left:64px;display:flex;align-items:center;gap:16px;z-index:3}
+.lockup .m{display:flex;align-items:center;gap:7px;height:38px}
+.lockup .m i{width:11px;border-radius:6px;background:var(--bar-record)}
+.lockup .m i:nth-child(1){height:17px}.lockup .m i:nth-child(2){height:33px}.lockup .m i:nth-child(3){height:23px}
+.lockup .w{font-family:var(--font);font-weight:650;font-size:38px;letter-spacing:-.02em;color:var(--zinc50)}
+/* headline */
+.head{position:absolute;left:64px;top:214px;z-index:3;font-family:var(--font);font-weight:700;font-size:132px;line-height:.96;letter-spacing:-.035em;color:var(--zinc50)}
+.head .a{color:var(--bar-record)}
+.sub{position:absolute;left:68px;top:494px;z-index:3;font-family:var(--font);font-size:34px;color:var(--zinc300);letter-spacing:.005em}
+/* badges */
+.badges{position:absolute;left:68px;bottom:54px;z-index:3;display:flex;align-items:center;gap:18px;font-family:var(--font);font-size:26px;color:var(--zinc400)}
+.badges .dot{width:12px;height:12px;border-radius:50%;background:var(--bar-record);box-shadow:0 0 16px rgba(255,107,107,.6)}
+.badges .sep{width:5px;height:5px;border-radius:50%;background:var(--zinc600)}
+/* pill */
+.pillwrap{position:absolute;right:96px;top:46%;transform:translateY(-50%);z-index:3}
+</style></head>
+<body>
+<div class="stage">
+  <div class="bg"></div><div class="shade"></div><div class="vig"></div>
+  <div class="lockup"><span class="m"><i></i><i></i><i></i></span><span class="w">Talkty</span></div>
+  <div class="head">Speak.<br><span class="a">It types.</span></div>
+  <div class="sub">Local speech to text, on your device.</div>
+  <div class="badges"><span class="dot"></span>Free &amp; open source<span class="sep"></span>Windows &amp; macOS</div>
+  <div class="pillwrap">
+    <div class="pill" style="--s:5.4">
+      <span class="bars"><i></i><i></i><i></i></span>
+      <span class="time">00:07</span>
+      <svg class="spark" viewBox="0 0 18 16" style="margin-left:2px"><path d="M9,0.5 L10.5,6.6 L16.5,8 L10.5,9.4 L9,15.5 L7.5,9.4 L1.5,8 L7.5,6.6 Z"/></svg>
+    </div>
+  </div>
+</div>
+</body></html>

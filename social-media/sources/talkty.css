@@ -36,9 +36,10 @@ html,body{font-family:var(--font);-webkit-font-smoothing:antialiased;text-render
 .pill.transcribe .bars i{background:var(--bar-transcribe)}
 .pill.copied .bars i{background:var(--bar-copied)}
 .pill .time{
-  color:var(--zinc200);font-size:calc(13px * var(--s));font-weight:500;
-  letter-spacing:.01em;min-width:calc(34px * var(--s));
-  font-variant-numeric:tabular-nums;
+  display:flex;align-items:center;height:calc(16px * var(--s));
+  color:var(--zinc200);font-size:calc(13.5px * var(--s));font-weight:600;
+  letter-spacing:.02em;line-height:1;font-variant-numeric:tabular-nums;
+  padding-bottom:calc(1px * var(--s));
 }
 .pill.copied .time{color:var(--bar-copied)}
 .pill .spark{width:calc(15px * var(--s));height:calc(15px * var(--s));margin-left:calc(2px * var(--s));fill:var(--zinc400)}

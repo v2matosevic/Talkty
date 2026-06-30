@@ -15,6 +15,12 @@ Handles:
 - Talk instead of type. Talkty is free, on-device speech-to-text.
 - Talkty: press a key, talk, paste. Whisper runs on your device.
 
+## Tags (keywords field, max 500 characters total)
+
+Paste this comma-separated list into the video's Tags field (Studio > Details > Show more > Tags). 384 characters, ordered most relevant first.
+
+Talkty, speech to text, voice to text, dictation, Whisper, local speech to text, private speech to text, offline dictation, on-device AI, transcription, voice typing, open source, free dictation app, Windows dictation, Mac dictation, Apple Silicon, coding by voice, voice coding, Claude Code, Cursor, AI coding assistant, speech recognition, productivity, developer tools, whisper.cpp
+
 ## Description (primary)
 
 Talkty is a free, open-source speech-to-text app for Windows and macOS. Press a global hotkey, speak, and your words land on the clipboard, ready to paste anywhere. Whisper runs entirely on your device, so the audio never leaves your machine and there is no account, no cloud, and no telemetry.

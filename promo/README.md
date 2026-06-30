@@ -3,8 +3,13 @@
 A [Remotion](https://remotion.dev) project that renders the Talkty explainer in
 both orientations from one composition. The UI in the video (the recording pill,
 the wordmark, the cards) is the real app, rebuilt in React from the same colors,
-fonts, and shapes as Talkty itself. The music and sound effects are synthesized
-locally (no licensing), see `scripts/generate-audio.mjs`.
+fonts, and shapes as Talkty itself. The sound effects are synthesized locally
+(no licensing), see `scripts/generate-audio.mjs`.
+
+> **Background music** is licensed separately and is not committed. It lives at
+> `public/audio/music.mp3` (gitignored) and is already baked into the rendered
+> MP4s. To re-render, drop a `music.mp3` there (trim it to ~40s with a fade in and
+> out), or remove the `<Audio src="audio/music.mp3">` line in `src/Promo.tsx`.
 
 ## What it shows
 

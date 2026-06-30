@@ -2,3 +2,7 @@ node_modules/
 out/
 .remotion/
 *.log
+
+# Background music is licensed separately, not redistributed in the repo.
+# Drop your own track here to re-render; it is baked into the committed MP4s.
+public/audio/music.mp3

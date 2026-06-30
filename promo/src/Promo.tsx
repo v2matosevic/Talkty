@@ -284,7 +284,6 @@ const Sfx: React.FC<{at: number; file: string; vol?: number}> = ({at, file, vol 
 );
 
 export const Promo: React.FC = () => {
-  const {durationInFrames} = useVideoConfig();
   return (
     <AbsoluteFill style={{background: C.bg0}}>
       <Background />
@@ -295,8 +294,8 @@ export const Promo: React.FC = () => {
       <Sequence from={SC.privacy[0]} durationInFrames={len('privacy') + OVERLAP}><Privacy /></Sequence>
       <Sequence from={SC.outro[0]} durationInFrames={len('outro')}><Outro /></Sequence>
 
-      <Audio src={staticFile('audio/music.wav')}
-        volume={(f) => interpolate(f, [0, 30, durationInFrames - 55, durationInFrames], [0, 0.4, 0.4, 0], clamp)} />
+      {/* Background track (fades baked into the MP3). */}
+      <Audio src={staticFile('audio/music.mp3')} volume={0.45} />
       {/* RecordFlow starts at 90: keypress ~ +20, pill pop ~ +52, copied ~ +322 */}
       <Sfx at={112} file="click.wav" vol={0.8} />
       <Sfx at={142} file="pop.wav" vol={0.9} />

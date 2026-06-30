@@ -1,5 +1,6 @@
-// Generates the music bed + UI sound effects for the Talkty promo as WAV files.
+// Generates the UI sound effects for the Talkty promo as WAV files.
 // Zero dependencies. Output: promo/public/audio/*.wav
+// (Background music is supplied separately as public/audio/music.mp3.)
 import {writeFileSync, mkdirSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -8,204 +9,170 @@ const SR = 44100;
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'audio');
 mkdirSync(OUT, {recursive: true});
 
-const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
-const clamp = (x) => Math.max(-1, Math.min(1, x));
 const TAU = Math.PI * 2;
+const clip = (x) => Math.max(-1, Math.min(1, x));
+const mkStereo = (sec) => [new Float32Array((sec * SR) | 0), new Float32Array((sec * SR) | 0)];
 
-// ---- WAV writer (16-bit PCM stereo) ----
 function writeWav(name, L, R) {
-  const n = L.length;
-  const buf = Buffer.alloc(44 + n * 4);
+  const n = L.length, buf = Buffer.alloc(44 + n * 4);
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 4, 4); buf.write('WAVE', 8);
   buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20);
   buf.writeUInt16LE(2, 22); buf.writeUInt32LE(SR, 24); buf.writeUInt32LE(SR * 4, 28);
-  buf.writeUInt16LE(4, 32); buf.writeUInt16LE(16, 34);
-  buf.write('data', 36); buf.writeUInt32LE(n * 4, 40);
+  buf.writeUInt16LE(4, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 4, 40);
   let o = 44;
-  for (let i = 0; i < n; i++) {
-    buf.writeInt16LE((clamp(L[i]) * 32767) | 0, o); o += 2;
-    buf.writeInt16LE((clamp(R[i]) * 32767) | 0, o); o += 2;
-  }
+  for (let i = 0; i < n; i++) { buf.writeInt16LE((clip(L[i]) * 32767) | 0, o); buf.writeInt16LE((clip(R[i]) * 32767) | 0, o + 2); o += 4; }
   writeFileSync(join(OUT, name), buf);
-  console.log('  ' + name + '  ' + (n / SR).toFixed(1) + 's');
+  console.log('  ' + name + '  ' + (n / SR).toFixed(2) + 's');
 }
 
-const mkStereo = (sec) => [new Float32Array((sec * SR) | 0), new Float32Array((sec * SR) | 0)];
-function normalize(L, R, target = 0.9) {
+function normalize(L, R, target = 0.85) {
   let peak = 0;
   for (let i = 0; i < L.length; i++) peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i]));
   if (peak < 1e-6) return;
   const g = target / peak;
   for (let i = 0; i < L.length; i++) { L[i] *= g; R[i] *= g; }
 }
-// soft clip for glue
-const sat = (x) => Math.tanh(x * 1.1);
 
-// add a voice: type in {sine,tri,saw,soft}; exp/AR envelope
-function addVoice(L, R, start, dur, freq, amp, type, panL = 0.5, panR = 0.5, attack = 0.01, release = 0.1, detune = 0) {
-  const s0 = (start * SR) | 0;
-  const total = ((dur + release) * SR) | 0;
+// ---- synth primitives ----
+// envelope: soft attack, then exponential decay (percussive)
+function tone(buf, start, freq, amp, decay, attack = 0.004, type = 'sine') {
+  const s0 = (start * SR) | 0, total = ((attack + decay) * SR) | 0;
   for (let i = 0; i < total; i++) {
-    const idx = s0 + i;
-    if (idx < 0 || idx >= L.length) continue;
+    const idx = s0 + i; if (idx < 0 || idx >= buf.length) continue;
     const t = i / SR;
-    // envelope: linear attack, sustain, exp release
-    let e;
-    if (t < attack) e = t / attack;
-    else if (t < dur) e = 1;
-    else e = Math.exp(-(t - dur) / (release * 0.5));
+    const e = t < attack ? t / attack : Math.exp(-(t - attack) / (decay * 0.34));
     const ph = TAU * freq * t;
-    const ph2 = TAU * (freq * (1 + detune)) * t;
-    let s;
-    if (type === 'sine') s = Math.sin(ph);
-    else if (type === 'tri') s = (2 / Math.PI) * Math.asin(Math.sin(ph));
-    else if (type === 'saw') s = 2 * (t * freq - Math.floor(0.5 + t * freq));
-    else if (type === 'soft') s = 0.7 * Math.sin(ph) + 0.3 * Math.sin(ph2) + 0.12 * Math.sin(ph * 2);
-    else s = Math.sin(ph);
-    const v = s * e * amp;
-    L[idx] += v * panL; R[idx] += v * panR;
+    let s = type === 'tri' ? (2 / Math.PI) * Math.asin(Math.sin(ph)) : Math.sin(ph);
+    buf[idx] += s * e * amp;
   }
 }
-
-function noiseBurst(L, R, start, dur, amp, decay, bright = 1) {
-  const s0 = (start * SR) | 0; const total = (dur * SR) | 0;
-  let last = 0;
+// glide tone: frequency ramps f0 -> f1 over the decay
+function glide(buf, start, f0, f1, amp, decay, attack = 0.005) {
+  const s0 = (start * SR) | 0, total = ((attack + decay) * SR) | 0;
+  let ph = 0;
   for (let i = 0; i < total; i++) {
-    const idx = s0 + i; if (idx < 0 || idx >= L.length) continue;
+    const idx = s0 + i; if (idx < 0 || idx >= buf.length) continue;
+    const t = i / SR, k = Math.min(1, t / (attack + decay));
+    const f = f0 + (f1 - f0) * k;
+    ph += TAU * f / SR;
+    const e = t < attack ? t / attack : Math.exp(-(t - attack) / (decay * 0.4));
+    buf[idx] += Math.sin(ph) * e * amp;
+  }
+}
+// bell: fundamental + inharmonic partials -> a soft, clean chime
+function bell(L, R, start, freq, amp, decay, pan = 0.5) {
+  const parts = [[1, 1, 1], [2.01, 0.5, 0.82], [2.76, 0.26, 0.62], [3.84, 0.12, 0.45], [5.4, 0.06, 0.32]];
+  for (const [r, a, d] of parts) {
+    tone(L, start, freq * r, amp * a * (0.6 + 0.8 * pan) * 0.5, decay * d);
+    tone(R, start, freq * r, amp * a * (0.6 + 0.8 * (1 - pan)) * 0.5, decay * d);
+  }
+}
+// warm filtered noise (1-pole low-pass), with an amplitude envelope fn(t in 0..dur)
+function noise(buf, start, dur, amp, cutoff, envFn) {
+  const s0 = (start * SR) | 0, total = (dur * SR) | 0;
+  let lp = 0;
+  for (let i = 0; i < total; i++) {
+    const idx = s0 + i; if (idx < 0 || idx >= buf.length) continue;
     const t = i / SR;
-    const e = Math.exp(-t / decay);
-    let n = Math.random() * 2 - 1;
-    n = last + bright * (n - last); last = n; // simple LP for darker noise when bright<1
-    const v = n * e * amp;
-    L[idx] += v; R[idx] += v;
+    const a = typeof cutoff === 'function' ? cutoff(t / dur) : cutoff;
+    lp += a * ((Math.random() * 2 - 1) - lp);
+    buf[idx] += lp * amp * envFn(t / dur);
   }
 }
 
-// =================== MUSIC BED ===================
-function music() {
-  const BPM = 96, beat = 60 / BPM, bar = beat * 4, eighth = beat / 2;
-  const BARS = 16;
-  const dur = bar * BARS + 1.2;
-  const [L, R] = mkStereo(dur);
-
-  // A minor: i - VI - III - VII  => Am, F, C, G
-  const chords = [
-    {pad: [57, 60, 64], bass: 45, arp: [69, 72, 76, 72, 69, 72, 76, 79]}, // Am
-    {pad: [53, 57, 60], bass: 41, arp: [65, 69, 72, 69, 65, 69, 72, 77]}, // F
-    {pad: [60, 64, 67], bass: 48, arp: [72, 76, 79, 76, 72, 76, 79, 84]}, // C
-    {pad: [55, 59, 62], bass: 43, arp: [67, 71, 74, 71, 67, 71, 74, 79]}, // G
-  ];
-
-  for (let b = 0; b < BARS; b++) {
-    const c = chords[b % 4];
-    const t0 = b * bar;
-    const fade = b >= BARS - 1 ? 0.55 : 1; // gentle outro on last bar
-    // Pads (always) - warm soft stack
-    c.pad.forEach((m, k) => {
-      addVoice(L, R, t0, bar, midi(m), 0.11 * fade, 'soft',
-        0.6 - k * 0.08, 0.4 + k * 0.08, 0.5, 0.7, 0.004);
-    });
-    // Bass from bar 2
-    if (b >= 2) {
-      addVoice(L, R, t0, beat * 1.8, midi(c.bass), 0.20 * fade, 'sine', 0.5, 0.5, 0.01, 0.25);
-      addVoice(L, R, t0 + beat * 2, beat * 1.8, midi(c.bass), 0.18 * fade, 'sine', 0.5, 0.5, 0.01, 0.25);
-    }
-    // Arp from bar 4
-    if (b >= 4) {
-      for (let e = 0; e < 8; e++) {
-        const t = t0 + e * eighth;
-        const pan = e % 2 ? [0.35, 0.65] : [0.65, 0.35];
-        addVoice(L, R, t, eighth * 0.9, midi(c.arp[e]), 0.085 * fade, 'tri', pan[0], pan[1], 0.005, 0.18);
-        // soft delay tap
-        addVoice(L, R, t + eighth * 1.5, eighth * 0.6, midi(c.arp[e]), 0.035 * fade, 'tri', pan[1], pan[0], 0.005, 0.15);
-      }
-    }
-    // Drums from bar 8
-    if (b >= 8 && b < BARS - 1) {
-      for (let bt = 0; bt < 4; bt++) {
-        const t = t0 + bt * beat;
-        // kick on 1 and 3
-        if (bt === 0 || bt === 2) {
-          const ks = (t * SR) | 0;
-          for (let i = 0; i < (0.16 * SR) | 0; i++) {
-            const idx = ks + i; if (idx >= L.length) break;
-            const tt = i / SR;
-            const f = 110 * Math.exp(-tt / 0.03) + 44;
-            const e = Math.exp(-tt / 0.10);
-            const v = Math.sin(TAU * f * tt) * e * 0.5;
-            L[idx] += v; R[idx] += v;
-          }
-        }
-        // soft hat on offbeats
-        noiseBurst(L, R, t + beat * 0.5, 0.05, 0.05, 0.018, 0.85);
-      }
-    }
+// ---- Schroeder reverb (Freeverb-lite), per channel ----
+function comb(x, d, fb, damp) {
+  const y = new Float32Array(x.length), buf = new Float32Array(d);
+  let i = 0, store = 0;
+  for (let n = 0; n < x.length; n++) { const o = buf[i]; store = o * (1 - damp) + store * damp; buf[i] = x[n] + store * fb; y[n] = o; i = (i + 1) % d; }
+  return y;
+}
+function allpass(x, d, g) {
+  const y = new Float32Array(x.length), buf = new Float32Array(d);
+  let i = 0;
+  for (let n = 0; n < x.length; n++) { const bo = buf[i]; const o = -x[n] + bo; buf[i] = x[n] + bo * g; y[n] = o; i = (i + 1) % d; }
+  return y;
+}
+function reverbCh(x, decay, mix, damp, spread) {
+  const ds = [1116, 1188, 1277, 1356, 1422, 1491].map((d) => d + spread);
+  const wet = new Float32Array(x.length);
+  for (const d of ds) { const c = comb(x, d, decay, damp); for (let n = 0; n < x.length; n++) wet[n] += c[n]; }
+  for (let n = 0; n < x.length; n++) wet[n] /= ds.length;
+  let w = allpass(wet, 556, 0.5); w = allpass(w, 441, 0.5); w = allpass(w, 341, 0.5);
+  const out = new Float32Array(x.length);
+  for (let n = 0; n < x.length; n++) out[n] = x[n] * (1 - mix) + w[n] * mix * 1.7;
+  return out;
+}
+function finish(name, L, R, {decay = 0.84, mix = 0.28, damp = 0.28, peak = 0.85} = {}) {
+  if (mix > 0) {
+    const nl = reverbCh(L, decay, mix, damp, 0);
+    const nr = reverbCh(R, decay, mix, damp, 23);
+    L.set(nl); R.set(nr);
   }
-
-  for (let i = 0; i < L.length; i++) { L[i] = sat(L[i]); R[i] = sat(R[i]); }
-  normalize(L, R, 0.82);
-  writeWav('music.wav', L, R);
+  // gentle soft-clip for glue
+  for (let i = 0; i < L.length; i++) { L[i] = Math.tanh(L[i] * 1.05); R[i] = Math.tanh(R[i] * 1.05); }
+  normalize(L, R, peak);
+  writeWav(name, L, R);
 }
 
 // =================== SOUND EFFECTS ===================
-function sfxPop() { // pill appears
-  const [L, R] = mkStereo(0.5);
-  noiseBurst(L, R, 0, 0.18, 0.18, 0.05, 0.5);
-  addVoice(L, R, 0.0, 0.18, 520, 0.22, 'sine', 0.5, 0.5, 0.005, 0.16);
-  addVoice(L, R, 0.02, 0.2, 780, 0.16, 'sine', 0.5, 0.5, 0.005, 0.18);
-  normalize(L, R, 0.8); writeWav('pop.wav', L, R);
-}
-function sfxClick() { // key press / paste
-  const [L, R] = mkStereo(0.18);
-  noiseBurst(L, R, 0, 0.05, 0.5, 0.012, 0.9);
-  addVoice(L, R, 0, 0.05, 1400, 0.25, 'sine', 0.5, 0.5, 0.001, 0.03);
-  normalize(L, R, 0.85); writeWav('click.wav', L, R);
-}
-function sfxDing() { // copied / success — bell major third
-  const [L, R] = mkStereo(1.2);
-  addVoice(L, R, 0, 0.9, midi(84), 0.30, 'sine', 0.5, 0.5, 0.002, 0.7);   // C6
-  addVoice(L, R, 0.0, 0.9, midi(88), 0.20, 'sine', 0.5, 0.5, 0.002, 0.7); // E6
-  addVoice(L, R, 0.0, 0.9, midi(91), 0.12, 'sine', 0.5, 0.5, 0.002, 0.7); // G6
-  addVoice(L, R, 0.005, 0.6, midi(96), 0.08, 'sine', 0.5, 0.5, 0.002, 0.5);
-  normalize(L, R, 0.78); writeWav('ding.wav', L, R);
-}
-function sfxShimmer() { // prompting sparkle — ascending pentatonic
-  const [L, R] = mkStereo(1.0);
-  const notes = [84, 88, 91, 96, 98];
-  notes.forEach((m, i) => {
-    addVoice(L, R, i * 0.045, 0.5, midi(m), 0.18, 'sine', 0.4 + i * 0.05, 0.6 - i * 0.05, 0.003, 0.45);
-  });
-  normalize(L, R, 0.7); writeWav('shimmer.wav', L, R);
-}
-function sfxWhoosh() { // transitions
-  const [L, R] = mkStereo(0.7);
-  const total = (0.6 * SR) | 0; let last = 0;
-  for (let i = 0; i < total; i++) {
-    const t = i / SR;
-    const e = Math.sin(Math.PI * (t / 0.6)); // swell in-out
-    let n = Math.random() * 2 - 1; n = last + 0.25 * (n - last); last = n;
-    const v = n * e * 0.3;
-    const pan = t / 0.6;
-    L[i] += v * (1 - pan); R[i] += v * pan;
-  }
-  normalize(L, R, 0.6); writeWav('whoosh.wav', L, R);
-}
-function sfxRiser() { // outro
-  const [L, R] = mkStereo(1.4);
-  const total = (1.2 * SR) | 0; let last = 0;
-  for (let i = 0; i < total; i++) {
-    const t = i / SR; const e = Math.min(1, t / 1.0) * Math.exp(-Math.max(0, t - 1.0) / 0.15);
-    let n = Math.random() * 2 - 1; n = last + (0.1 + 0.6 * (t / 1.2)) * (n - last); last = n;
-    const sweep = Math.sin(TAU * (200 + 900 * (t / 1.2)) * t) * 0.15;
-    const v = (n * 0.18 + sweep) * e;
-    L[i] += v; R[i] += v;
-  }
-  // resolve note
-  addVoice(L, R, 1.0, 0.4, midi(81), 0.25, 'soft', 0.5, 0.5, 0.005, 0.35);
-  normalize(L, R, 0.75); writeWav('riser.wav', L, R);
+
+// key press: a soft mechanical "thock", not a beep
+function sfxClick() {
+  const [L, R] = mkStereo(0.22);
+  noise(L, 0, 0.014, 0.5, 0.85, (t) => Math.exp(-t * 6)); noise(R, 0, 0.014, 0.5, 0.85, (t) => Math.exp(-t * 6));
+  tone(L, 0.0, 168, 0.5, 0.05); tone(R, 0.0, 168, 0.5, 0.05);
+  tone(L, 0.001, 2600, 0.10, 0.012); tone(R, 0.001, 2600, 0.10, 0.012);
+  finish('click.wav', L, R, {mix: 0.10, decay: 0.6, peak: 0.8});
 }
 
-console.log('Generating audio...');
-music();
-sfxPop(); sfxClick(); sfxDing(); sfxShimmer(); sfxWhoosh(); sfxRiser();
+// pill appears: a soft, bright UI pop that glides up
+function sfxPop() {
+  const [L, R] = mkStereo(0.6);
+  noise(L, 0, 0.02, 0.22, 0.7, (t) => Math.exp(-t * 7)); noise(R, 0, 0.02, 0.22, 0.7, (t) => Math.exp(-t * 7));
+  glide(L, 0.0, 440, 820, 0.34, 0.16); glide(R, 0.0, 440, 820, 0.34, 0.16);
+  tone(L, 0.02, 1240, 0.12, 0.12); tone(R, 0.02, 1240, 0.12, 0.12);
+  finish('pop.wav', L, R, {mix: 0.22, decay: 0.8, peak: 0.82});
+}
+
+// copied / success: a warm two-note bell chime (perfect fifth)
+function sfxDing() {
+  const [L, R] = mkStereo(1.7);
+  bell(L, R, 0.0, 1046.5, 0.6, 1.0, 0.42);  // C6
+  bell(L, R, 0.05, 1568.0, 0.5, 1.1, 0.58); // G6
+  finish('ding.wav', L, R, {mix: 0.32, decay: 0.86, damp: 0.22, peak: 0.8});
+}
+
+// prompting sparkle: a glittery ascending pentatonic run
+function sfxShimmer() {
+  const [L, R] = mkStereo(1.7);
+  const notes = [1046.5, 1174.7, 1318.5, 1568.0, 1760.0, 2093.0]; // C6 D6 E6 G6 A6 C7
+  notes.forEach((f, i) => bell(L, R, i * 0.04, f, 0.3, 0.7 + i * 0.05, i % 2 ? 0.34 : 0.66));
+  finish('shimmer.wav', L, R, {mix: 0.4, decay: 0.87, damp: 0.18, peak: 0.74});
+}
+
+// transition swoosh: warm filtered noise that swells and sweeps, panning across
+function sfxWhoosh() {
+  const [L, R] = mkStereo(0.75);
+  const env = (t) => Math.sin(Math.PI * Math.min(1, t)) ** 1.4;
+  const cut = (t) => 0.06 + 0.5 * Math.sin(Math.PI * t); // open then close
+  noise(L, 0, 0.6, 0.34, cut, (t) => env(t) * (1 - t * 0.4));
+  noise(R, 0.03, 0.6, 0.34, cut, (t) => env(t) * (0.6 + t * 0.4));
+  finish('whoosh.wav', L, R, {mix: 0.22, decay: 0.7, peak: 0.62});
+}
+
+// outro riser: noise rising in pitch + brightness, resolving to a soft chord
+function sfxRiser() {
+  const [L, R] = mkStereo(1.8);
+  const cut = (t) => 0.04 + 0.55 * t * t;
+  noise(L, 0, 1.15, 0.3, cut, (t) => Math.min(1, t * 1.2) * (t < 0.95 ? 1 : Math.exp(-(t - 0.95) * 12)));
+  noise(R, 0, 1.15, 0.3, cut, (t) => Math.min(1, t * 1.2) * (t < 0.95 ? 1 : Math.exp(-(t - 0.95) * 12)));
+  glide(L, 0.0, 220, 1100, 0.16, 1.1); glide(R, 0.0, 220, 1100, 0.16, 1.1);
+  // resolve: soft major chord (A major-ish) bells
+  [880, 1108.7, 1318.5].forEach((f, i) => bell(L, R, 1.02, f, 0.26, 0.7, i % 2 ? 0.4 : 0.6));
+  finish('riser.wav', L, R, {mix: 0.32, decay: 0.85, peak: 0.78});
+}
+
+console.log('Generating sound effects...');
+sfxClick(); sfxPop(); sfxDing(); sfxShimmer(); sfxWhoosh(); sfxRiser();
 console.log('Done -> ' + OUT);

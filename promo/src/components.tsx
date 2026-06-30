@@ -8,7 +8,7 @@ export const Pill: React.FC<{
   time?: string;
   spark?: boolean;
   bars?: [number, number, number];
-}> = ({s, state = 'record', time = '0:00', spark = false, bars = [6, 12, 8]}) => {
+}> = ({s, state = 'record', time = '00:00', spark = false, bars = [6, 12, 8]}) => {
   const barColor = state === 'transcribe' ? C.transcribe : state === 'copied' ? C.greenBar : C.bar;
   const timeColor = state === 'copied' ? C.greenBar : C.zinc200;
   return (
@@ -23,8 +23,11 @@ export const Pill: React.FC<{
         ))}
       </div>
       <div style={{
-        color: timeColor, fontSize: 13 * s, fontWeight: 500, fontFamily: FONT,
-        minWidth: 34 * s, fontVariantNumeric: 'tabular-nums', letterSpacing: '.01em',
+        display: 'flex', alignItems: 'center', height: 16 * s,
+        color: timeColor, fontSize: 13.5 * s, fontWeight: 600, fontFamily: FONT,
+        fontVariantNumeric: 'tabular-nums', fontFeatureSettings: '"tnum" 1',
+        letterSpacing: state === 'copied' ? '0' : '.02em', lineHeight: 1,
+        paddingBottom: 1 * s,
       }}>{time}</div>
       {spark && (
         <svg width={15 * s} height={15 * s} viewBox="0 0 18 16" style={{marginLeft: 2 * s}}>

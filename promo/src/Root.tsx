@@ -3,7 +3,7 @@ import {Composition} from 'remotion';
 import {Promo} from './Promo';
 
 const FPS = 30;
-const DUR = 1170; // 39s
+const DUR = 1200; // 40s
 
 export const RemotionRoot: React.FC = () => (
   <>

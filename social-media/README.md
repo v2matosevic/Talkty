@@ -33,6 +33,8 @@ re-render after a tweak, run `pwsh sources/render.ps1` (needs Chrome).
 
 All copy is em-dash free and written to be posted as the maker, not as an ad.
 
+Handles: **@v2matosevic** (personal), **@version2hr** (studio), https://version2.hr
+
 ## Video
 
 The promotional explainer, rendered in both orientations from one source. The UI

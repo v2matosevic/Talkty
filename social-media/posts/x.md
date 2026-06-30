@@ -1,12 +1,13 @@
 # X / Twitter
 
-No em-dashes. Plain and specific. Attach the image noted under each post.
+No em-dashes. Plain and specific. Attach the image or video noted under each post.
+Posting from @v2matosevic (studio: @version2hr).
 
 ---
 
 ## Launch thread
 
-**1/** (attach `images/hero.png`)
+**1/** (attach `video/talkty-promo-horizontal.mp4` for best reach, or `images/hero.png`)
 I open sourced Talkty: free speech to text that runs entirely on your machine.
 
 Press a hotkey, talk, and your words are on the clipboard. No account, no cloud, no telemetry. Whisper runs locally.
@@ -36,6 +37,8 @@ macOS: https://github.com/v2matosevic/talkty-mac
 
 Try it, fork it, send a PR. I would love your feedback.
 
+Built at @version2hr.
+
 ---
 
 ## Single post (attach `images/x-card.png`)
@@ -46,3 +49,5 @@ Hotkey, talk, paste. No account, no cloud, no telemetry. Whisper runs locally on
 
 Windows: https://github.com/v2matosevic/Talkty
 macOS: https://github.com/v2matosevic/talkty-mac
+
+Built at @version2hr.

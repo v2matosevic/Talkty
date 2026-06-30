@@ -3,6 +3,11 @@
 For the horizontal video (`video/talkty-promo-horizontal.mp4`). Thumbnail:
 `images/youtube-thumbnail.png`. No em-dashes.
 
+Handles:
+- X (personal): https://x.com/v2matosevic
+- X (studio): https://x.com/version2hr
+- Website: https://version2.hr
+
 ## Title
 
 (pick one)
@@ -10,7 +15,7 @@ For the horizontal video (`video/talkty-promo-horizontal.mp4`). Thumbnail:
 - Talk instead of type. Talkty is free, on-device speech-to-text.
 - Talkty: press a key, talk, paste. Whisper runs on your device.
 
-## Description
+## Description (primary)
 
 Talkty is a free, open-source speech-to-text app for Windows and macOS. Press a global hotkey, speak, and your words land on the clipboard, ready to paste anywhere. Whisper runs entirely on your device, so the audio never leaves your machine and there is no account, no cloud, and no telemetry.
 
@@ -31,8 +36,26 @@ Chapters:
 0:31 Private by default
 0:35 Free and open source
 
+Connect:
+X: @v2matosevic (https://x.com/v2matosevic)
+Studio: @version2hr (https://x.com/version2hr) and https://version2.hr
+
 #opensource #speechtotext #whisper #productivity #dictation
+
+## Description (alternative, shorter)
+
+Type with your voice, without sending it to anyone's server.
+
+Talkty is free, open-source, on-device speech-to-text for Windows and macOS. Hit a hotkey, talk, and the text is on your clipboard. No account, no cloud, no telemetry. There is also an optional mode that turns a rough dictation into a clean prompt for your coding agent.
+
+Get it (MIT licensed):
+Windows: https://github.com/v2matosevic/Talkty
+macOS: https://github.com/v2matosevic/talkty-mac
+
+Made by @version2hr. Follow @v2matosevic for more.
+
+#opensource #speechtotext #dictation #developer #whisper
 
 ## Pinned comment
 
-Everything runs on your device by default. The optional cloud and AI-prompt features are off until you turn them on, and your API key is encrypted locally. The apps are not code signed or notarized yet, so you may see a one-time warning on first launch. Feedback and pull requests are welcome on GitHub.
+Everything runs on your device by default. The optional cloud and AI-prompt features are off until you turn them on, and your API key is encrypted locally. The apps are not code signed or notarized yet, so you may see a one-time warning on first launch. Feedback and pull requests are welcome on GitHub. Follow along: @v2matosevic and @version2hr.

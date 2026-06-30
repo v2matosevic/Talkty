@@ -30,6 +30,8 @@ It started as a tool for talking to coding agents, but it works anywhere you can
 Windows: https://github.com/v2matosevic/Talkty
 macOS: https://github.com/v2matosevic/talkty-mac
 
+Follow along: @v2matosevic on X, and the studio @version2hr.
+
 ## Topics
 
 Open Source, Developer Tools, Productivity, Artificial Intelligence, Windows, Mac

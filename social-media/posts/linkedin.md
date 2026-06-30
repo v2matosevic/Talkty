@@ -19,3 +19,5 @@ Windows: https://github.com/v2matosevic/Talkty
 macOS: https://github.com/v2matosevic/talkty-mac
 
 If you give it a try, I would genuinely like to hear what you think.
+
+Built at Version2. On X: @v2matosevic and @version2hr.

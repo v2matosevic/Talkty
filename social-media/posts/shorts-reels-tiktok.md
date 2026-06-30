@@ -26,3 +26,5 @@ Press a key, talk, paste. Whisper runs on your device, free and open source. Win
 
 Windows: github.com/v2matosevic/Talkty
 macOS: github.com/v2matosevic/talkty-mac
+
+Follow: @v2matosevic and @version2hr

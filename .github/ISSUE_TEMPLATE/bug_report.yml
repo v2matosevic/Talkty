@@ -1,0 +1,60 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file this. The more detail, the faster it gets fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what went wrong?
+      placeholder: I pressed Alt+Q in VS Code, spoke, and nothing was pasted.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      placeholder: The transcribed text should paste at the cursor.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Talkty version
+      description: Found in the About window or the installer file name.
+      placeholder: 1.1.5
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Which model
+      options:
+        - Tiny
+        - Small
+        - Large v3 Turbo
+        - Large v3
+        - A quantized Lite model
+        - A cloud model
+        - Not sure
+    validations:
+      required: false
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and Windows version
+      placeholder: RTX 4070, Windows 11 23H2 (or "CPU only")
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Attach the latest log from `%AppData%\Talkty\Logs\` if you can. It helps a lot.
+        Please remove anything private first.
+    validations:
+      required: false

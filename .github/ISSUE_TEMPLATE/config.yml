@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: macOS version (talkty-mac)
+    url: https://github.com/v2matosevic/talkty-mac
+    about: Using a Mac? The native Apple Silicon build lives in its own repo.
+  - name: Website
+    url: https://version2.hr
+    about: Made by Version2.

@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="talkty.css">
+<style>
+html,body{width:2400px;height:1200px;overflow:hidden;background:#08080a}
+.stage{position:relative;width:2400px;height:1200px}
+.bg{position:absolute;inset:0;background:radial-gradient(120% 100% at 78% 0%, #1a1a20 0%, #0d0d10 46%, #08080a 100%)}
+.grid{position:absolute;inset:0;opacity:.3;
+  background-image:radial-gradient(rgba(255,255,255,.05) 1px, transparent 1.4px);background-size:40px 40px;
+  mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);}
+.wrap{position:relative;z-index:2;height:100%;display:grid;grid-template-columns:1fr 1fr;align-items:center;padding:0 150px;gap:60px}
+/* left */
+.left{display:flex;flex-direction:column;align-items:flex-start}
+.word{font-size:150px;font-weight:650;letter-spacing:-.025em;color:var(--zinc50);line-height:1}
+.head{margin-top:44px;font-size:52px;font-weight:400;line-height:1.28;color:var(--zinc300);letter-spacing:.002em}
+.head b{color:var(--zinc50);font-weight:600}
+.chips{margin-top:64px;display:flex;gap:18px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:14px;font-size:27px;color:var(--zinc300);
+  background:rgba(255,255,255,.03);border:1px solid var(--zinc800);border-radius:999px;padding:16px 26px}
+.chip .d{width:11px;height:11px;border-radius:50%}
+.d.r{background:var(--bar-record)} .d.g{background:var(--green)} .d.p{background:var(--prompt)}
+/* right: the app in action */
+.right{display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+.flow{display:flex;flex-direction:column;align-items:center;gap:0}
+.pillrow{margin-bottom:54px}
+.conn{width:2px;height:0}
+.card{width:900px;background:var(--zinc900);border:1px solid var(--zinc800);border-radius:22px;
+  padding:34px 38px;box-shadow:0 40px 90px rgba(0,0,0,.5)}
+.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.card .lbl{font-size:23px;color:var(--zinc500);letter-spacing:.04em;text-transform:uppercase}
+.card .copied{display:flex;align-items:center;gap:11px;font-size:24px;color:var(--green);
+  background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.28);border-radius:999px;padding:9px 20px}
+.card .copied .c{width:11px;height:11px;border-radius:50%;background:var(--green)}
+.card .txt{font-size:40px;line-height:1.42;color:var(--zinc100);font-weight:400}
+.card .txt .k{color:var(--zinc50);font-weight:600}
+</style></head>
+<body>
+<div class="stage">
+  <div class="bg"></div><div class="grid"></div>
+  <div class="wrap">
+    <div class="left">
+      <div class="word">Talkty</div>
+      <div class="head">Press a key, talk, and your words are<br>on the clipboard. <b>Whisper runs on your<br>device.</b> No account. No cloud.</div>
+      <div class="chips">
+        <span class="chip"><span class="d r"></span>Free &amp; open source</span>
+        <span class="chip"><span class="d g"></span>On-device by default</span>
+        <span class="chip"><span class="d p"></span>Windows &amp; macOS</span>
+      </div>
+    </div>
+    <div class="right">
+      <div class="flow">
+        <div class="pillrow">
+          <div class="pill" style="--s:5.4">
+            <span class="bars"><i></i><i></i><i></i></span>
+            <span class="time">0:07</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="top">
+            <span class="lbl">Transcribed</span>
+            <span class="copied"><span class="c"></span>Copied</span>
+          </div>
+          <div class="txt">Add <span class="k">rate limiting</span> to the login route: five attempts per minute, then return a <span class="k">429</span> with a retry-after header.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

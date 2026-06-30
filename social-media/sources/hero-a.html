@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="talkty.css">
+<style>
+html,body{width:2400px;height:1200px;overflow:hidden;background:#08080a}
+.stage{position:relative;width:2400px;height:1200px;display:flex;align-items:center;justify-content:center}
+.bg{position:absolute;inset:0;
+  background:
+   radial-gradient(130% 90% at 50% -15%, #1b1b21 0%, #0d0d10 48%, #08080a 100%);}
+.grid{position:absolute;inset:0;opacity:.35;
+  background-image:radial-gradient(rgba(255,255,255,.045) 1px, transparent 1.4px);
+  background-size:40px 40px;
+  mask-image:radial-gradient(80% 70% at 50% 42%, #000 0%, transparent 78%);
+  -webkit-mask-image:radial-gradient(80% 70% at 50% 42%, #000 0%, transparent 78%);}
+.vignette{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%)}
+.col{position:relative;display:flex;flex-direction:column;align-items:center;gap:0;z-index:2}
+.pillwrap{margin-bottom:96px}
+.word{font-size:148px;font-weight:650;letter-spacing:-.02em;color:var(--zinc50);line-height:1}
+.tag{margin-top:40px;font-size:46px;font-weight:400;color:var(--zinc400);letter-spacing:.005em}
+.meta{margin-top:54px;display:flex;align-items:center;gap:20px;font-size:28px;color:var(--zinc500)}
+.meta .dot{width:13px;height:13px;border-radius:50%;background:var(--bar-record);box-shadow:0 0 18px rgba(255,107,107,.6)}
+.meta .sep{width:5px;height:5px;border-radius:50%;background:var(--zinc700)}
+</style></head>
+<body>
+<div class="stage">
+  <div class="bg"></div><div class="grid"></div><div class="vignette"></div>
+  <div class="col">
+    <div class="pillwrap">
+      <div class="pill" style="--s:7">
+        <span class="bars"><i></i><i></i><i></i></span>
+        <span class="time">0:07</span>
+        <svg class="spark" viewBox="0 0 18 16"><path d="M9,0.5 L10.5,6.6 L16.5,8 L10.5,9.4 L9,15.5 L7.5,9.4 L1.5,8 L7.5,6.6 Z"/></svg>
+      </div>
+    </div>
+    <div class="word">Talkty</div>
+    <div class="tag">Local speech to text. Press a key, talk, paste.</div>
+    <div class="meta">
+      <span class="dot"></span><span>Free and open source</span>
+      <span class="sep"></span><span>Runs on your device</span>
+      <span class="sep"></span><span>Windows &amp; macOS</span>
+    </div>
+  </div>
+</div>
+</body></html>

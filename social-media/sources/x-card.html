@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="talkty.css">
+<style>
+html,body{width:1600px;height:900px;overflow:hidden;background:#08080a}
+.stage{position:relative;width:1600px;height:900px;display:flex;align-items:center;justify-content:center}
+.bg{position:absolute;inset:0;background:radial-gradient(120% 110% at 50% -10%, #1a1a20 0%, #0d0d10 50%, #08080a 100%)}
+.grid{position:absolute;inset:0;opacity:.28;background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1.4px);background-size:34px 34px;
+  mask-image:radial-gradient(78% 78% at 50% 46%, #000 0%, transparent 82%);-webkit-mask-image:radial-gradient(78% 78% at 50% 46%, #000 0%, transparent 82%);}
+.col{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center}
+.pillwrap{margin-bottom:42px}
+.card{width:1080px;background:var(--zinc900);border:1px solid var(--zinc800);border-radius:20px;padding:30px 34px;box-shadow:0 36px 80px rgba(0,0,0,.5)}
+.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.card .lbl{font-size:20px;color:var(--zinc500);letter-spacing:.05em;text-transform:uppercase}
+.card .copied{display:flex;align-items:center;gap:10px;font-size:21px;color:var(--green);background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.28);border-radius:999px;padding:8px 18px}
+.card .copied .c{width:10px;height:10px;border-radius:50%;background:var(--green)}
+.card .txt{font-size:35px;line-height:1.4;color:var(--zinc100)}
+.card .txt .k{color:var(--zinc50);font-weight:600}
+.brand{margin-top:54px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.word{font-size:72px;font-weight:650;letter-spacing:-.02em;color:var(--zinc50);line-height:1}
+.tag{font-size:30px;color:var(--zinc400)}
+</style></head>
+<body>
+<div class="stage">
+  <div class="bg"></div><div class="grid"></div>
+  <div class="col">
+    <div class="pillwrap">
+      <div class="pill" style="--s:3">
+        <span class="bars"><i></i><i></i><i></i></span>
+        <span class="time">0:07</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="top"><span class="lbl">Transcribed</span><span class="copied"><span class="c"></span>Copied</span></div>
+      <div class="txt">Add <span class="k">rate limiting</span> to the login route: five attempts per minute, then return a <span class="k">429</span> with a retry-after header.</div>
+    </div>
+    <div class="brand">
+      <div class="word">Talkty</div>
+      <div class="tag">Free, open source speech to text that runs on your device.</div>
+    </div>
+  </div>
+</div>
+</body></html>

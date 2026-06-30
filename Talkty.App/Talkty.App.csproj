@@ -13,7 +13,7 @@
     <Product>Talkty</Product>
     <Description>Local speech-to-text powered by Whisper. Fast, private, and works offline.</Description>
     <Company>Version2</Company>
-    <Copyright>Copyright (c) 2025 Version2. All rights reserved.</Copyright>
+    <Copyright>Copyright (c) 2025 Version2. MIT License.</Copyright>
     <Authors>Version2</Authors>
     <!-- Version comes from Directory.Build.props — single source of truth. -->
     <NeutralLanguage>en</NeutralLanguage>

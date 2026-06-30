@@ -25,6 +25,20 @@ re-render after a tweak, run `pwsh sources/render.ps1` (needs Chrome).
 - `posts/linkedin.md` — LinkedIn announcement.
 - `posts/github-release.md` — release note draft.
 
+## Video
+
+The promotional explainer, rendered in both orientations from one source. The UI
+in the video is the real app, animated. Music and sound effects are synthesized
+locally, so there is nothing to license.
+
+| File | Size | Use |
+|------|------|-----|
+| `video/talkty-promo-horizontal.mp4` | 1920 x 1080 | YouTube, X, LinkedIn, the website. |
+| `video/talkty-promo-vertical.mp4` | 1080 x 1920 | Reels, Shorts, TikTok, Stories. |
+
+Source and build instructions live in [`../promo`](../promo). Re-render with
+`npm run render:h` and `npm run render:v`.
+
 ## Brand quick reference
 
 - Background: zinc 950 `#09090B` to `#121214`

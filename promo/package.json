@@ -1,0 +1,23 @@
+{
+  "name": "talkty-promo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Promotional video for Talkty, built with Remotion.",
+  "scripts": {
+    "studio": "remotion studio",
+    "audio": "node scripts/generate-audio.mjs",
+    "render:h": "remotion render src/index.ts PromoH out/talkty-promo-horizontal.mp4 --concurrency=4",
+    "render:v": "remotion render src/index.ts PromoV out/talkty-promo-vertical.mp4 --concurrency=4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "remotion": "^4.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.0"
+  }
+}

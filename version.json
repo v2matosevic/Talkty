@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.2",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Talkty now frees the speech model's memory after 15 minutes of inactivity (a large model no longer holds gigabytes of RAM while the app sits in the tray) and reloads it automatically while you speak. More accurate transcription: better recovery from stuck decodes, no more English bias on other languages, and default replacements no longer rewrite real words like \"cloud\". You now get a notification when a transcription or Prompting fails, the pill shows a purple \"Prompting…\" state, long dictations are never silently cut off, and startup is faster."
+  "release_notes": "Settings rebuilt with a left navigation (Model, Audio & Language, Vocabulary, Cloud & Prompting, Behavior, Hotkey) and a resizable window. Text replacements are now editable in Settings (one \"misheard => correct\" rule per line). The API key is masked with a reveal toggle, history entries have copy/delete on hover plus a Clear-all, and dark scrollbars and inputs replace the white OS controls. Accuracy: abbreviations like \"e.g.\" survive punctuation cleanup, and cloud transcription retries once on transient errors. Hover the recording pill for the \"esc cancels\" hint."
 }

@@ -52,6 +52,9 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
   hallucinations like `[MUSIC]` and "Thanks for watching", and normalizes punctuation.
 - **Quiet in the tray.** Lives in the system tray, shows a small floating pill while
   recording, and ducks background audio so the mic hears you clearly.
+- **Light on your PC.** Zero CPU while idle, and the speech model's memory
+  (up to several GB for the large models) is freed after 15 minutes of inactivity —
+  it reloads automatically while you speak, so you never notice.
 - **Cloud transcription** *(opt-in)*. Route a take through OpenRouter models
   (GPT-4o Transcribe, Whisper Large V3, Qwen3 ASR, and more) when you want extra
   accuracy. Local stays the default.
@@ -183,7 +186,7 @@ installer/       Inno Setup script
 docs/            PROMPTING.md and assets
 ```
 
-A deeper tour of the architecture lives in [CLAUDE.md](./CLAUDE.md).
+A deeper tour of the architecture lives in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
 ---
 

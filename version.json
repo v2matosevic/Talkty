@@ -1,5 +1,5 @@
 {
-  "version": "1.1.5",
+  "version": "1.2.0",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "History now keeps both halves of a Prompting entry. When you use Prompting, the Recent list shows what you actually said (\"You said: …\") and the generated prompt together, marked with a PROMPT badge. Click the entry to copy the prompt, or click the \"You said\" line to copy just your original transcription. Plain (non-Prompting) transcriptions look the same as before."
+  "release_notes": "Talkty now frees the speech model's memory after 15 minutes of inactivity (a large model no longer holds gigabytes of RAM while the app sits in the tray) and reloads it automatically while you speak. More accurate transcription: better recovery from stuck decodes, no more English bias on other languages, and default replacements no longer rewrite real words like \"cloud\". You now get a notification when a transcription or Prompting fails, the pill shows a purple \"Prompting…\" state, long dictations are never silently cut off, and startup is faster."
 }

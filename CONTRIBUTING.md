@@ -53,4 +53,5 @@ code, add or update a test.
 
 There is no dependency injection container. Services are wired by hand in
 `MainWindow.xaml.cs`. The model profile enum is persisted by number, so never
-reorder or remove its members. `CLAUDE.md` documents the gotchas in detail.
+reorder or remove its members. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) documents
+the gotchas in detail.

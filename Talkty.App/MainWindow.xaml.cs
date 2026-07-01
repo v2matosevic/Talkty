@@ -173,6 +173,7 @@ public partial class MainWindow : Window
         var settings = _settingsService.Settings;
         var hotkeyText = $"{settings.HotkeyModifier}+{settings.HotkeyKey}";
         HotkeyBadge.Text = hotkeyText;
+        EmptyStateHotkeyText.Text = $"Press {hotkeyText} to start";
         Log.Debug($"Hotkey badge updated: {hotkeyText}");
     }
 

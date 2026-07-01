@@ -182,6 +182,26 @@ public class TextPostProcessorTests
 
     // ── CleanupPunctuation ───────────────────────────────────────────────
 
+    [Theory]
+    [InlineData("Use e.g. the config file.", "Use e.g. the config file.")]
+    [InlineData("The new one vs. the old one.", "The new one vs. the old one.")]
+    [InlineData("Files, folders, etc. and so on.", "Files, folders, etc. and so on.")]
+    [InlineData("That is i.e. the main point.", "That is i.e. the main point.")]
+    public void CleanupPunctuation_PreservesAbbreviationsBeforeLowercase(string input, string expected)
+    {
+        // A period after an abbreviation followed by lowercase is NOT a false sentence
+        // break — deleting it would corrupt the abbreviation ("e.g. the" → "e.g the").
+        var result = TextPostProcessor.CleanupPunctuation(input);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CleanupPunctuation_StillMergesRealFalseBreaks()
+    {
+        var result = TextPostProcessor.CleanupPunctuation("I want to build. a new feature");
+        Assert.Equal("I want to build a new feature.", result);
+    }
+
     [Fact]
     public void CleanupPunctuation_RemovesDoublePeriod()
     {

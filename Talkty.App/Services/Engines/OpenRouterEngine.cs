@@ -144,17 +144,34 @@ public class OpenRouterEngine : ITranscriptionEngine
 
             var json = JsonSerializer.Serialize(payload);
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            Log.Debug($"POST {Endpoint} ({wav.Length} bytes audio, {json.Length} bytes body)");
-            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseContentRead, linkedCts.Token);
-            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
-
-            if (!response.IsSuccessStatusCode)
+            // One retry on transient failures (rate limit / gateway hiccups). Auth and
+            // client errors are permanent — retrying those just doubles the wait.
+            string body;
+            System.Net.HttpStatusCode status;
+            int attempt = 0;
+            while (true)
             {
-                return Fail(DescribeHttpError(response.StatusCode, body), startTime);
+                attempt++;
+                using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                Log.Debug($"POST {Endpoint} ({wav.Length} bytes audio, {json.Length} bytes body, attempt {attempt})");
+                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseContentRead, linkedCts.Token);
+                body = await response.Content.ReadAsStringAsync(linkedCts.Token);
+                status = response.StatusCode;
+
+                if (response.IsSuccessStatusCode) break;
+
+                bool transient = (int)status is 429 or 500 or 502 or 503;
+                if (transient && attempt == 1)
+                {
+                    Log.Warning($"OpenRouter HTTP {(int)status} — transient, retrying once after 1s");
+                    await Task.Delay(1000, linkedCts.Token);
+                    continue;
+                }
+
+                return Fail(DescribeHttpError(status, body), startTime);
             }
 
             var text = ExtractText(body);

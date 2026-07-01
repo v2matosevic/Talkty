@@ -2,6 +2,21 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.2.2] - 2026-07-02
+
+- Text replacements are now editable in Settings > Vocabulary — one rule per
+  line ("misheard => correct"), with a Reset to defaults. Previously the rules
+  only lived in settings.json. Use this to re-add "cloud => Claude" if you
+  relied on it.
+- Punctuation cleanup no longer corrupts abbreviations: "e.g. the", "i.e.",
+  "vs.", "etc." keep their periods.
+- Cloud transcription retries once on transient errors (rate limit, gateway
+  hiccups) instead of failing immediately.
+- The early streamed clipboard copy now gets the same punctuation cleanup as
+  the final text.
+- "Open models folder" link on the Settings Model page.
+- The empty-history hint now shows your actual hotkey instead of always Alt+Q.
+
 ## [1.2.1] - 2026-07-01
 
 - Settings rebuilt with a left navigation — six clear sections (Model,

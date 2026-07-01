@@ -40,8 +40,11 @@ public static partial class TextPostProcessor
 
     // Matches a sentence-ending period followed by a lowercase word — indicates a false sentence break.
     // "I want to build. a new feature" → the period before "a" is a false break from a pause.
-    // The negative lookbehind prevents matching the last dot of an ellipsis (user-intended "...").
-    [GeneratedRegex(@"(?<!\.)\.(\s+)([a-z])", RegexOptions.Compiled)]
+    // The first negative lookbehind prevents matching the last dot of an ellipsis (user-intended "...").
+    // The abbreviation lookbehinds keep legitimate "e.g. the" / "vs. the old" / "etc. and" intact —
+    // deleting the dot there corrupts the abbreviation itself, which is worse than keeping a rare
+    // false break after one.
+    [GeneratedRegex(@"(?<!\.)(?<!\be\.g)(?<!\bi\.e)(?<!\betc)(?<!\bvs)(?<!\bcf)(?<!\bapprox)(?<!\bincl)\.(\s+)([a-z])", RegexOptions.Compiled)]
     private static partial Regex FalseSentenceBreak();
 
     // Matches leading/trailing ellipsis that Whisper adds to continued segments.

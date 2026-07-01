@@ -111,6 +111,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _customVocabularyText = "";
 
+    // "misheard => correct" lines, one rule per line (deterministic post-transcription fixes)
+    [ObservableProperty]
+    private string _textReplacementsText = "";
+
     // Data-driven model collections — local (offline, free) and cloud (online, needs key).
     public ObservableCollection<ModelProfileViewModel> LocalModels { get; } = [];
     public ObservableCollection<ModelProfileViewModel> CloudModels { get; } = [];
@@ -306,6 +310,42 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         {
             CustomVocabularyText = string.Join(", ", DefaultVocabulary.CodingTerms);
         }
+
+        TextReplacementsText = FormatReplacements(
+            settings.TextReplacements is { Count: > 0 }
+                ? settings.TextReplacements
+                : DefaultVocabulary.DefaultReplacements);
+    }
+
+    /// <summary>Renders a replacements dictionary as editable "misheard => correct" lines.</summary>
+    internal static string FormatReplacements(IReadOnlyDictionary<string, string> replacements) =>
+        string.Join(Environment.NewLine, replacements.Select(kv => $"{kv.Key} => {kv.Value}"));
+
+    /// <summary>
+    /// Parses "misheard => correct" lines back into a replacements dictionary.
+    /// Accepts "=>" or "->" as the separator; blank and malformed lines are skipped.
+    /// </summary>
+    internal static Dictionary<string, string> ParseReplacements(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(text)) return result;
+
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim().TrimEnd('\r');
+            if (line.Length == 0) continue;
+
+            var sep = line.IndexOf("=>", StringComparison.Ordinal);
+            if (sep < 0) sep = line.IndexOf("->", StringComparison.Ordinal);
+            if (sep <= 0) continue;
+
+            var key = line[..sep].Trim();
+            var value = line[(sep + 2)..].Trim();
+            if (key.Length == 0 || value.Length == 0) continue;
+
+            result[key] = value;
+        }
+        return result;
     }
 
     private void UpdateHotkeyText()
@@ -541,10 +581,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             HotkeyKey = HotkeyKey,
             UseCustomVocabulary = UseCustomVocabulary,
             CustomVocabulary = vocabularyList,
-            // Not editable in this dialog — carry the live rules through. Omitting this
-            // nulled the replacements on every save, and the next launch silently re-seeded
-            // defaults over any custom rules.
-            TextReplacements = _settingsService.Settings.TextReplacements,
+            TextReplacements = ParseReplacements(TextReplacementsText),
             // Encrypt the cloud API key before it leaves the dialog (DPAPI, CurrentUser).
             OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect(
                 string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim()),
@@ -561,6 +598,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         CustomVocabularyText = string.Join(", ", DefaultVocabulary.CodingTerms);
         UseCustomVocabulary = true;
         Log.Info("Vocabulary reset to defaults");
+    }
+
+    [RelayCommand]
+    public void ResetReplacementsToDefaults()
+    {
+        TextReplacementsText = FormatReplacements(DefaultVocabulary.DefaultReplacements);
+        Log.Info("Text replacements reset to defaults");
     }
 
     [RelayCommand]

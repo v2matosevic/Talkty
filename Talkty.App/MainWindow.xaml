@@ -467,7 +467,8 @@
                                        FontSize="12"
                                        Foreground="{StaticResource Zinc600Brush}"
                                        HorizontalAlignment="Center"/>
-                            <TextBlock Text="Press Alt+Q to start"
+                            <TextBlock x:Name="EmptyStateHotkeyText"
+                                       Text="Press Alt+Q to start"
                                        FontSize="11"
                                        Foreground="{StaticResource Zinc700Brush}"
                                        HorizontalAlignment="Center"

@@ -587,9 +587,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         // hit the clipboard before the full-pass clean runs.
                         text = TextPostProcessor.StripHallucinations(text);
 
-                        // Apply post-processing to streamed segment too
+                        // Apply post-processing to streamed segment too — same treatment as the
+                        // full pass, so an early paste doesn't differ from the final text.
                         if (textReplacements is { Count: > 0 })
                             text = TextPostProcessor.ApplyReplacements(text, textReplacements);
+                        text = TextPostProcessor.CleanupPunctuation(text);
 
                         if (string.IsNullOrWhiteSpace(text))
                         {

@@ -171,7 +171,37 @@
                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
                               Visibility="{Binding IsChecked, ElementName=NavModels, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <StackPanel Margin="16,4,20,20">
-                        <TextBlock Text="TRANSCRIPTION MODEL" Style="{StaticResource SectionHeader}"/>
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="TRANSCRIPTION MODEL" Style="{StaticResource SectionHeader}" Margin="0" VerticalAlignment="Center"/>
+                            <Button Content="Open models folder"
+                                    FontSize="10"
+                                    HorizontalAlignment="Right"
+                                    Command="{Binding OpenModelsFolderCommand}"
+                                    ToolTip="Show the downloaded model files in Explorer">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Foreground" Value="{StaticResource Zinc600Brush}"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="6,2">
+                                                        <ContentPresenter/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource Zinc300Brush}"/>
+                                                <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </Grid>
 
                         <!-- LOCAL — offline &amp; free (expanded by default; recommended model is first) -->
                         <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
@@ -434,6 +464,41 @@
                                                 ToolTip="Reset to default coding vocabulary"/>
                                     </Grid>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="TEXT REPLACEMENTS" Style="{StaticResource SectionHeader}" Margin="0,20,0,10"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14"
+                                Visibility="{Binding UseCustomVocabulary, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBox Text="{Binding TextReplacementsText, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         VerticalScrollBarVisibility="Auto"
+                                         VerticalContentAlignment="Top"
+                                         FontFamily="{StaticResource FontMono}"
+                                         MaxHeight="180"
+                                         MinHeight="100"
+                                         FontSize="11"
+                                         Padding="8,6"
+                                         Margin="0,0,0,8"/>
+                                <Grid>
+                                    <TextBlock Text="One rule per line: misheard =&gt; correct. Applied after transcription — always exact, never hallucinated. Word-boundary and case-insensitive (e.g. cube cuddle =&gt; kubectl)."
+                                               FontSize="10"
+                                               Foreground="{StaticResource Zinc500Brush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,80,0"
+                                               VerticalAlignment="Center"/>
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding ResetReplacementsToDefaultsCommand}"
+                                            Content="Reset"
+                                            FontSize="11"
+                                            Padding="12,5"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Bottom"
+                                            ToolTip="Reset to the default replacement rules"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>

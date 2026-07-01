@@ -552,6 +552,11 @@
                                 </StackPanel>
                             </Grid>
 
+                            <CheckBox Content="Free memory when idle"
+                                      IsChecked="{Binding UnloadModelWhenIdle}"
+                                      ToolTip="Unloads the speech model after 15 minutes of inactivity to free RAM. It reloads automatically while you speak — you won't notice it."
+                                      Margin="0,0,0,12"/>
+
                             <CheckBox Content="Use GPU acceleration (CUDA)"
                                       IsChecked="{Binding UseGpu}"
                                       ToolTip="Enable GPU acceleration for faster transcription. Requires NVIDIA GPU with CUDA."/>

@@ -59,6 +59,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _duckVolumeWhileRecording;
 
     [ObservableProperty]
+    private bool _unloadModelWhenIdle = true;
+
+    [ObservableProperty]
     private int _volumeDuckPercent = 20; // 5-100 percent
 
     [ObservableProperty]
@@ -283,6 +286,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         AutoDetectLanguage = settings.AutoDetectLanguage;
         UseGpu = settings.UseGpu;
         DuckVolumeWhileRecording = settings.DuckVolumeWhileRecording;
+        UnloadModelWhenIdle = settings.UnloadModelWhenIdle;
         VolumeDuckPercent = (int)(settings.VolumeDuckLevel * 100);
         ModelsPath = _settingsService.GetModelsDirectory();
         HotkeyModifier = settings.HotkeyModifier;
@@ -531,11 +535,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             UseGpu = UseGpu,
             DuckVolumeWhileRecording = DuckVolumeWhileRecording,
             VolumeDuckLevel = VolumeDuckPercent / 100f,
+            UnloadModelWhenIdle = UnloadModelWhenIdle,
             ModelsPath = ModelsPath,
             HotkeyModifier = HotkeyModifier,
             HotkeyKey = HotkeyKey,
             UseCustomVocabulary = UseCustomVocabulary,
             CustomVocabulary = vocabularyList,
+            // Not editable in this dialog — carry the live rules through. Omitting this
+            // nulled the replacements on every save, and the next launch silently re-seeded
+            // defaults over any custom rules.
+            TextReplacements = _settingsService.Settings.TextReplacements,
             // Encrypt the cloud API key before it leaves the dialog (DPAPI, CurrentUser).
             OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect(
                 string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim()),

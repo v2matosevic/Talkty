@@ -91,6 +91,7 @@ public partial class App : Application
         }
 
         base.OnExit(e);
+        Log.Shutdown();
     }
 
     private static void ShowCrashDialog(string crashFile)

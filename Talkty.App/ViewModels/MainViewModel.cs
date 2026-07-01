@@ -113,7 +113,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             Log.Info("LoadSettingsAndModel starting");
 
-            _settingsService.Load();
+            // Settings are already loaded — MainWindow calls Load() before constructing this
+            // ViewModel. Re-loading here was a redundant disk read + deserialize at startup.
             var settings = _settingsService.Settings;
             Log.Debug($"Settings loaded. ModelProfile: {settings.ModelProfile}, Mic: {settings.SelectedMicrophoneId ?? "default"}");
 
@@ -149,6 +150,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _transcriptionService.SetCloudApiKey(cloudKey);
             _promptRefinementService?.SetApiKey(cloudKey);
             _promptRefinementService?.SetModel(settings.PromptingModel);
+
+            _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);
 
             await LoadModelAsync(settings.ModelProfile, settings.UseGpu);
 
@@ -478,6 +481,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             Log.Debug("Calling AudioCaptureService.StartRecording()");
             _audioCaptureService.StartRecording();
+
+            // If the model was unloaded while idle, start reloading NOW so it overlaps with
+            // the user speaking — by stop time it's usually ready and the reload costs no
+            // perceived latency. TranscribeAsync awaits this same load if it's still going.
+            _ = _transcriptionService.EnsureModelLoadedAsync();
+
             IsListening = true;
             StatusText = "Listening...";
             Log.Info("Recording started - raising RequestShowOverlay");
@@ -935,6 +944,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Prompting model — persist the user's pick. Without this it was applied to the live refiner
         // (SetModel below) but never written to disk, so it reset to the default on every restart.
         _settingsService.Settings.PromptingModel = settings.PromptingModel;
+
+        _settingsService.Settings.UnloadModelWhenIdle = settings.UnloadModelWhenIdle;
+        _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);
 
         _settingsService.Save();
 

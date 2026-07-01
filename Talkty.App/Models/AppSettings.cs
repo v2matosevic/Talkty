@@ -30,6 +30,13 @@ public class AppSettings
     public float VolumeDuckLevel { get; set; } = 0.20f;
 
     /// <summary>
+    /// Unload the local speech model after ~15 minutes without a transcription to free
+    /// RAM/VRAM while the app idles in the tray. It reloads transparently on the next
+    /// recording (the reload overlaps with speaking, so it's rarely felt).
+    /// </summary>
+    public bool UnloadModelWhenIdle { get; set; } = true;
+
+    /// <summary>
     /// Whether to use the custom vocabulary prompt during transcription.
     /// </summary>
     public bool UseCustomVocabulary { get; set; } = true;

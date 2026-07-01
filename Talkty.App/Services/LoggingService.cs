@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -22,9 +21,22 @@ public static class Log
     private static readonly string LogFile = Path.Combine(
         LogDirectory, $"talkty_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
 
-    private static readonly ConcurrentQueue<string> LogQueue = new();
     private static readonly object WriteLock = new();
+    private static StreamWriter? _writer;
     private static bool _initialized;
+
+    /// <summary>
+    /// Minimum level written to the log. Debug builds log everything; release builds default
+    /// to Info (Debug lines are per-segment/per-step chatty and each one hits disk). Set the
+    /// TALKTY_DEBUG_LOG=1 environment variable to get full Debug logs from a release build
+    /// when diagnosing an issue.
+    /// </summary>
+    public static LogLevel MinLevel { get; set; } =
+#if DEBUG
+        LogLevel.Debug;
+#else
+        Environment.GetEnvironmentVariable("TALKTY_DEBUG_LOG") == "1" ? LogLevel.Debug : LogLevel.Info;
+#endif
 
     public static void Initialize()
     {
@@ -33,9 +45,16 @@ public static class Log
         try
         {
             Directory.CreateDirectory(LogDirectory);
+
+            // One persistent writer for the app lifetime — the previous per-line
+            // File.AppendAllText opened and closed the file on every log call.
+            // AutoFlush keeps each line durable so a hard crash (e.g. a native
+            // whisper.cpp fault with no managed crash log) still leaves a full tail.
+            _writer = new StreamWriter(LogFile, append: false) { AutoFlush = true };
             _initialized = true;
 
-            // Write comprehensive header
+            // Header WITHOUT GPU info — GetGpuInfo spawns nvidia-smi and can block up to 5s,
+            // and Initialize runs on the UI thread before the first window. Logged async below.
             var header = $"""
                 ================================================================================
                 TALKTY LOG - Started {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}
@@ -49,21 +68,40 @@ public static class Log
                 64-bit OS: {Environment.Is64BitOperatingSystem}
                 64-bit Process: {Environment.Is64BitProcess}
                 Working Set: {Environment.WorkingSet / 1024 / 1024} MB
+                Min Level: {MinLevel}
                 Log File: {LogFile}
-
-                --- GPU DETECTION ---
-                {GetGpuInfo()}
 
                 ================================================================================
 
                 """;
 
-            File.WriteAllText(LogFile, header);
+            lock (WriteLock)
+            {
+                _writer.Write(header);
+            }
             Info("Logging initialized with enhanced diagnostics");
+
+            // GPU detection off the startup path — it shells out to nvidia-smi.
+            _ = Task.Run(() => Info($"--- GPU DETECTION ---\n{GetGpuInfo()}"));
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Failed to initialize logging: {ex.Message}");
+            // Logging must never take the app down; if the file can't be opened we run silent.
+        }
+    }
+
+    /// <summary>Flushes and closes the log file. Call once at app exit.</summary>
+    public static void Shutdown()
+    {
+        lock (WriteLock)
+        {
+            try
+            {
+                _writer?.Dispose();
+            }
+            catch { /* nothing useful to do */ }
+            _writer = null;
+            _initialized = false;
         }
     }
 
@@ -262,6 +300,7 @@ public static class Log
 
     private static void Write(LogLevel level, string message, string caller, string file, int line)
     {
+        if (level < MinLevel) return;
         if (!_initialized) Initialize();
 
         var fileName = Path.GetFileName(file);
@@ -271,25 +310,12 @@ public static class Log
 
         var logLine = $"[{timestamp}] [{levelStr}] [{location}] {message}";
 
-        // Console output with colors
-        var originalColor = Console.ForegroundColor;
-        Console.ForegroundColor = level switch
-        {
-            LogLevel.Debug => ConsoleColor.Gray,
-            LogLevel.Info => ConsoleColor.White,
-            LogLevel.Warning => ConsoleColor.Yellow,
-            LogLevel.Error => ConsoleColor.Red,
-            _ => ConsoleColor.White
-        };
-        Console.WriteLine(logLine);
-        Console.ForegroundColor = originalColor;
-
-        // File output
+        // File output only — this is a windowed app (WinExe), there is no console to write to.
         try
         {
             lock (WriteLock)
             {
-                File.AppendAllText(LogFile, logLine + Environment.NewLine);
+                _writer?.WriteLine(logLine);
             }
         }
         catch

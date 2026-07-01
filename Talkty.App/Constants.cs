@@ -64,6 +64,14 @@ public static class Constants
     public const int WhisperMaxThreads = 8;
 
     /// <summary>
+    /// Minutes without a transcription before the local model is unloaded to free RAM/VRAM
+    /// (the app idles in the tray; a Large model otherwise holds 1.5-3 GB around the clock).
+    /// Reload is transparent and overlaps with the next recording. 15 min keeps rapid-fire
+    /// dictation sessions entirely on the loaded model.
+    /// </summary>
+    public const int ModelIdleUnloadMinutes = 15;
+
+    /// <summary>
     /// Silent-sample count used to warm up the processor on model load (0.5s at 16kHz).
     /// </summary>
     public const int WhisperWarmupSamples = SampleRate / 2;

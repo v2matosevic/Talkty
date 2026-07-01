@@ -39,6 +39,20 @@ public interface ITranscriptionService : IDisposable
     void SetCloudApiKey(string? apiKey);
 
     /// <summary>
+    /// Enables/disables unloading the local model after a period of inactivity (frees RAM/VRAM
+    /// while the app idles in the tray). The model is transparently restored on next use.
+    /// </summary>
+    void SetIdleUnload(bool enabled);
+
+    /// <summary>
+    /// Restores the model if it was unloaded while idle; no-op when already loaded.
+    /// Call at recording start so the reload overlaps with the user speaking —
+    /// <see cref="TranscribeAsync"/> also calls it and awaits any in-flight reload.
+    /// Returns false when no model was ever successfully loaded.
+    /// </summary>
+    Task<bool> EnsureModelLoadedAsync();
+
+    /// <summary>
     /// Whether a model is currently loaded and ready.
     /// </summary>
     bool IsModelLoaded { get; }

@@ -2,6 +2,22 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.2.0] - 2026-07-01
+
+- Talkty now frees the speech model's memory after 15 minutes of inactivity —
+  a Large model no longer holds 1.5-3 GB of RAM around the clock while the app
+  sits in the tray. The model reloads automatically while you speak, so the next
+  recording works exactly as before. Toggle with "Free memory when idle" in
+  Settings > Behavior (on by default).
+- Faster startup: GPU detection no longer runs on the launch path (it could
+  block the app for up to 5 seconds), and settings are read from disk once
+  instead of twice.
+- Much less disk activity: the log file stays open instead of being reopened
+  for every line, and verbose debug logging is off in release builds (set
+  TALKTY_DEBUG_LOG=1 to re-enable it when diagnosing an issue).
+- Fixed: saving Settings silently reset custom text replacements to defaults on
+  the next launch.
+
 ## [1.1.6] - 2026-07-01
 
 - Transcription accuracy: removed the default "cloud"→"Claude" and "sequel"→"SQL"

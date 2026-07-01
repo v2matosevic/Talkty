@@ -136,8 +136,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             LoadPersistedHistory();
 
             // Pre-set vocabulary prompt so the processor is built with it from the start
-            // (avoids a processor rebuild on the first transcription)
-            if (settings.UseCustomVocabulary)
+            // (avoids a processor rebuild on the first transcription). English-only — must
+            // match the per-transcription gate or the first transcription forces a rebuild.
+            if (settings.UseCustomVocabulary && !settings.AutoDetectLanguage && settings.Language == "en")
             {
                 _transcriptionService.SetVocabularyPrompt(DefaultVocabulary.PromptContext);
             }
@@ -549,9 +550,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var startTime = DateTime.Now;
             var language = _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language;
 
-            // Build vocabulary prompt — use contextual sentences for stronger Whisper bias
+            // Build vocabulary prompt — use contextual sentences for stronger Whisper bias.
+            // English-only: an English initial_prompt biases non-English (and auto-detect)
+            // decoding toward English tokens and prompt regurgitation.
             string? vocabularyPrompt = null;
-            if (_settingsService.Settings.UseCustomVocabulary)
+            if (_settingsService.Settings.UseCustomVocabulary && language == "en")
             {
                 vocabularyPrompt = DefaultVocabulary.PromptContext;
                 Log.Debug($"Vocabulary prompt: {vocabularyPrompt.Length} chars");
@@ -646,6 +649,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         else
                         {
                             Log.Warning("Prompt refinement returned nothing — using raw transcription");
+                            // The user asked for a prompt and is silently getting raw dictation —
+                            // say so (unless they cancelled via ESC, where silence is expected).
+                            if (cancellationToken.IsCancellationRequested == false)
+                            {
+                                RequestShowToast?.Invoke(this, new ToastEventArgs
+                                {
+                                    Message = _promptRefinementService.LastError
+                                              ?? "Prompting failed — copied the raw transcription instead",
+                                    Type = ToastType.Warning,
+                                    DurationMs = 5000
+                                });
+                            }
                         }
                     }
                     else
@@ -722,6 +737,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 {
                     Log.Warning($"Transcription failed or empty. Error: {result.ErrorMessage}");
                     StatusText = result.ErrorMessage ?? "Transcription failed";
+                    // The app usually lives hidden in the tray — StatusText alone is invisible
+                    // there. Toast so the user knows nothing reached the clipboard.
+                    RequestShowToast?.Invoke(this, new ToastEventArgs
+                    {
+                        Message = result.ErrorMessage ?? "Transcription failed — nothing was copied",
+                        Type = ToastType.Warning,
+                        DurationMs = 5000
+                    });
                 }
             }
 

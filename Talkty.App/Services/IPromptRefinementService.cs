@@ -25,4 +25,10 @@ public interface IPromptRefinementService
     /// Returns null on failure (caller should fall back to the raw transcription).
     /// </summary>
     Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// User-facing description of why the last <see cref="RefineAsync"/> returned null
+    /// (invalid key, out of credits, all models failed). Null after a success or a user cancel.
+    /// </summary>
+    string? LastError { get; }
 }

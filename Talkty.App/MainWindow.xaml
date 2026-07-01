@@ -183,11 +183,13 @@
                                                 <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
                                                     <Setter Property="Fill" Value="#8B5CF6"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsModelLoading}" Value="True">
-                                                    <Setter Property="Fill" Value="#F59E0B"/>
-                                                </DataTrigger>
+                                                <!-- IsModelLoading declared AFTER IsModelLoaded so it wins while both
+                                                     apply (during load, loaded is still false) — last trigger wins. -->
                                                 <DataTrigger Binding="{Binding IsModelLoaded}" Value="False">
                                                     <Setter Property="Fill" Value="#EF4444"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsModelLoading}" Value="True">
+                                                    <Setter Property="Fill" Value="#F59E0B"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -208,11 +210,12 @@
                                                 <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
                                                     <Setter Property="Text" Value="Transcribing..."/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsModelLoading}" Value="True">
-                                                    <Setter Property="Text" Value="Loading Model..."/>
-                                                </DataTrigger>
+                                                <!-- Same ordering rule as the status dot: loading must beat not-loaded. -->
                                                 <DataTrigger Binding="{Binding IsModelLoaded}" Value="False">
                                                     <Setter Property="Text" Value="Model Not Loaded"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsModelLoading}" Value="True">
+                                                    <Setter Property="Text" Value="Loading Model..."/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

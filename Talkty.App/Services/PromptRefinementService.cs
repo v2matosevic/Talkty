@@ -142,6 +142,8 @@ public class PromptRefinementService : IPromptRefinementService
     private string? _apiKey;
     private string? _primaryModel;
 
+    public string? LastError { get; private set; }
+
     public bool IsConfigured
     {
         get { lock (_lock) { return !string.IsNullOrWhiteSpace(_apiKey); } }
@@ -176,12 +178,15 @@ public class PromptRefinementService : IPromptRefinementService
 
     public async Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default)
     {
+        LastError = null;
+
         string? key;
         lock (_lock) { key = _apiKey; }
 
         if (string.IsNullOrWhiteSpace(key))
         {
             Log.Warning("PromptRefinement: no API key configured");
+            LastError = "No OpenRouter API key configured";
             return null;
         }
         if (string.IsNullOrWhiteSpace(transcription))
@@ -199,7 +204,17 @@ public class PromptRefinementService : IPromptRefinementService
 
             var model = chain[i];
             bool isLast = i == chain.Length - 1;
-            var (ok, content) = await TryRefineWithModel(model, key!, transcription, cancellationToken);
+            var (ok, content, fatalError) = await TryRefineWithModel(model, key!, transcription, cancellationToken);
+
+            // Auth/credit failures affect every model identically — trying the rest of the
+            // chain would just burn 3 more timeouts. Abort and tell the user what's wrong.
+            if (fatalError != null)
+            {
+                Log.Error($"Refinement aborted: {fatalError}");
+                LastError = fatalError;
+                return null;
+            }
+
             if (ok && !string.IsNullOrWhiteSpace(content))
             {
                 // Completeness guard: a model that returned a far-shorter-than-input result summarized
@@ -224,6 +239,7 @@ public class PromptRefinementService : IPromptRefinementService
         }
 
         Log.Error("All refinement models failed — caller falls back to raw transcription");
+        LastError = "Prompting failed (all models unavailable)";
         return null;
     }
 
@@ -241,10 +257,13 @@ public class PromptRefinementService : IPromptRefinementService
     }
 
     /// <summary>
-    /// Single attempt against one model. Returns (true, content) on success, (false, null) on any
-    /// failure (HTTP error, timeout, parse error, empty) so the chain can move to the next model.
+    /// Single attempt against one model. Returns (true, content, null) on success and
+    /// (false, null, null) on a per-model failure (HTTP error, timeout, parse error, empty,
+    /// truncated) so the chain can move to the next model. A non-null fatalError means the
+    /// failure is key-level (401/402) — every model would fail the same way, so the chain
+    /// must abort and surface the message instead of retrying.
     /// </summary>
-    private async Task<(bool ok, string? content)> TryRefineWithModel(
+    private async Task<(bool ok, string? content, string? fatalError)> TryRefineWithModel(
         string model, string apiKey, string transcription, CancellationToken cancellationToken)
     {
         using var timeoutCts = new CancellationTokenSource(Constants.PromptRefinementTimeoutMs);
@@ -264,7 +283,10 @@ public class PromptRefinementService : IPromptRefinementService
                 temperature = 0.2,
                 // Headroom so a long, detail-complete prompt is never truncated by a provider's
                 // default output cap. This is a ceiling, not a target — it adds no latency.
-                max_tokens = 2048,
+                // Sized for the worst case: dictations expand ~2-2.5× under "lose nothing", so
+                // 2048 could cut a long dictation mid-prompt (finish_reason=length is treated
+                // as a failure below, but the right fix is to not hit the ceiling at all).
+                max_tokens = 8192,
                 // Route to the fastest-decoding provider. Critical for minimax/minimax-m3, which is
                 // multi-hosted at very different speeds — a slow route would reintroduce a GLM-style
                 // latency tax. Harmless no-op for single-provider models (Gemini/DeepSeek).
@@ -284,38 +306,57 @@ public class PromptRefinementService : IPromptRefinementService
             if (!response.IsSuccessStatusCode)
             {
                 Log.Warning($"Refinement '{model}' HTTP {(int)response.StatusCode}: {Truncate(body, 200)}");
-                return (false, null);
+                // 401/402 are key-level, not model-level — abort the chain with a user message.
+                var fatal = (int)response.StatusCode switch
+                {
+                    401 => "OpenRouter rejected your API key — check it in Settings",
+                    402 => "OpenRouter credits exhausted — top up your account",
+                    _ => (string?)null
+                };
+                return (false, null, fatal);
             }
 
-            var content = ExtractContent(body);
+            var (content, finishReason) = ExtractContent(body);
             if (string.IsNullOrWhiteSpace(content))
             {
                 Log.Warning($"Refinement '{model}' returned empty content");
-                return (false, null);
+                return (false, null, null);
+            }
+
+            // A "length" finish means the provider cut the prompt mid-sentence at max_tokens.
+            // An incomplete prompt silently violates "lose nothing" — treat as failure so the
+            // chain escalates rather than shipping a truncated prompt as success.
+            if (string.Equals(finishReason, "length", StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning($"Refinement '{model}' hit max_tokens (finish_reason=length, {content.Length} chars) — treating as failure");
+                return (false, null, null);
             }
 
             Log.Info($"Refinement '{model}' ok in {sw.ElapsedMilliseconds}ms: {transcription.Length} → {content.Length} chars");
-            return (true, content);
+            return (true, content, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             Log.Info($"Refinement '{model}' cancelled (ESC)");
-            return (false, null);
+            return (false, null, null);
         }
         catch (OperationCanceledException)
         {
             Log.Warning($"Refinement '{model}' timed out after {Constants.PromptRefinementTimeoutMs / 1000}s");
-            return (false, null);
+            return (false, null, null);
         }
         catch (Exception ex)
         {
             Log.Warning($"Refinement '{model}' failed: {ex.Message}");
-            return (false, null);
+            return (false, null, null);
         }
     }
 
-    /// <summary>Pulls the assistant message out of an OpenAI/OpenRouter chat-completions response.</summary>
-    private static string? ExtractContent(string body)
+    /// <summary>
+    /// Pulls the assistant message and finish_reason out of an OpenAI/OpenRouter
+    /// chat-completions response.
+    /// </summary>
+    private static (string? content, string? finishReason) ExtractContent(string body)
     {
         try
         {
@@ -323,17 +364,22 @@ public class PromptRefinementService : IPromptRefinementService
             if (doc.RootElement.TryGetProperty("choices", out var choices) &&
                 choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0)
             {
-                var msg = choices[0].GetProperty("message");
+                var choice = choices[0];
+                string? finishReason = null;
+                if (choice.TryGetProperty("finish_reason", out var fr) && fr.ValueKind == JsonValueKind.String)
+                    finishReason = fr.GetString();
+
+                var msg = choice.GetProperty("message");
                 if (msg.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
-                    return content.GetString();
+                    return (content.GetString(), finishReason);
             }
             Log.Warning($"Refinement response had no choices[0].message.content: {Truncate(body, 200)}");
-            return null;
+            return (null, null);
         }
         catch (JsonException ex)
         {
             Log.Warning($"Failed to parse refinement response: {ex.Message}");
-            return null;
+            return (null, null);
         }
     }
 

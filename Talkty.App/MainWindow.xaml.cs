@@ -323,6 +323,12 @@ public partial class MainWindow : Window
                 {
                     _overlayWindow.ViewModel.StatusText = "Cancelled";
                 }
+                else if (_viewModel.StatusText == "Refining prompt...")
+                {
+                    // Prompting adds a second network round-trip after transcription — show it
+                    // on the pill so the extra wait doesn't read as a stuck "..."
+                    _overlayWindow.ViewModel.StatusText = "Prompting…";
+                }
                 break;
         }
     }
@@ -368,6 +374,24 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
+            // The app usually sits hidden in the tray, where an in-app toast is invisible.
+            // Warnings/errors (failed transcription, bad API key) must still reach the user,
+            // so route them to a tray balloon when the window isn't showing.
+            if (!IsVisible && e.Type == ToastType.Warning)
+            {
+                // Wrapped in try-catch due to known WPF visual tree race condition (see below).
+                try
+                {
+                    TrayIcon.ShowBalloonTip("Talkty", e.Message,
+                        Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Warning);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"Tray balloon failed: {ex.Message}");
+                }
+                return;
+            }
+
             Toast.Show(e.Message, e.Type, e.DurationMs);
         });
     }

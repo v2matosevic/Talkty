@@ -69,6 +69,17 @@ that as a failure and **escalates to the next model**.
 - On the **last** model in the chain the result is kept anyway — a structured-but-short prompt still
   beats raw transcription.
 
+Two more failure modes are handled the same way (v1.1.6):
+
+- **Truncation**: `finish_reason == "length"` means the provider cut the prompt mid-sentence at
+  `max_tokens` — an incomplete prompt silently violates "lose nothing," so it is treated as a failure
+  and escalated instead of shipped. `max_tokens` is 8192 (dictations expand ~2–2.5×, so the old 2048
+  ceiling was reachable on long dictations).
+- **Key-level errors abort the chain**: HTTP 401 (bad key) / 402 (credits exhausted) would fail
+  identically on every model — instead of burning four timeouts, the chain aborts immediately and the
+  app toasts the reason. Total failure of the chain also toasts ("Prompting failed — copied the raw
+  transcription instead") rather than silently pasting raw dictation.
+
 This is what makes lower-tier models safe to pick as the primary: if a cheap model drops detail, the
 chain auto-recovers to a stronger one (the first fallback is the proven-reliable Gemini 3.5 Flash)
 rather than silently shipping a lossy prompt. Tuned from real logs — MiniMax M3 once returned **195
@@ -99,8 +110,9 @@ hidden "thinking" tokens before answering — that directly lengthens the *"Refi
 for marginal quality gain on a rewrite. So the chain deliberately uses **fast, non-reasoning
 "Flash" instruct models**.
 
-Cost is a non-issue at this volume: a refinement call is ~700 tokens, so even the priciest option
-here is a fraction of a cent per prompt. **Latency, not cost, is the deciding factor** — hence the
+Cost is a non-issue at this volume: a refinement call is ~1,100 tokens of system prompt plus the
+dictation and its expansion (typically ~1,500–3,000 tokens total), so even the priciest option here
+is a fraction of a cent per prompt. **Latency, not cost, is the deciding factor** — hence the
 Flash tier.
 
 To change the chain, edit `DefaultModels[]` in `Talkty.App/Services/PromptRefinementService.cs`. Verify

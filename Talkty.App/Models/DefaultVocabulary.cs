@@ -23,12 +23,13 @@ public static class DefaultVocabulary
     /// Key = what Whisper produces (case-insensitive match), Value = correct replacement.
     /// These are applied deterministically after transcription — 100% reliable.
     /// Only include words where the misrecognition is consistent and the replacement is unambiguous.
+    /// Real English words ("cloud", "sequel") must NEVER be default keys — they rewrite legitimate
+    /// speech ("AWS cloud" → "AWS Claude"). Users who want those swaps add them in Settings.
     /// </summary>
     public static IReadOnlyDictionary<string, string> DefaultReplacements { get; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             // AI & LLM — these are the most commonly misheard
-            ["cloud"] = "Claude",
             ["claud"] = "Claude",
             ["claw'd"] = "Claude",
             ["claude ai"] = "Claude AI",
@@ -77,7 +78,6 @@ public static class DefaultVocabulary
             ["jay son"] = "JSON",
             ["ya ml"] = "YAML",
             ["gee RPC"] = "gRPC",
-            ["sequel"] = "SQL",
         };
 
     /// <summary>

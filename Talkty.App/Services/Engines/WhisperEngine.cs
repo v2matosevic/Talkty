@@ -498,8 +498,8 @@ public class WhisperEngine : ITranscriptionEngine
 
     /// <summary>
     /// Builds a WhisperProcessor with speed-optimized settings.
-    /// Greedy decoding (bestOf=1), no context carryover, single segment for short audio,
-    /// deterministic temperature, and no fallback retries.
+    /// Greedy decoding (bestOf=1), no context carryover, temperature 0 with the standard
+    /// fallback increment so a stuck decode (repetition loop / garbage segment) can re-decode.
     /// </summary>
     private static WhisperProcessor BuildProcessor(WhisperFactory factory, string language, int threads, bool isMultilingual, string? vocabularyPrompt = null)
     {
@@ -517,9 +517,12 @@ public class WhisperEngine : ITranscriptionEngine
             .WithLanguage(language)
             // Each recording is independent — don't carry context from previous transcriptions
             .WithNoContext()
-            // Fully deterministic: no random sampling, no temperature fallback retries
+            // Deterministic first pass (temperature 0). TemperatureInc 0.2 keeps whisper.cpp's
+            // built-in fallback: when a window decodes badly (high compression ratio / low
+            // logprob — a repetition loop or garbage), it re-decodes at higher temperature.
+            // Costs nothing on healthy audio; disabling it (0f) left stuck decodes stuck.
             .WithTemperature(0f)
-            .WithTemperatureInc(0f);
+            .WithTemperatureInc(0.2f);
 
         if (!string.IsNullOrWhiteSpace(vocabularyPrompt))
         {

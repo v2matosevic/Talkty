@@ -2,6 +2,29 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.1.6] - 2026-07-01
+
+- Transcription accuracy: removed the default "cloud"→"Claude" and "sequel"→"SQL"
+  replacements — they rewrote legitimate speech ("AWS cloud" became "AWS Claude").
+  Existing installs keep their saved rules; re-add them in Settings if you want them.
+- Transcription accuracy: the English coding-vocabulary prompt is no longer applied
+  when transcribing other languages (or with auto-detect) — it was biasing
+  non-English decoding toward English.
+- Transcription accuracy: re-enabled Whisper's temperature fallback so a decode
+  stuck in a repetition loop recovers instead of producing garbage.
+- Prompting: long dictations are no longer silently cut off — the output ceiling was
+  raised 4x and a truncated result now escalates to the next model instead of
+  shipping incomplete.
+- Prompting: an invalid or out-of-credits OpenRouter key now fails fast with a clear
+  notification instead of silently trying all four models (up to ~48s) and pasting
+  raw text.
+- You now get a notification when a transcription fails or Prompting falls back to
+  the raw transcription — including as a tray balloon when the window is hidden.
+- The recording pill now shows a purple "Prompting…" state while the AI expands your
+  dictation (it used to sit on "..." with no explanation).
+- Fixed the main window showing red "Model Not Loaded" while a model was actually
+  loading — the amber "Loading Model…" state now shows correctly.
+
 ## [1.1.5] - 2026-06-20
 
 - History now keeps both halves of a Prompting entry: what you said and the prompt

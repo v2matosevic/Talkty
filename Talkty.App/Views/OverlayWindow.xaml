@@ -99,6 +99,12 @@
                                 <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
                                     <Setter Property="Text" Value="..."/>
                                 </DataTrigger>
+                                <!-- Declared after IsTranscribing so it overrides "..." while the
+                                     LLM expands the transcription into an agent prompt. -->
+                                <DataTrigger Binding="{Binding StatusText}" Value="Prompting…">
+                                    <Setter Property="Text" Value="Prompting…"/>
+                                    <Setter Property="Foreground" Value="#8B5CF6"/>
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
                                     <Setter Property="Text" Value="Copied"/>
                                     <Setter Property="Foreground" Value="#32D583"/>

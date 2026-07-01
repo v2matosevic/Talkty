@@ -156,11 +156,11 @@ public partial class MainWindow : Window
         if (!registered)
         {
             Log.Error($"Failed to register hotkey {modifier} + {key}!");
-            System.Windows.MessageBox.Show(
-                $"Failed to register hotkey ({modifier} + {key}). It may be in use by another application.",
-                "Talkty",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Warning);
+            // In-app toast instead of the light OS MessageBox (which broke the dark theme).
+            Toast.Show(
+                $"Hotkey {modifier}+{key} is in use by another app — pick a different one in Settings",
+                ToastType.Warning,
+                6000);
         }
         else
         {

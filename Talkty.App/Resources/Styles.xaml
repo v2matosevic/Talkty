@@ -23,6 +23,12 @@
     <Color x:Key="Yellow">#F59E0B</Color>
     <Color x:Key="Red">#EF4444</Color>
 
+    <!-- Status palette — the single source for recording/transcribing state colors.
+         Used by the main window, the overlay pill, and toasts so states match everywhere. -->
+    <Color x:Key="StatusGreen">#32D583</Color>
+    <Color x:Key="StatusRed">#FF6B6B</Color>
+    <Color x:Key="StatusPurple">#8B5CF6</Color>
+
     <!-- Brushes -->
     <SolidColorBrush x:Key="Zinc950Brush" Color="{StaticResource Zinc950}"/>
     <SolidColorBrush x:Key="Zinc900Brush" Color="{StaticResource Zinc900}"/>
@@ -39,6 +45,10 @@
     <SolidColorBrush x:Key="GreenBrush" Color="{StaticResource Green}"/>
     <SolidColorBrush x:Key="YellowBrush" Color="{StaticResource Yellow}"/>
     <SolidColorBrush x:Key="RedBrush" Color="{StaticResource Red}"/>
+
+    <SolidColorBrush x:Key="StatusGreenBrush" Color="{StaticResource StatusGreen}"/>
+    <SolidColorBrush x:Key="StatusRedBrush" Color="{StaticResource StatusRed}"/>
+    <SolidColorBrush x:Key="StatusPurpleBrush" Color="{StaticResource StatusPurple}"/>
 
     <!-- Compatibility -->
     <SolidColorBrush x:Key="BaseBrush" Color="{StaticResource Zinc950}"/>
@@ -500,6 +510,167 @@
     <!-- Button style aliases -->
     <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButton}"/>
     <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButton}"/>
+
+    <!-- ScrollBar — slim dark thumb-only style. Without this, every ScrollViewer renders
+         the light OS scrollbar and breaks the dark theme (Settings, history, vocabulary). -->
+    <Style x:Key="ScrollThumb" TargetType="Thumb">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" CornerRadius="4" Background="{StaticResource Zinc700Brush}" Margin="2"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource Zinc600Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource Zinc500Brush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width" Value="10"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ScrollThumb}"/>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="10"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="Transparent">
+                                <Track x:Name="PART_Track">
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource ScrollThumb}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- TextBox — dark themed. Without this, text inputs render as white OS boxes. -->
+    <Style TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Zinc200Brush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource Zinc200Brush}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource Zinc600Brush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Zinc700Brush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="FontFamily" Value="{StaticResource Font}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Zinc600Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Zinc500Brush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- PasswordBox — matches the TextBox theme (used for the masked API key). -->
+    <Style TargetType="PasswordBox">
+        <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+        <Setter Property="Foreground" Value="{StaticResource Zinc200Brush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource Zinc200Brush}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource Zinc600Brush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Zinc700Brush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Zinc600Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Zinc500Brush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Settings left-nav item -->
+    <Style x:Key="SettingsNavItem" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource Zinc400Brush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Font}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Root"
+                            Background="Transparent"
+                            CornerRadius="8"
+                            Padding="12,9"
+                            Margin="0,0,0,2">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Zinc900Brush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Zinc200Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource Zinc800Brush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Zinc100Brush}"/>
+                            <Setter Property="FontWeight" Value="Medium"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- Tooltip Style -->
     <Style TargetType="ToolTip">

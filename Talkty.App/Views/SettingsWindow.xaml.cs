@@ -9,6 +9,7 @@ namespace Talkty.App.Views;
 public partial class SettingsWindow : Window
 {
     private readonly SettingsViewModel _viewModel;
+    private bool _syncingApiKey;
 
     public event EventHandler<AppSettings>? SettingsSaved;
 
@@ -22,11 +23,41 @@ public partial class SettingsWindow : Window
 
         DataContext = _viewModel;
 
+        // Seed the masked API key box (PasswordBox.Password is not bindable by design).
+        _syncingApiKey = true;
+        ApiKeyMasked.Password = _viewModel.OpenRouterApiKey ?? "";
+        _syncingApiKey = false;
+
         // Handle key events for hotkey recording
         PreviewKeyDown += OnPreviewKeyDown;
 
         // Dispose ViewModel when window closes
         Closed += (s, e) => _viewModel.Dispose();
+    }
+
+    /// <summary>Masked key box → ViewModel (PasswordBox has no two-way binding).</summary>
+    private void ApiKeyMasked_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (_syncingApiKey) return;
+        _viewModel.OpenRouterApiKey = ApiKeyMasked.Password;
+    }
+
+    /// <summary>
+    /// Eye toggle: swap between the masked PasswordBox and the plain TextBox.
+    /// Whichever becomes visible is synced from the ViewModel first, so edits made
+    /// in one always carry into the other.
+    /// </summary>
+    private void ApiKeyReveal_Toggled(object sender, RoutedEventArgs e)
+    {
+        var reveal = ApiKeyReveal.IsChecked == true;
+        if (!reveal)
+        {
+            _syncingApiKey = true;
+            ApiKeyMasked.Password = _viewModel.OpenRouterApiKey ?? "";
+            _syncingApiKey = false;
+        }
+        ApiKeyPlain.Visibility = reveal ? Visibility.Visible : Visibility.Collapsed;
+        ApiKeyMasked.Visibility = reveal ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)

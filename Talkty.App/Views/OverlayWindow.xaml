@@ -37,13 +37,13 @@
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Height" Value="6"/>
-                                    <Setter Property="Background" Value="#FF6B6B"/>
+                                    <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
-                                            <Setter Property="Background" Value="#6E56CF"/>
+                                            <Setter Property="Background" Value="{StaticResource StatusPurpleBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
-                                            <Setter Property="Background" Value="#32D583"/>
+                                            <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -54,13 +54,13 @@
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Height" Value="12"/>
-                                    <Setter Property="Background" Value="#FF6B6B"/>
+                                    <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
-                                            <Setter Property="Background" Value="#6E56CF"/>
+                                            <Setter Property="Background" Value="{StaticResource StatusPurpleBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
-                                            <Setter Property="Background" Value="#32D583"/>
+                                            <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -71,13 +71,13 @@
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Height" Value="8"/>
-                                    <Setter Property="Background" Value="#FF6B6B"/>
+                                    <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
-                                            <Setter Property="Background" Value="#6E56CF"/>
+                                            <Setter Property="Background" Value="{StaticResource StatusPurpleBrush}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
-                                            <Setter Property="Background" Value="#32D583"/>
+                                            <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -103,11 +103,34 @@
                                      LLM expands the transcription into an agent prompt. -->
                                 <DataTrigger Binding="{Binding StatusText}" Value="Prompting…">
                                     <Setter Property="Text" Value="Prompting…"/>
-                                    <Setter Property="Foreground" Value="#8B5CF6"/>
+                                    <Setter Property="Foreground" Value="{StaticResource StatusPurpleBrush}"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
                                     <Setter Property="Text" Value="Copied"/>
-                                    <Setter Property="Foreground" Value="#32D583"/>
+                                    <Setter Property="Foreground" Value="{StaticResource StatusGreenBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- "esc" cancel hint — revealed on hover, like the sparkle. Makes the (previously
+                     invisible) ESC-to-cancel feature discoverable without cluttering the pill. -->
+                <TextBlock Text="esc cancels"
+                           FontSize="10"
+                           Foreground="#71717A"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <!-- Nothing to cancel once the result is on the clipboard -->
+                                <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -152,7 +175,7 @@
                                 <!-- Active state: stay visible, accent purple (matches the pill's transcribing color). -->
                                 <DataTrigger Binding="{Binding IsPromptMode}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
-                                    <Setter Property="Foreground" Value="#8B5CF6"/>
+                                    <Setter Property="Foreground" Value="{StaticResource StatusPurpleBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

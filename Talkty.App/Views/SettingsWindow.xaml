@@ -4,13 +4,114 @@
         xmlns:models="clr-namespace:Talkty.App.Models"
         xmlns:viewmodels="clr-namespace:Talkty.App.ViewModels"
         Title="Settings"
-        Height="720"
-        Width="420"
+        Height="560"
+        Width="680"
+        MinHeight="460"
+        MinWidth="620"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        ResizeMode="NoResize">
+        ResizeMode="CanResizeWithGrip">
+
+    <Window.Resources>
+        <!-- Model item template — used by both the Local and Cloud lists -->
+        <DataTemplate x:Key="ModelItemTemplate" DataType="{x:Type viewmodels:ModelProfileViewModel}">
+            <StackPanel>
+                <!-- Separator line (hidden for first item via PreviousData) -->
+                <Border Height="1" Background="{StaticResource Zinc800Brush}" Margin="14,0"
+                        x:Name="Separator"/>
+                <!-- Clickable row -->
+                <Border Padding="14,10" Cursor="Hand"
+                        MouseLeftButtonUp="ModelItem_Click">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+                                </Trigger>
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource EqualityConverter}">
+                                            <Binding Path="Profile"/>
+                                            <Binding Path="DataContext.SelectedProfile" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource Zinc100Brush}"/>
+                                <!-- Highlight badge (Recommended / Best English / Ultra Fast / Quantized) -->
+                                <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="4"
+                                        Background="{Binding BadgeColor, Converter={StaticResource HexColorBrushConverter}, ConverterParameter=0.2}"
+                                        Visibility="{Binding BadgeText, Converter={StaticResource NotNullToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding BadgeText}" FontSize="9"
+                                               Foreground="{Binding BadgeColor, Converter={StaticResource HexColorBrushConverter}}"/>
+                                </Border>
+                                <!-- Downloaded badge -->
+                                <Border Padding="6,2" CornerRadius="4"
+                                        Visibility="{Binding IsDownloaded, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Border.Margin>
+                                        <Thickness Left="4" Top="0" Right="0" Bottom="0"/>
+                                    </Border.Margin>
+                                    <Border.Background>
+                                        <SolidColorBrush Color="#10B981" Opacity="0.2"/>
+                                    </Border.Background>
+                                    <TextBlock Text="{Binding StatusBadgeText}" FontSize="9" Foreground="#10B981"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{StaticResource Zinc500Brush}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <!-- Checkmark for selected -->
+                        <Path Grid.Column="1" Data="M5,12 L9,16 L19,6"
+                              Stroke="{StaticResource Zinc100Brush}" StrokeThickness="2"
+                              Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Value="True">
+                                            <DataTrigger.Binding>
+                                                <MultiBinding Converter="{StaticResource EqualityConverter}">
+                                                    <Binding Path="Profile"/>
+                                                    <Binding Path="DataContext.SelectedProfile" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                </MultiBinding>
+                                            </DataTrigger.Binding>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                    </Grid>
+                </Border>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <!-- Hide separator for the first item in each list -->
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                    <Setter TargetName="Separator" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Section header inside a page -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Zinc600Brush}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
 
     <Border Background="{StaticResource Zinc950Brush}"
             CornerRadius="12"
@@ -45,594 +146,561 @@
                 </Button>
             </Grid>
 
-            <!-- Content -->
-            <ScrollViewer Grid.Row="1"
-                          VerticalScrollBarVisibility="Auto"
-                          Padding="0">
-                <StackPanel Margin="20,0,20,20">
+            <!-- Content: left nav + page -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="164"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-                    <!-- Model item template — used by all three category lists -->
-                    <StackPanel.Resources>
-                        <DataTemplate x:Key="ModelItemTemplate" DataType="{x:Type viewmodels:ModelProfileViewModel}">
+                <!-- Navigation -->
+                <StackPanel Grid.Column="0" Margin="12,0,8,12">
+                    <RadioButton x:Name="NavModels"    Style="{StaticResource SettingsNavItem}" GroupName="Nav" IsChecked="True" Content="Model"/>
+                    <RadioButton x:Name="NavAudio"     Style="{StaticResource SettingsNavItem}" GroupName="Nav" Content="Audio &amp; Language"/>
+                    <RadioButton x:Name="NavVocab"     Style="{StaticResource SettingsNavItem}" GroupName="Nav" Content="Vocabulary"/>
+                    <RadioButton x:Name="NavCloud"     Style="{StaticResource SettingsNavItem}" GroupName="Nav" Content="Cloud &amp; Prompting"/>
+                    <RadioButton x:Name="NavBehavior"  Style="{StaticResource SettingsNavItem}" GroupName="Nav" Content="Behavior"/>
+                    <RadioButton x:Name="NavHotkey"    Style="{StaticResource SettingsNavItem}" GroupName="Nav" Content="Hotkey"/>
+                </StackPanel>
+
+                <!-- Vertical divider -->
+                <Border Grid.Column="0" Width="1" HorizontalAlignment="Right"
+                        Background="{StaticResource Zinc800Brush}" Margin="0,0,0,12"/>
+
+                <!-- ═══ MODEL page ═══ -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsChecked, ElementName=NavModels, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Margin="16,4,20,20">
+                        <TextBlock Text="TRANSCRIPTION MODEL" Style="{StaticResource SectionHeader}"/>
+
+                        <!-- LOCAL — offline &amp; free (expanded by default; recommended model is first) -->
+                        <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
                             <StackPanel>
-                                <!-- Separator line (hidden for first item via PreviousData) -->
-                                <Border Height="1" Background="{StaticResource Zinc800Brush}" Margin="14,0"
-                                        x:Name="Separator"/>
-                                <!-- Clickable row -->
-                                <Border Padding="14,10" Cursor="Hand"
-                                        MouseLeftButtonUp="ModelItem_Click">
+                                <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleLocal_Click">
                                     <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="Transparent"/>
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
-                                                </Trigger>
-                                                <DataTrigger Value="True">
-                                                    <DataTrigger.Binding>
-                                                        <MultiBinding Converter="{StaticResource EqualityConverter}">
-                                                            <Binding Path="Profile"/>
-                                                            <Binding Path="DataContext.SelectedProfile" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                                        </MultiBinding>
-                                                    </DataTrigger.Binding>
-                                                    <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
+                                        <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
                                         </Style>
                                     </Border.Style>
                                     <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="On your device — private &amp; free" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Zinc300Brush}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="▾" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="LocalArrow"/>
+                                    </Grid>
+                                </Border>
+                                <ItemsControl ItemsSource="{Binding LocalModels}" ItemTemplate="{StaticResource ModelItemTemplate}" x:Name="LocalList"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- CLOUD — online models via OpenRouter, requires a key (collapsed by default) -->
+                        <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,20">
+                            <StackPanel>
+                                <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleCloud_Click">
+                                    <Border.Style>
+                                        <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Cloud — higher accuracy, needs API key" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Zinc300Brush}" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="▸" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="CloudArrow"/>
+                                    </Grid>
+                                </Border>
+                                <ItemsControl ItemsSource="{Binding CloudModels}" ItemTemplate="{StaticResource ModelItemTemplate}" Visibility="Collapsed" x:Name="CloudList"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Download Section - Only visible when selected model not downloaded -->
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14"
+                                Visibility="{Binding IsSelectedModelDownloaded, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <!-- Download prompt when not downloading -->
+                                <StackPanel Visibility="{Binding IsDownloading, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                                    <TextBlock Text="Model not downloaded. Download to use this profile."
+                                               FontSize="12"
+                                               Foreground="{StaticResource Zinc300Brush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,12"/>
+
+                                    <Button Style="{StaticResource PrimaryButton}"
+                                            Command="{Binding DownloadModelCommand}"
+                                            HorizontalAlignment="Left"
+                                            Padding="16,10">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="M12,4 L12,16 M7,12 L12,17 L17,12 M5,20 L19,20"
+                                                  Stroke="{StaticResource Zinc950Brush}"
+                                                  StrokeThickness="2"
+                                                  Width="14" Height="14"
+                                                  Stretch="Uniform"
+                                                  Margin="0,0,8,0"/>
+                                            <TextBlock Text="Download Model" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <!-- Download progress when downloading -->
+                                <StackPanel Visibility="{Binding IsDownloading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <!-- Progress bar -->
+                                    <Grid Height="6" Margin="0,0,0,10">
+                                        <Border CornerRadius="3" Background="{StaticResource Zinc800Brush}"/>
+                                        <Border CornerRadius="3" HorizontalAlignment="Left">
+                                            <Border.Width>
+                                                <MultiBinding Converter="{StaticResource PercentageWidthConverter}">
+                                                    <Binding Path="DownloadProgress"/>
+                                                    <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="ActualWidth"/>
+                                                </MultiBinding>
+                                            </Border.Width>
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#6E56CF" Offset="0"/>
+                                                    <GradientStop Color="#8B5CF6" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Progress info -->
+                                    <Grid Margin="0,0,0,12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
+
                                         <StackPanel>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{StaticResource Zinc100Brush}"/>
-                                                <!-- Highlight badge (Recommended / Best English / Ultra Fast / Quantized) -->
-                                                <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="4"
-                                                        Background="{Binding BadgeColor, Converter={StaticResource HexColorBrushConverter}, ConverterParameter=0.2}"
-                                                        Visibility="{Binding BadgeText, Converter={StaticResource NotNullToVisibilityConverter}}">
-                                                    <TextBlock Text="{Binding BadgeText}" FontSize="9"
-                                                               Foreground="{Binding BadgeColor, Converter={StaticResource HexColorBrushConverter}}"/>
-                                                </Border>
-                                                <!-- Downloaded badge -->
-                                                <Border Padding="6,2" CornerRadius="4"
-                                                        Visibility="{Binding IsDownloaded, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                    <Border.Margin>
-                                                        <Thickness Left="4" Top="0" Right="0" Bottom="0"/>
-                                                    </Border.Margin>
-                                                    <Border.Background>
-                                                        <SolidColorBrush Color="#10B981" Opacity="0.2"/>
-                                                    </Border.Background>
-                                                    <TextBlock Text="{Binding StatusBadgeText}" FontSize="9" Foreground="#10B981"/>
-                                                </Border>
+                                            <TextBlock Text="{Binding DownloadStatusText}"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource Zinc200Brush}"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                <TextBlock Text="{Binding DownloadSpeedText}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource Zinc500Brush}"/>
+                                                <TextBlock Text=" - "
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource Zinc600Brush}"
+                                                           Visibility="{Binding DownloadTimeRemaining, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                <TextBlock FontSize="11" Foreground="{StaticResource Zinc500Brush}">
+                                                    <Run Text="{Binding DownloadTimeRemaining}"/>
+                                                    <Run Text=" remaining"/>
+                                                </TextBlock>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{StaticResource Zinc500Brush}" Margin="0,2,0,0"/>
                                         </StackPanel>
-                                        <!-- Checkmark for selected -->
-                                        <Path Grid.Column="1" Data="M5,12 L9,16 L19,6"
-                                              Stroke="{StaticResource Zinc100Brush}" StrokeThickness="2"
-                                              Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center">
-                                            <Path.Style>
-                                                <Style TargetType="Path">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
+
+                                        <TextBlock Grid.Column="1"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Zinc100Brush}"
+                                                   VerticalAlignment="Center">
+                                            <Run Text="{Binding DownloadProgress, StringFormat={}{0:F0}}"/><Run Text="%"/>
+                                        </TextBlock>
+                                    </Grid>
+
+                                    <!-- Cancel button -->
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding DownloadModelCommand}"
+                                            Content="Cancel"
+                                            HorizontalAlignment="Left"
+                                            Padding="16,8"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ═══ MICROPHONE &amp; LANGUAGE page ═══ -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsChecked, ElementName=NavAudio, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Margin="16,4,20,20">
+                        <TextBlock Text="MICROPHONE" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14"
+                                Margin="0,0,0,20">
+                            <StackPanel>
+                                <ComboBox ItemsSource="{Binding AudioDevices}"
+                                          SelectedItem="{Binding SelectedAudioDevice}"
+                                          DisplayMemberPath="Name"
+                                          Margin="0,0,0,14"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding TestMicrophoneCommand}"
+                                            Padding="16,10"
+                                            Margin="0,0,12,0">
+                                        <TextBlock FontSize="12">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="Test"/>
                                                     <Style.Triggers>
-                                                        <DataTrigger Value="True">
-                                                            <DataTrigger.Binding>
-                                                                <MultiBinding Converter="{StaticResource EqualityConverter}">
-                                                                    <Binding Path="Profile"/>
-                                                                    <Binding Path="DataContext.SelectedProfile" RelativeSource="{RelativeSource AncestorType=Window}"/>
-                                                                </MultiBinding>
-                                                            </DataTrigger.Binding>
-                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        <DataTrigger Binding="{Binding IsTesting}" Value="True">
+                                                            <Setter Property="Text" Value="Stop"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </Path.Style>
-                                        </Path>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-                            <DataTemplate.Triggers>
-                                <!-- Hide separator for the first item in each list -->
-                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
-                                    <Setter TargetName="Separator" Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </StackPanel.Resources>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button>
 
-                    <!-- TRANSCRIPTION MODEL — how your speech becomes text -->
-                    <TextBlock Text="TRANSCRIPTION MODEL"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <!-- LOCAL — offline & free (expanded by default; recommended model is first) -->
-                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,8">
-                        <StackPanel>
-                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleLocal_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="On your device — private &amp; free" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Zinc300Brush}" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="▾" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="LocalArrow"/>
-                                </Grid>
-                            </Border>
-                            <ItemsControl ItemsSource="{Binding LocalModels}" ItemTemplate="{StaticResource ModelItemTemplate}" x:Name="LocalList"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- CLOUD — online models via OpenRouter, requires a key (collapsed by default) -->
-                    <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Margin="0,0,0,20">
-                        <StackPanel>
-                            <Border Padding="14,10" Cursor="Hand" CornerRadius="10" MouseLeftButtonUp="ToggleCloud_Click">
-                                <Border.Style>
-                                    <Style TargetType="Border"><Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger></Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="Cloud — higher accuracy, needs API key" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Zinc300Brush}" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="▸" FontSize="11" Foreground="{StaticResource Zinc600Brush}" VerticalAlignment="Center" x:Name="CloudArrow"/>
-                                </Grid>
-                            </Border>
-                            <ItemsControl ItemsSource="{Binding CloudModels}" ItemTemplate="{StaticResource ModelItemTemplate}" Visibility="Collapsed" x:Name="CloudList"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Download Section - Only visible when selected model not downloaded -->
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20"
-                            Visibility="{Binding IsSelectedModelDownloaded, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
-                        <StackPanel>
-                            <!-- Download prompt when not downloading -->
-                            <StackPanel Visibility="{Binding IsDownloading, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
-                                <TextBlock Text="Model not downloaded. Download to use this profile."
-                                           FontSize="12"
-                                           Foreground="{StaticResource Zinc300Brush}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,12"/>
-
-                                <Button Style="{StaticResource PrimaryButton}"
-                                        Command="{Binding DownloadModelCommand}"
-                                        HorizontalAlignment="Left"
-                                        Padding="16,10">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Path Data="M12,4 L12,16 M7,12 L12,17 L17,12 M5,20 L19,20"
-                                              Stroke="{StaticResource Zinc950Brush}"
-                                              StrokeThickness="2"
-                                              Width="14" Height="14"
-                                              Stretch="Uniform"
-                                              Margin="0,0,8,0"/>
-                                        <TextBlock Text="Download Model" FontSize="12"/>
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
-
-                            <!-- Download progress when downloading -->
-                            <StackPanel Visibility="{Binding IsDownloading, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <!-- Progress bar -->
-                                <Grid Height="6" Margin="0,0,0,10">
-                                    <Border CornerRadius="3" Background="{StaticResource Zinc800Brush}"/>
-                                    <Border CornerRadius="3" HorizontalAlignment="Left">
-                                        <Border.Width>
-                                            <MultiBinding Converter="{StaticResource PercentageWidthConverter}">
-                                                <Binding Path="DownloadProgress"/>
-                                                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="ActualWidth"/>
-                                            </MultiBinding>
-                                        </Border.Width>
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                <GradientStop Color="#6E56CF" Offset="0"/>
-                                                <GradientStop Color="#8B5CF6" Offset="1"/>
-                                            </LinearGradientBrush>
-                                        </Border.Background>
+                                    <Border Grid.Column="1"
+                                            Height="36"
+                                            Background="{StaticResource Zinc800Brush}"
+                                            CornerRadius="6"
+                                            Padding="4">
+                                        <Border CornerRadius="4"
+                                                Background="{StaticResource StatusGreenBrush}"
+                                                HorizontalAlignment="Left"
+                                                Width="{Binding TestAudioLevel, Converter={StaticResource LevelToWidthConverter}}"/>
                                     </Border>
                                 </Grid>
+                            </StackPanel>
+                        </Border>
 
-                                <!-- Progress info -->
-                                <Grid Margin="0,0,0,12">
+                        <TextBlock Text="LANGUAGE" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Transcription language"
+                                               FontSize="13"
+                                               Foreground="{StaticResource Zinc200Brush}"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1"
+                                              ItemsSource="{Binding AvailableLanguages}"
+                                              SelectedItem="{Binding SelectedLanguage}"
+                                              MinWidth="130"/>
+                                </Grid>
+                                <TextBlock Text="Select 'auto' for automatic detection, or choose a specific language for better accuracy."
+                                           FontSize="10"
+                                           Foreground="{StaticResource Zinc500Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ═══ VOCABULARY page ═══ -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsChecked, ElementName=NavVocab, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Margin="16,4,20,20">
+                        <TextBlock Text="VOCABULARY" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <CheckBox Content="Use custom vocabulary for coding terms"
+                                          IsChecked="{Binding UseCustomVocabulary}"
+                                          ToolTip="Helps the AI recognize words like Claude, React, kubectl, PostgreSQL correctly"
+                                          Margin="0,0,0,10"/>
+
+                                <!-- Vocabulary editor - visible when enabled -->
+                                <StackPanel Visibility="{Binding UseCustomVocabulary, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBox Text="{Binding CustomVocabularyText, UpdateSourceTrigger=PropertyChanged}"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             VerticalContentAlignment="Top"
+                                             MaxHeight="200"
+                                             MinHeight="100"
+                                             FontSize="11"
+                                             Padding="8,6"
+                                             Margin="0,0,0,8"/>
+
+                                    <Grid>
+                                        <TextBlock Text="Comma-separated terms that help the AI recognize coding words correctly."
+                                                   FontSize="10"
+                                                   Foreground="{StaticResource Zinc500Brush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,80,0"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Style="{StaticResource SecondaryButton}"
+                                                Command="{Binding ResetVocabularyToDefaultsCommand}"
+                                                Content="Reset"
+                                                FontSize="11"
+                                                Padding="12,5"
+                                                HorizontalAlignment="Right"
+                                                ToolTip="Reset to default coding vocabulary"/>
+                                    </Grid>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ═══ CLOUD &amp; PROMPTING page ═══ -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsChecked, ElementName=NavCloud, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Margin="16,4,20,20">
+                        <TextBlock Text="OPENROUTER API KEY" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14"
+                                Margin="0,0,0,20">
+                            <StackPanel>
+                                <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding DownloadStatusText}"
-                                                   FontSize="12"
-                                                   Foreground="{StaticResource Zinc200Brush}"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                            <TextBlock Text="{Binding DownloadSpeedText}"
-                                                       FontSize="11"
-                                                       Foreground="{StaticResource Zinc500Brush}"/>
-                                            <TextBlock Text=" - "
-                                                       FontSize="11"
-                                                       Foreground="{StaticResource Zinc600Brush}"
-                                                       Visibility="{Binding DownloadTimeRemaining, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource Zinc500Brush}">
-                                                <Run Text="{Binding DownloadTimeRemaining}"/>
-                                                <Run Text=" remaining"/>
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </StackPanel>
+                                    <!-- Masked by default; the eye toggle swaps to the plain TextBox -->
+                                    <PasswordBox x:Name="ApiKeyMasked"
+                                                 FontFamily="{StaticResource FontMono}"
+                                                 FontSize="11"
+                                                 PasswordChanged="ApiKeyMasked_PasswordChanged"/>
+                                    <TextBox x:Name="ApiKeyPlain"
+                                             Visibility="Collapsed"
+                                             Text="{Binding OpenRouterApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                             FontSize="11"
+                                             FontFamily="{StaticResource FontMono}"/>
 
-                                    <TextBlock Grid.Column="1"
-                                               FontSize="14"
-                                               FontWeight="SemiBold"
-                                               Foreground="{StaticResource Zinc100Brush}"
-                                               VerticalAlignment="Center">
-                                        <Run Text="{Binding DownloadProgress, StringFormat={}{0:F0}}"/><Run Text="%"/>
-                                    </TextBlock>
+                                    <!-- Reveal toggle (eye) -->
+                                    <ToggleButton x:Name="ApiKeyReveal"
+                                                  Grid.Column="1"
+                                                  Margin="8,0,0,0"
+                                                  Width="32" Height="30"
+                                                  Cursor="Hand"
+                                                  Checked="ApiKeyReveal_Toggled"
+                                                  Unchecked="ApiKeyReveal_Toggled"
+                                                  ToolTip="Show / hide the key">
+                                        <ToggleButton.Style>
+                                            <Style TargetType="ToggleButton">
+                                                <Setter Property="Foreground" Value="{StaticResource Zinc500Brush}"/>
+                                                <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ToggleButton">
+                                                            <Border Background="{TemplateBinding Background}" CornerRadius="6">
+                                                                <!-- Eye glyph -->
+                                                                <Path Fill="{TemplateBinding Foreground}"
+                                                                      Width="16" Height="16" Stretch="Uniform"
+                                                                      Data="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource Zinc300Brush}"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource Zinc100Brush}"/>
+                                                        <Setter Property="Background" Value="{StaticResource Zinc700Brush}"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ToggleButton.Style>
+                                    </ToggleButton>
+                                </Grid>
+                                <TextBlock FontSize="10"
+                                           Foreground="{StaticResource Zinc500Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"
+                                           Text="Powers Cloud transcription and Prompting. Stored encrypted on this PC (Windows DPAPI). Get a key at openrouter.ai/keys — cloud features send data to OpenRouter and cost per use; local transcription stays fully offline."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="PROMPTING" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <TextBlock Text="Prompt model"
+                                           FontSize="13"
+                                           Foreground="{StaticResource Zinc200Brush}"
+                                           Margin="0,0,0,8"/>
+                                <ComboBox ItemsSource="{Binding AvailablePromptModels}"
+                                          SelectedItem="{Binding SelectedPromptModel}"/>
+                                <TextBlock Text="{Binding SelectedPromptModel.Note}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource Zinc400Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+                                <TextBlock FontSize="10"
+                                           Foreground="{StaticResource Zinc500Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"
+                                           Text="With Prompting on (the sparkle on the recording pill), your dictation is rewritten into a structured prompt for a coding agent like Claude Code or Cursor. Uses your OpenRouter key above; falls back to the raw text if it fails."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ═══ BEHAVIOR page ═══ -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsChecked, ElementName=NavBehavior, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Margin="16,4,20,20">
+                        <TextBlock Text="BEHAVIOR" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <CheckBox Content="Copy to clipboard"
+                                          IsChecked="{Binding CopyToClipboard}"
+                                          Margin="0,0,0,12"/>
+                                <CheckBox Content="Auto-paste at cursor"
+                                          IsChecked="{Binding AutoPaste}"
+                                          Margin="0,0,0,12"/>
+                                <CheckBox Content="Lower volume while recording"
+                                          IsChecked="{Binding DuckVolumeWhileRecording}"
+                                          ToolTip="Reduce system volume during recording to prevent audio interference"
+                                          Margin="0,0,0,8"/>
+
+                                <!-- Volume duck level control - only visible when duck is enabled -->
+                                <Grid Margin="24,0,0,12"
+                                      Visibility="{Binding DuckVolumeWhileRecording, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="Volume level"
+                                               FontSize="12"
+                                               Foreground="{StaticResource Zinc400Brush}"
+                                               VerticalAlignment="Center"/>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <!-- Decrease button -->
+                                        <Button Style="{StaticResource IconButton}"
+                                                Command="{Binding DecreaseVolumeDuckLevelCommand}"
+                                                Width="28" Height="28"
+                                                ToolTip="Decrease (quieter)">
+                                            <Path Data="M4,12 L20,12"
+                                                  Stroke="{StaticResource Zinc400Brush}"
+                                                  StrokeThickness="2"
+                                                  Width="12" Height="12"
+                                                  Stretch="Uniform"/>
+                                        </Button>
+
+                                        <!-- Value display -->
+                                        <Border Background="{StaticResource Zinc800Brush}"
+                                                CornerRadius="4"
+                                                Padding="12,4"
+                                                Margin="4,0">
+                                            <TextBlock FontSize="12"
+                                                       FontFamily="{StaticResource FontMono}"
+                                                       Foreground="{StaticResource Zinc200Brush}"
+                                                       MinWidth="32"
+                                                       TextAlignment="Center">
+                                                <Run Text="{Binding VolumeDuckPercent}"/><Run Text="%"/>
+                                            </TextBlock>
+                                        </Border>
+
+                                        <!-- Increase button -->
+                                        <Button Style="{StaticResource IconButton}"
+                                                Command="{Binding IncreaseVolumeDuckLevelCommand}"
+                                                Width="28" Height="28"
+                                                ToolTip="Increase (louder)">
+                                            <Path Data="M12,4 L12,20 M4,12 L20,12"
+                                                  Stroke="{StaticResource Zinc400Brush}"
+                                                  StrokeThickness="2"
+                                                  Width="12" Height="12"
+                                                  Stretch="Uniform"/>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
 
-                                <!-- Cancel button -->
-                                <Button Style="{StaticResource SecondaryButton}"
-                                        Command="{Binding DownloadModelCommand}"
-                                        Content="Cancel"
-                                        HorizontalAlignment="Left"
-                                        Padding="16,8"/>
+                                <CheckBox Content="Free memory when idle"
+                                          IsChecked="{Binding UnloadModelWhenIdle}"
+                                          ToolTip="Unloads the speech model after 15 minutes of inactivity to free RAM. It reloads automatically while you speak — you won't notice it."
+                                          Margin="0,0,0,12"/>
+
+                                <CheckBox Content="Use GPU acceleration (CUDA)"
+                                          IsChecked="{Binding UseGpu}"
+                                          ToolTip="Enable GPU acceleration for faster transcription. Requires NVIDIA GPU with CUDA."/>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
 
-                    <!-- OPENROUTER API KEY — one key powers Cloud transcription AND Prompting -->
-                    <TextBlock Text="OPENROUTER API KEY"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
+                <!-- ═══ HOTKEY page ═══ -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsChecked, ElementName=NavHotkey, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Margin="16,4,20,20">
+                        <TextBlock Text="SHORTCUT" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
 
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <TextBox Text="{Binding OpenRouterApiKey, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="11"
-                                     FontFamily="{StaticResource FontMono}"
-                                     Padding="8,6"/>
-                            <TextBlock FontSize="10"
-                                       Foreground="{StaticResource Zinc600Brush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,8,0,0"
-                                       Text="Powers Cloud transcription and Prompting. Stored encrypted on this PC (Windows DPAPI). Get a key at openrouter.ai/keys — cloud features send data to OpenRouter and cost per use; local transcription stays fully offline."/>
-                        </StackPanel>
-                    </Border>
+                                    <TextBlock Text="Toggle recording"
+                                               FontSize="13"
+                                               Foreground="{StaticResource Zinc200Brush}"
+                                               VerticalAlignment="Center"/>
 
-                    <!-- PROMPTING — the model that rewrites dictation into a coding-agent prompt -->
-                    <TextBlock Text="PROMPTING"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <TextBlock Text="Prompt model"
-                                       FontSize="13"
-                                       Foreground="{StaticResource Zinc200Brush}"
-                                       Margin="0,0,0,8"/>
-                            <ComboBox ItemsSource="{Binding AvailablePromptModels}"
-                                      SelectedItem="{Binding SelectedPromptModel}"/>
-                            <TextBlock Text="{Binding SelectedPromptModel.Note}"
-                                       FontSize="11"
-                                       Foreground="{StaticResource Zinc400Brush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,8,0,0"/>
-                            <TextBlock FontSize="10"
-                                       Foreground="{StaticResource Zinc600Brush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,8,0,0"
-                                       Text="With Prompting on (the sparkle on the recording pill), your dictation is rewritten into a structured prompt for a coding agent like Claude Code or Cursor. Uses your OpenRouter key above; falls back to the raw text if it fails."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- MICROPHONE -->
-                    <TextBlock Text="MICROPHONE"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <ComboBox ItemsSource="{Binding AudioDevices}"
-                                      SelectedItem="{Binding SelectedAudioDevice}"
-                                      DisplayMemberPath="Name"
-                                      Margin="0,0,0,14"/>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <Button Style="{StaticResource SecondaryButton}"
-                                        Command="{Binding TestMicrophoneCommand}"
-                                        Padding="16,10"
-                                        Margin="0,0,12,0">
-                                    <TextBlock FontSize="12">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value="Test"/>
+                                    <Border Grid.Column="1"
+                                            Cursor="Hand"
+                                            MouseLeftButtonUp="HotkeyBox_Click">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                                <Setter Property="CornerRadius" Value="6"/>
+                                                <Setter Property="Padding" Value="12,6"/>
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsTesting}" Value="True">
-                                                        <Setter Property="Text" Value="Stop"/>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{StaticResource Zinc700Brush}"/>
+                                                    </Trigger>
+                                                    <DataTrigger Binding="{Binding IsRecordingHotkey}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="#6E56CF"/>
+                                                        <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Button>
-
-                                <Border Grid.Column="1"
-                                        Height="36"
-                                        Background="{StaticResource Zinc800Brush}"
-                                        CornerRadius="6"
-                                        Padding="4">
-                                    <Border CornerRadius="4"
-                                            Background="#10B981"
-                                            HorizontalAlignment="Left"
-                                            Width="{Binding TestAudioLevel, Converter={StaticResource LevelToWidthConverter}}"/>
-                                </Border>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- LANGUAGE -->
-                    <TextBlock Text="LANGUAGE"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Transcription language"
-                                           FontSize="13"
-                                           Foreground="{StaticResource Zinc200Brush}"
-                                           VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1"
-                                          ItemsSource="{Binding AvailableLanguages}"
-                                          SelectedItem="{Binding SelectedLanguage}"
-                                          Width="100"/>
-                            </Grid>
-                            <TextBlock Text="Select 'auto' for automatic detection, or choose a specific language for better accuracy."
-                                       FontSize="10"
-                                       Foreground="{StaticResource Zinc600Brush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,10,0,0"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- VOCABULARY -->
-                    <TextBlock Text="VOCABULARY"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <CheckBox Content="Use custom vocabulary for coding terms"
-                                      IsChecked="{Binding UseCustomVocabulary}"
-                                      ToolTip="Helps the AI recognize words like Claude, React, kubectl, PostgreSQL correctly"
-                                      Margin="0,0,0,10"/>
-
-                            <!-- Vocabulary editor - visible when enabled -->
-                            <StackPanel Visibility="{Binding UseCustomVocabulary, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBox Text="{Binding CustomVocabularyText, UpdateSourceTrigger=PropertyChanged}"
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         VerticalScrollBarVisibility="Auto"
-                                         MaxHeight="120"
-                                         MinHeight="60"
-                                         FontSize="11"
-                                         Padding="8,6"
-                                         Margin="0,0,0,8"/>
-
-                                <Grid>
-                                    <TextBlock Text="Comma-separated terms that help the AI recognize coding words correctly."
-                                               FontSize="10"
-                                               Foreground="{StaticResource Zinc600Brush}"
-                                               TextWrapping="Wrap"
-                                               VerticalAlignment="Center"/>
-                                    <Button Style="{StaticResource SecondaryButton}"
-                                            Command="{Binding ResetVocabularyToDefaultsCommand}"
-                                            Content="Reset"
-                                            FontSize="11"
-                                            Padding="12,5"
-                                            HorizontalAlignment="Right"
-                                            ToolTip="Reset to default coding vocabulary"/>
-                                </Grid>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- BEHAVIOR -->
-                    <TextBlock Text="BEHAVIOR"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <CheckBox Content="Copy to clipboard"
-                                      IsChecked="{Binding CopyToClipboard}"
-                                      Margin="0,0,0,12"/>
-                            <CheckBox Content="Auto-paste at cursor"
-                                      IsChecked="{Binding AutoPaste}"
-                                      Margin="0,0,0,12"/>
-                            <CheckBox Content="Lower volume while recording"
-                                      IsChecked="{Binding DuckVolumeWhileRecording}"
-                                      ToolTip="Reduce system volume during recording to prevent audio interference"
-                                      Margin="0,0,0,8"/>
-
-                            <!-- Volume duck level control - only visible when duck is enabled -->
-                            <Grid Margin="24,0,0,12"
-                                  Visibility="{Binding DuckVolumeWhileRecording, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Text="Volume level"
-                                           FontSize="12"
-                                           Foreground="{StaticResource Zinc400Brush}"
-                                           VerticalAlignment="Center"/>
-
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <!-- Decrease button -->
-                                    <Button Style="{StaticResource IconButton}"
-                                            Command="{Binding DecreaseVolumeDuckLevelCommand}"
-                                            Width="28" Height="28"
-                                            ToolTip="Decrease (quieter)">
-                                        <Path Data="M4,12 L20,12"
-                                              Stroke="{StaticResource Zinc400Brush}"
-                                              StrokeThickness="2"
-                                              Width="12" Height="12"
-                                              Stretch="Uniform"/>
-                                    </Button>
-
-                                    <!-- Value display -->
-                                    <Border Background="{StaticResource Zinc800Brush}"
-                                            CornerRadius="4"
-                                            Padding="12,4"
-                                            Margin="4,0">
-                                        <TextBlock FontSize="12"
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding HotkeyText}"
                                                    FontFamily="{StaticResource FontMono}"
-                                                   Foreground="{StaticResource Zinc200Brush}"
-                                                   MinWidth="32"
-                                                   TextAlignment="Center">
-                                            <Run Text="{Binding VolumeDuckPercent}"/><Run Text="%"/>
+                                                   FontSize="12">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource Zinc400Brush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsRecordingHotkey}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource StatusPurpleBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
                                         </TextBlock>
                                     </Border>
+                                </Grid>
 
-                                    <!-- Increase button -->
-                                    <Button Style="{StaticResource IconButton}"
-                                            Command="{Binding IncreaseVolumeDuckLevelCommand}"
-                                            Width="28" Height="28"
-                                            ToolTip="Increase (louder)">
-                                        <Path Data="M12,4 L12,20 M4,12 L20,12"
-                                              Stroke="{StaticResource Zinc400Brush}"
-                                              StrokeThickness="2"
-                                              Width="12" Height="12"
-                                              Stretch="Uniform"/>
-                                    </Button>
-                                </StackPanel>
-                            </Grid>
+                                <TextBlock Text="Click the box above and press your desired key combination (requires at least one modifier: Ctrl, Alt, Shift, or Win)"
+                                           FontSize="10"
+                                           Foreground="{StaticResource Zinc500Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,10,0,0"/>
 
-                            <CheckBox Content="Free memory when idle"
-                                      IsChecked="{Binding UnloadModelWhenIdle}"
-                                      ToolTip="Unloads the speech model after 15 minutes of inactivity to free RAM. It reloads automatically while you speak — you won't notice it."
-                                      Margin="0,0,0,12"/>
+                                <Border Height="1" Background="{StaticResource Zinc800Brush}" Margin="0,14,0,14"/>
 
-                            <CheckBox Content="Use GPU acceleration (CUDA)"
-                                      IsChecked="{Binding UseGpu}"
-                                      ToolTip="Enable GPU acceleration for faster transcription. Requires NVIDIA GPU with CUDA."/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- SHORTCUT -->
-                    <TextBlock Text="SHORTCUT"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource Zinc600Brush}"
-                               Margin="0,0,0,10"/>
-
-                    <Border Background="{StaticResource Zinc900Brush}"
-                            CornerRadius="10"
-                            Padding="14">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Text="Toggle recording"
-                                           FontSize="13"
-                                           Foreground="{StaticResource Zinc200Brush}"
-                                           VerticalAlignment="Center"/>
-
-                                <Border Grid.Column="1"
-                                        Cursor="Hand"
-                                        MouseLeftButtonUp="HotkeyBox_Click">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                            <Setter Property="BorderBrush" Value="Transparent"/>
-                                            <Setter Property="CornerRadius" Value="6"/>
-                                            <Setter Property="Padding" Value="12,6"/>
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="{StaticResource Zinc700Brush}"/>
-                                                </Trigger>
-                                                <DataTrigger Binding="{Binding IsRecordingHotkey}" Value="True">
-                                                    <Setter Property="BorderBrush" Value="#6E56CF"/>
-                                                    <Setter Property="Background" Value="{StaticResource Zinc800Brush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <TextBlock Text="{Binding HotkeyText}"
-                                               FontFamily="{StaticResource FontMono}"
-                                               FontSize="12">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{StaticResource Zinc400Brush}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsRecordingHotkey}" Value="True">
-                                                        <Setter Property="Foreground" Value="#8B5CF6"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Border>
-                            </Grid>
-
-                            <TextBlock Text="Click the box above and press your desired key combination (requires at least one modifier: Ctrl, Alt, Shift, or Win)"
-                                       FontSize="10"
-                                       Foreground="{StaticResource Zinc600Brush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,10,0,0"/>
-                        </StackPanel>
-                    </Border>
-
-                </StackPanel>
-            </ScrollViewer>
+                                <TextBlock FontSize="12" Foreground="{StaticResource Zinc400Brush}" TextWrapping="Wrap">
+                                    <Run Text="While recording, press"/>
+                                    <Run Text="Esc" FontFamily="{StaticResource FontMono}" Foreground="{StaticResource Zinc200Brush}"/>
+                                    <Run Text="to cancel without transcribing."/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
 
             <!-- Footer -->
             <Border Grid.Row="2"

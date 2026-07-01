@@ -906,6 +906,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand]
+    public void DeleteHistoryItem(TranscriptionHistoryItem? item)
+    {
+        if (item == null) return;
+        History.Remove(item);
+        _ = Task.Run(SaveHistoryToDisk);
+        Log.Info("History entry deleted");
+    }
+
+    [RelayCommand]
+    public void ClearHistory()
+    {
+        if (History.Count == 0) return;
+        var count = History.Count;
+        History.Clear();
+        _ = Task.Run(SaveHistoryToDisk);
+        Log.Info($"History cleared ({count} entries)");
+        StatusText = "History cleared";
+    }
+
     public void ApplySettings(AppSettings settings)
     {
         Log.Info($"ApplySettings: Profile={settings.ModelProfile}, Mic={settings.SelectedMicrophoneId}, UseGpu={settings.UseGpu}, Hotkey={settings.HotkeyModifier}+{settings.HotkeyKey}");

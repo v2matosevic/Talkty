@@ -2,6 +2,26 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.2.1] - 2026-07-01
+
+- Settings rebuilt with a left navigation — six clear sections (Model,
+  Audio & Language, Vocabulary, Cloud & Prompting, Behavior, Hotkey) replace
+  one long scroll. The window is now resizable.
+- The OpenRouter API key is masked by default, with an eye toggle to reveal it.
+- History entries show copy and delete buttons on hover, and a Clear action
+  removes all history.
+- Dark themed scrollbars and text boxes everywhere — no more white OS controls
+  breaking the theme.
+- Hover the recording pill to see the "esc cancels" hint (ESC-to-cancel existed
+  but nothing ever told you).
+- Onboarding fixed: step numbers were invisible (white on white), and it
+  recommended a model that no longer exists. It now also mentions auto-paste,
+  ESC, and the Prompting sparkle.
+- Status colors unified across the main window, pill, and toasts (one green,
+  one red, one purple).
+- Hotkey-conflict errors show as an in-app notification instead of a light
+  OS dialog box.
+
 ## [1.2.0] - 2026-07-01
 
 - Talkty now frees the speech model's memory after 15 minutes of inactivity —

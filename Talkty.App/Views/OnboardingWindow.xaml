@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Welcome to Talkty"
-        Width="500" Height="380"
+        Width="500" Height="620"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -41,7 +41,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Border Width="24" Height="24" CornerRadius="12"
                                     Background="{StaticResource AccentBrush}">
-                                <TextBlock Text="1" Foreground="White"
+                                <TextBlock Text="1" Foreground="{StaticResource Zinc950Brush}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            FontWeight="SemiBold" FontSize="12"/>
                             </Border>
@@ -70,7 +70,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Border Width="24" Height="24" CornerRadius="12"
                                     Background="{StaticResource AccentBrush}">
-                                <TextBlock Text="2" Foreground="White"
+                                <TextBlock Text="2" Foreground="{StaticResource Zinc950Brush}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            FontWeight="SemiBold" FontSize="12"/>
                             </Border>
@@ -89,7 +89,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Border Width="24" Height="24" CornerRadius="12"
                                     Background="{StaticResource AccentBrush}">
-                                <TextBlock Text="3" Foreground="White"
+                                <TextBlock Text="3" Foreground="{StaticResource Zinc950Brush}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            FontWeight="SemiBold" FontSize="12"/>
                             </Border>
@@ -110,9 +110,25 @@
                             <TextBlock Text="Model Required"
                                        FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource ForegroundBrush}"/>
-                            <TextBlock Text="Open Settings to download a Whisper model. The Low model (~75MB) is recommended for most users."
+                            <TextBlock Text="Open Settings to download a Whisper model. Large v3 Turbo is the recommended all-round pick; Tiny (~75 MB) works for quick notes on modest hardware."
                                        FontSize="13" Foreground="{StaticResource MutedBrush}"
                                        TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Good to know -->
+                    <Border Background="{StaticResource SurfaceBrush}"
+                            CornerRadius="8" Padding="16" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Good to know"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource ForegroundBrush}"/>
+                            <TextBlock FontSize="13" Foreground="{StaticResource MutedBrush}"
+                                       TextWrapping="Wrap" Margin="0,4,0,0">
+                                • Press <Run FontFamily="Cascadia Code, Consolas">Esc</Run> while recording to cancel.<LineBreak/>
+                                • Turn on auto-paste in Settings and the text types itself at your cursor.<LineBreak/>
+                                • Hover the recording pill and tap the ✦ sparkle to turn a dictation into a structured AI-agent prompt.
+                            </TextBlock>
                         </StackPanel>
                     </Border>
                 </StackPanel>

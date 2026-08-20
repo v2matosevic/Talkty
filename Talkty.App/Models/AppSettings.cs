@@ -18,11 +18,12 @@ public class AppSettings
     public bool RestoreClipboardAfterPaste { get; set; } = false;
 
     /// <summary>
-    /// Position the recording pill near the text caret of the focused app (falling back
-    /// to the mouse cursor, then bottom-center of the active monitor) instead of always
-    /// bottom-center — keeps the recording state in the user's field of view.
+    /// Opt-in: position the recording pill near the text caret of the focused app (falling
+    /// back to the mouse cursor, then bottom-center of the active monitor). Default is OFF —
+    /// the pill sits at the bottom-center of the monitor the cursor is on, which stays out
+    /// of the way of what the user is typing.
     /// </summary>
-    public bool OverlayNearTextCursor { get; set; } = true;
+    public bool OverlayNearTextCursor { get; set; } = false;
     public string Language { get; set; } = "en";
     public bool AutoDetectLanguage { get; set; } = false;
     public string ModelsPath { get; set; } = string.Empty;

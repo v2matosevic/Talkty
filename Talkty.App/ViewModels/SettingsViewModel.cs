@@ -50,7 +50,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _restoreClipboardAfterPaste;
 
     [ObservableProperty]
-    private bool _overlayNearTextCursor = true;
+    private bool _overlayNearTextCursor;
 
     [ObservableProperty]
     private LanguageOption _selectedLanguage = new("auto", "Auto Detect");

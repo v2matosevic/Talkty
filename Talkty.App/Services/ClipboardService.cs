@@ -27,4 +27,17 @@ public class ClipboardService : IClipboardService
 
         return false;
     }
+
+    public string? GetTextOrNull()
+    {
+        try
+        {
+            return Clipboard.ContainsText() ? Clipboard.GetText() : null;
+        }
+        catch
+        {
+            // Clipboard locked by another process — treat as "nothing to preserve".
+            return null;
+        }
+    }
 }

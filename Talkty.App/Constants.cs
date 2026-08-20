@@ -138,4 +138,11 @@ public static class Constants
     /// Longer sleep after a failed focus-restore attempt before retrying.
     /// </summary>
     public const int PasteFocusRetryDelayMs = 60;
+
+    /// <summary>
+    /// Delay after a successful auto-paste before restoring the user's previous clipboard
+    /// (when that option is on). Apps consume WM_PASTE synchronously within a few ms;
+    /// 300ms leaves generous headroom for slow Electron apps.
+    /// </summary>
+    public const int ClipboardRestoreDelayMs = 300;
 }

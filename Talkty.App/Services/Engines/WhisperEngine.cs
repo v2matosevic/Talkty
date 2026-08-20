@@ -16,7 +16,15 @@ public class WhisperEngine : ITranscriptionEngine
     private readonly object _lock = new();
     private string _currentLanguage = "en";
     private string? _currentVocabularyPrompt;
+    private string? _languageHint;
     private bool _useGpu = false;
+
+    // Fire-and-forget warmup on the freshly built processor. Tracked so any path that
+    // disposes/replaces the processor can cancel it and wait it out first — disposing a
+    // processor mid-ProcessAsync throws "Cannot dispose while processing" and (when it
+    // happened inside a rebuild) killed the very transcription that triggered it.
+    private Task? _warmupTask;
+    private CancellationTokenSource? _warmupCts;
 
     public string EngineName => "Whisper";
     public TranscriptionEngine EngineType => TranscriptionEngine.Whisper;
@@ -139,7 +147,7 @@ public class WhisperEngine : ITranscriptionEngine
             var vulkanAvailable = CheckVulkanAvailability();
             if (vulkanAvailable)
             {
-                Log.Info("Configuring runtime: Vulkan GPU (AMD/Intel — no CUDA found)");
+                Log.Info("Configuring runtime: Vulkan GPU (works on NVIDIA/AMD/Intel; CUDA pack not installed)");
                 RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Vulkan];
                 Log.Info("RuntimeLibraryOrder set to: [Vulkan]");
                 return;
@@ -210,6 +218,17 @@ public class WhisperEngine : ITranscriptionEngine
         _currentVocabularyPrompt = prompt;
     }
 
+    /// <summary>
+    /// Pre-sets the language the processor should be built with on model load.
+    /// Without this, every load (including idle-unload reloads) built the processor with
+    /// the model's default ("auto" for multilingual) and the first transcription with the
+    /// user's real language forced a full processor rebuild.
+    /// </summary>
+    public void SetLanguageHint(string? language)
+    {
+        _languageHint = language;
+    }
+
     public async Task<bool> LoadModelAsync(
         ModelProfile profile,
         string modelPath,
@@ -271,15 +290,17 @@ public class WhisperEngine : ITranscriptionEngine
                     if (useGpu && loadedRuntime.Contains("CPU"))
                     {
                         Log.Warning("GPU was requested but CPU is being used!");
-                        Log.Warning("No GPU runtime found. For NVIDIA: install CUDA Toolkit 12.1+. For AMD/Intel: Vulkan runtime should be bundled.");
+                        Log.Warning("No GPU runtime loaded. Vulkan is bundled and covers NVIDIA/AMD/Intel — check GPU drivers. NVIDIA users can also install the CUDA pack from Settings > Behavior.");
                         BackendInfo = "CPU (GPU unavailable — check GPU drivers/CUDA)";
                     }
 
                     // Log loaded whisper-related modules
                     Log.LogLoadedModules("whisper", "ggml", "cuda", "cublas");
 
-                    // Use "auto" for multilingual models, "en" for English-only
-                    _currentLanguage = profile.SupportsAutoDetect() ? "auto" : "en";
+                    // Build with the user's configured language when we have it — English-only
+                    // models are always "en". Falling back to "auto" here used to force a
+                    // processor rebuild on the first transcription after every (re)load.
+                    _currentLanguage = profile.SupportsAutoDetect() ? (_languageHint ?? "auto") : "en";
 
                     var threads = GetOptimalThreadCount();
                     Log.Debug($"Building WhisperProcessor with language={_currentLanguage}, threads={threads}, vocabulary={(!string.IsNullOrWhiteSpace(_currentVocabularyPrompt) ? $"{_currentVocabularyPrompt.Length} chars" : "none")}...");
@@ -290,8 +311,13 @@ public class WhisperEngine : ITranscriptionEngine
 
                     // Warmup runs OFF the load path — fire-and-forget. UI sees "Ready" immediately;
                     // first real transcription pays a small cold-start cost if it beats warmup, but
-                    // that's rare and better than blocking model load.
-                    _ = Task.Run(WarmupProcessor);
+                    // that's rare and better than blocking model load. Tracked (task + cts) so
+                    // rebuild/dispose can wait it out instead of disposing the processor under it.
+                    _warmupCts?.Dispose();
+                    _warmupCts = new CancellationTokenSource();
+                    var warmupProcessor = _processor;
+                    var warmupToken = _warmupCts.Token;
+                    _warmupTask = Task.Run(() => WarmupProcessor(warmupProcessor, warmupToken));
 
                     return true;
                 }
@@ -310,33 +336,59 @@ public class WhisperEngine : ITranscriptionEngine
     /// This warms up JIT compilation, GPU memory allocation, and internal whisper.cpp buffers
     /// so the first real transcription doesn't pay a cold-start penalty.
     /// </summary>
-    private async Task WarmupProcessor()
+    private static async Task WarmupProcessor(WhisperProcessor processor, CancellationToken cancellationToken)
     {
-        // Snapshot the processor ref under the lock so we don't race with a reload/dispose.
-        WhisperProcessor? processor;
-        lock (_lock)
-        {
-            processor = _processor;
-        }
-        if (processor == null) return;
-
         try
         {
             var warmupStart = DateTime.Now;
             // 0.5 seconds of silence at 16kHz — primes JIT, GPU memory, internal buffers
             var silence = new float[Constants.WhisperWarmupSamples];
-            using var cts = new CancellationTokenSource(5000);
-            await foreach (var segment in processor.ProcessAsync(silence, cts.Token))
+            using var timeoutCts = new CancellationTokenSource(5000);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            await foreach (var segment in processor.ProcessAsync(silence, linkedCts.Token))
             {
                 // Discard — we only care about priming the pipeline
             }
             var warmupTime = DateTime.Now - warmupStart;
             Log.Info($"Processor warmup completed in {warmupTime.TotalMilliseconds:F0}ms");
         }
+        catch (OperationCanceledException)
+        {
+            Log.Debug("Processor warmup cancelled");
+        }
         catch (Exception ex)
         {
             // Non-fatal — warmup is best-effort
             Log.Warning($"Processor warmup failed (non-fatal): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Cancels any in-flight warmup and waits for it to finish so the processor it runs on
+    /// can be disposed safely. Bounded wait — warmup itself has a 5s internal timeout.
+    /// Warmup never takes <see cref="_lock"/>, so calling this with or without the lock
+    /// held cannot deadlock.
+    /// </summary>
+    private void CancelWarmupAndWait()
+    {
+        var task = _warmupTask;
+        if (task == null || task.IsCompleted) return;
+
+        try
+        {
+            _warmupCts?.Cancel();
+            if (!task.Wait(TimeSpan.FromSeconds(6)))
+            {
+                Log.Warning("Warmup did not finish within 6s — proceeding with dispose anyway");
+            }
+        }
+        catch (AggregateException)
+        {
+            // Warmup swallows its own exceptions; nothing real can surface here.
+        }
+        finally
+        {
+            _warmupTask = null;
         }
     }
 
@@ -546,6 +598,10 @@ public class WhisperEngine : ITranscriptionEngine
     {
         return Task.Run(() =>
         {
+            // The warmup may still be processing on the current processor — let it wind
+            // down before disposing, or Dispose throws "Cannot dispose while processing".
+            CancelWarmupAndWait();
+
             lock (_lock)
             {
                 if (_factory == null || CurrentProfile == null) return;
@@ -564,6 +620,9 @@ public class WhisperEngine : ITranscriptionEngine
 
     private void DisposeInternal()
     {
+        // Wind down any in-flight warmup before touching the processor it runs on.
+        CancelWarmupAndWait();
+
         if (_processor != null)
         {
             Log.Debug("Disposing WhisperProcessor");

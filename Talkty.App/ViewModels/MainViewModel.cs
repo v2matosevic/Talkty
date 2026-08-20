@@ -144,6 +144,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _transcriptionService.SetVocabularyPrompt(DefaultVocabulary.PromptContext);
             }
 
+            // Pre-set the language too — same reason as the vocabulary prompt: the processor
+            // must be built with the language actually used at transcription time, or the
+            // first transcription after every (re)load pays a full processor rebuild.
+            _transcriptionService.SetLanguageHint(settings.AutoDetectLanguage ? "auto" : settings.Language);
+
             // Forward the decrypted cloud API key to the transcription engine AND the prompt
             // refiner — both call OpenRouter.
             var cloudKey = ApiKeyProtector.Unprotect(settings.OpenRouterApiKeyEncrypted);
@@ -515,6 +520,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // the user is currently looking at and wants to paste into.
             _autoPasteService.CaptureTargetWindow();
 
+            // Snapshot the clipboard BEFORE anything (incl. the streamed first segment)
+            // overwrites it, so it can be restored after a successful auto-paste.
+            string? clipboardToRestore = null;
+            if (_settingsService.Settings.AutoPaste && _settingsService.Settings.RestoreClipboardAfterPaste)
+            {
+                clipboardToRestore = _clipboardService.GetTextOrNull();
+            }
+
             // Claim foreground privilege IMMEDIATELY on the UI thread.
             // Windows only grants SetForegroundWindow permission to the thread
             // that last received user input (our hotkey). If we wait until after
@@ -703,7 +716,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         // Overlay stays visible during paste — hiding it would cause focus changes.
                         Log.Debug("Auto-pasting at cursor");
                         var textForClipboard = result.Text;
-                        await Task.Run(() => _autoPasteService.PasteToTargetWindow(
+                        var pasteOutcome = await Task.Run(() => _autoPasteService.PasteToTargetWindow(
                             ensureClipboardText: () =>
                             {
                                 // Re-set clipboard right before Ctrl+V — focus switching can
@@ -713,6 +726,38 @@ public partial class MainViewModel : ObservableObject, IDisposable
                                     _clipboardService.SetText(textForClipboard);
                                 });
                             }));
+
+                        if (pasteOutcome != PasteOutcome.Pasted)
+                        {
+                            // The text is safe on the clipboard — say WHY it didn't land
+                            // instead of leaving the user staring at an unchanged window.
+                            var reason = pasteOutcome switch
+                            {
+                                PasteOutcome.TargetElevated =>
+                                    "That app runs as administrator, so Windows blocks auto-paste — press Ctrl+V to paste.",
+                                PasteOutcome.NoTarget =>
+                                    "The window to paste into is gone — text is on the clipboard (Ctrl+V).",
+                                _ =>
+                                    "Couldn't focus the target window — text is on the clipboard (Ctrl+V).",
+                            };
+                            RequestShowToast?.Invoke(this, new ToastEventArgs
+                            {
+                                Message = reason,
+                                Type = ToastType.Warning,
+                                DurationMs = 5000
+                            });
+                        }
+                        else if (clipboardToRestore != null)
+                        {
+                            // Give the target app a beat to consume WM_PASTE, then hand the
+                            // user their original clipboard back.
+                            await Task.Delay(Constants.ClipboardRestoreDelayMs);
+                            Application.Current.Dispatcher.Invoke(() =>
+                            {
+                                _clipboardService.SetText(clipboardToRestore);
+                            });
+                            Log.Info("Previous clipboard content restored after paste");
+                        }
                     }
                 }
 
@@ -941,6 +986,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _settingsService.Settings.SelectedMicrophoneId = settings.SelectedMicrophoneId;
         _settingsService.Settings.CopyToClipboard = settings.CopyToClipboard;
         _settingsService.Settings.AutoPaste = settings.AutoPaste;
+        _settingsService.Settings.RestoreClipboardAfterPaste = settings.RestoreClipboardAfterPaste;
+        _settingsService.Settings.OverlayNearTextCursor = settings.OverlayNearTextCursor;
         _settingsService.Settings.Language = settings.Language;
         _settingsService.Settings.AutoDetectLanguage = settings.AutoDetectLanguage;
         _settingsService.Settings.UseGpu = settings.UseGpu;
@@ -969,6 +1016,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         _settingsService.Settings.UnloadModelWhenIdle = settings.UnloadModelWhenIdle;
         _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);
+
+        // Keep the engine's language hint in sync so idle-unload reloads build the
+        // processor with the right language directly.
+        _transcriptionService.SetLanguageHint(settings.AutoDetectLanguage ? "auto" : settings.Language);
 
         _settingsService.Save();
 

@@ -172,7 +172,7 @@ public class AutoPasteService : IAutoPasteService
     }
 
     /// <inheritdoc />
-    public void PasteToTargetWindow(Action? ensureClipboardText = null)
+    public PasteOutcome PasteToTargetWindow(Action? ensureClipboardText = null)
     {
         // Snapshot the handle once — we're on thread pool, UI thread could reassign mid-flight.
         var target = Volatile.Read(ref _targetWindowHandle);
@@ -184,7 +184,7 @@ public class AutoPasteService : IAutoPasteService
             if (target == IntPtr.Zero || !IsWindow(target))
             {
                 Log.Warning("Target window handle is invalid — text is on clipboard");
-                return;
+                return PasteOutcome.NoTarget;
             }
 
             // Log who currently has foreground (before we do anything)
@@ -210,7 +210,7 @@ public class AutoPasteService : IAutoPasteService
                 if (!RestoreFocusToTarget(target))
                 {
                     Log.Warning("Failed to restore focus — skipping paste. Text is on clipboard for manual Ctrl+V.");
-                    return;
+                    return PasteOutcome.FocusRestoreFailed;
                 }
                 Thread.Sleep(Constants.PasteFocusRetryDelayMs);
                 Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Focus restored");
@@ -253,10 +253,16 @@ public class AutoPasteService : IAutoPasteService
 
             sw.Stop();
             Log.Info($"=== AUTO-PASTE END === Total: {sw.ElapsedMilliseconds}ms, class: \"{windowClass}\", process: \"{processName}\"");
+
+            // We still try (Talkty itself might be elevated, in which case it works), but
+            // in the normal non-elevated case UIPI drops the keystrokes without any error —
+            // report it so the user hears "press Ctrl+V yourself" instead of silence.
+            return isElevated ? PasteOutcome.TargetElevated : PasteOutcome.Pasted;
         }
         catch (Exception ex)
         {
             Log.Error("Failed to simulate paste", ex);
+            return PasteOutcome.FocusRestoreFailed;
         }
     }
 

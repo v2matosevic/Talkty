@@ -39,6 +39,13 @@ public interface ITranscriptionService : IDisposable
     void SetCloudApiKey(string? apiKey);
 
     /// <summary>
+    /// Pre-sets the transcription language ("en", "de", "auto", …) so the processor is built
+    /// with it on model load — including transparent reloads after an idle unload. Without it,
+    /// the first transcription after every (re)load forced a processor rebuild.
+    /// </summary>
+    void SetLanguageHint(string? language);
+
+    /// <summary>
     /// Enables/disables unloading the local model after a period of inactivity (frees RAM/VRAM
     /// while the app idles in the tray). The model is transparently restored on next use.
     /// </summary>

@@ -127,6 +127,13 @@ dotnet publish -c Release -r win-x64 --self-contained true   # NOT single-file
 Single-file publish is off deliberately — Whisper.net's native DLLs must live in the
 `runtimes/` folder structure. Always publish before running ISCC: the installer's
 `[Files]` glob matches the publish folder, and an empty one fails the compile.
+Delete the publish folder before a release publish — `dotnet publish` does not clean
+it, and stale files (e.g. CUDA DLLs from an old fat build) would ride into the installer.
+
+**CUDA is not bundled** (since v1.3.0): the installer ships the Vulkan backend (works on
+NVIDIA/AMD/Intel); `CudaPackService` downloads the optional CUDA runtime in-app from the
+`cuda-pack-cu13` GitHub release (asset built by `installer/make-cuda-pack.ps1`). A fat
+build remains available with `-p:BundleCuda=true` (requires CUDA Toolkit v13.1).
 
 ## Logging
 

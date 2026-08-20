@@ -263,6 +263,9 @@ public partial class MainWindow : Window
                     _overlayWindow = new OverlayWindow();
                 }
 
+                // Position mode can change in Settings — refresh it every show
+                _overlayWindow.PositionNearTextCursor = _settingsService.Settings.OverlayNearTextCursor;
+
                 // Reset overlay state for new recording session
                 _overlayWindow.ViewModel.IsListening = true;
                 _overlayWindow.ViewModel.IsTranscribing = false;

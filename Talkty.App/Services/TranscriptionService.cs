@@ -28,6 +28,7 @@ public class TranscriptionService : ITranscriptionService
 
     private string? _pendingVocabularyPrompt;
     private string? _pendingApiKey;
+    private string? _pendingLanguage;
 
     // Last successful load — what EnsureModelLoadedAsync restores after an idle unload.
     private ModelProfile? _lastProfile;
@@ -61,6 +62,15 @@ public class TranscriptionService : ITranscriptionService
         if (_currentEngine is Engines.OpenRouterEngine openRouter)
         {
             openRouter.SetApiKey(apiKey);
+        }
+    }
+
+    public void SetLanguageHint(string? language)
+    {
+        _pendingLanguage = language;
+        if (_currentEngine is Engines.WhisperEngine whisper)
+        {
+            whisper.SetLanguageHint(language);
         }
     }
 
@@ -125,10 +135,12 @@ public class TranscriptionService : ITranscriptionService
                         _currentEngine = TranscriptionEngineFactory.CreateEngine(requiredEngine);
                         Log.Info($"Created new {_currentEngine.EngineName} engine");
 
-                        // Forward pending vocabulary prompt to new engine
-                        if (_pendingVocabularyPrompt != null && _currentEngine is Engines.WhisperEngine newWhisper)
+                        // Forward pending vocabulary prompt + language to new engine
+                        if (_currentEngine is Engines.WhisperEngine newWhisper)
                         {
-                            newWhisper.SetVocabularyPrompt(_pendingVocabularyPrompt);
+                            if (_pendingVocabularyPrompt != null)
+                                newWhisper.SetVocabularyPrompt(_pendingVocabularyPrompt);
+                            newWhisper.SetLanguageHint(_pendingLanguage);
                         }
 
                         // Forward pending API key to a new cloud engine
@@ -194,6 +206,10 @@ public class TranscriptionService : ITranscriptionService
         string? vocabularyPrompt = null)
     {
         Log.Info($"TranscriptionService.TranscribeAsync: Samples={audioSamples.Length}, Language={language}{(vocabularyPrompt != null ? $", Vocabulary={vocabularyPrompt.Length} chars" : "")}");
+
+        // Remember the language actually in use so a later idle-unload reload rebuilds
+        // the processor with it directly (no first-transcription rebuild).
+        _pendingLanguage = language;
 
         // Counter BEFORE EnsureModelLoadedAsync — see the race note on _idleTimer.
         Interlocked.Increment(ref _activeTranscriptions);

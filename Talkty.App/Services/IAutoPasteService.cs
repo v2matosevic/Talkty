@@ -1,6 +1,30 @@
 namespace Talkty.App.Services;
 
 /// <summary>
+/// Result of an auto-paste attempt. Anything other than <see cref="Pasted"/> means the
+/// text is still on the clipboard for a manual Ctrl+V — the caller should tell the user
+/// instead of failing silently.
+/// </summary>
+public enum PasteOutcome
+{
+    /// <summary>Ctrl+V was delivered to the target window.</summary>
+    Pasted,
+
+    /// <summary>The captured target window no longer exists.</summary>
+    NoTarget,
+
+    /// <summary>The user switched apps and focus could not be restored to the target.</summary>
+    FocusRestoreFailed,
+
+    /// <summary>
+    /// The target runs elevated (as administrator) — Windows UIPI silently discards
+    /// keystrokes sent from a non-elevated process, so the paste almost certainly
+    /// did not arrive.
+    /// </summary>
+    TargetElevated,
+}
+
+/// <summary>
 /// Handles capturing a target window before recording and pasting
 /// transcribed text into it after transcription completes.
 /// </summary>
@@ -28,5 +52,5 @@ public interface IAutoPasteService
     /// Delegate that re-sets the clipboard text if it was cleared during focus restore.
     /// Must handle Dispatcher marshalling internally. Called right before Ctrl+V.
     /// </param>
-    void PasteToTargetWindow(Action? ensureClipboardText = null);
+    PasteOutcome PasteToTargetWindow(Action? ensureClipboardText = null);
 }

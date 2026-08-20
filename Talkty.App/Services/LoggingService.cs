@@ -126,7 +126,9 @@ public static class Log
                     var psi = new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "nvidia-smi",
-                        Arguments = "--query-gpu=name,memory.total,driver_version,cuda_version --format=csv,noheader,nounits",
+                        // NOTE: "cuda_version" is not a valid --query-gpu field (it errored on
+                        // every launch); driver_version implies the supported CUDA version.
+                        Arguments = "--query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,

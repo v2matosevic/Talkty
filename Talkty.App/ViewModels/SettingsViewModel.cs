@@ -47,6 +47,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _autoPaste;
 
     [ObservableProperty]
+    private bool _restoreClipboardAfterPaste;
+
+    [ObservableProperty]
+    private bool _overlayNearTextCursor = true;
+
+    [ObservableProperty]
     private LanguageOption _selectedLanguage = new("auto", "Auto Detect");
 
     [ObservableProperty]
@@ -54,6 +60,72 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _useGpu;
+
+    // ─── CUDA pack (optional download — CUDA is no longer bundled in the installer) ───
+
+    private readonly CudaPackService _cudaPackService = new();
+
+    [ObservableProperty]
+    private bool _showCudaPackOffer;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DownloadCudaPackCommand))]
+    private bool _isCudaPackDownloading;
+
+    [ObservableProperty]
+    private double _cudaPackProgress;
+
+    [ObservableProperty]
+    private string _cudaPackStatus = "";
+
+    /// <summary>Set once the pack lands this session — swaps the offer for a restart prompt.</summary>
+    [ObservableProperty]
+    private bool _cudaPackInstalledPendingRestart;
+
+    partial void OnUseGpuChanged(bool value) => UpdateCudaPackOffer();
+
+    private void UpdateCudaPackOffer()
+    {
+        ShowCudaPackOffer = UseGpu
+                            && !CudaPackInstalledPendingRestart
+                            && _cudaPackService.HasNvidiaGpu
+                            && !_cudaPackService.IsCudaInstalled;
+    }
+
+    private bool CanDownloadCudaPack() => !IsCudaPackDownloading;
+
+    [RelayCommand(CanExecute = nameof(CanDownloadCudaPack))]
+    public async Task DownloadCudaPack()
+    {
+        IsCudaPackDownloading = true;
+        CudaPackProgress = 0;
+        CudaPackStatus = "Downloading…";
+        try
+        {
+            var progress = new Progress<double>(p =>
+            {
+                CudaPackProgress = p * 100;
+                CudaPackStatus = $"Downloading… {p:P0}";
+            });
+
+            var (success, message) = await _cudaPackService.DownloadAndInstallAsync(progress);
+            CudaPackStatus = message;
+            if (success)
+            {
+                CudaPackInstalledPendingRestart = true;
+                UpdateCudaPackOffer();
+            }
+        }
+        finally
+        {
+            IsCudaPackDownloading = false;
+        }
+    }
+
+    [RelayCommand]
+    public void RestartApp() => App.Restart();
+
+    // ──────────────────────────────────────────────────────────────────────
 
     [ObservableProperty]
     private bool _duckVolumeWhileRecording;
@@ -282,6 +354,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         CopyToClipboard = settings.CopyToClipboard;
         AutoPaste = settings.AutoPaste;
+        RestoreClipboardAfterPaste = settings.RestoreClipboardAfterPaste;
+        OverlayNearTextCursor = settings.OverlayNearTextCursor;
 
         // Find matching language option by code, default to "auto"
         SelectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == settings.Language)
@@ -570,6 +644,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             SelectedMicrophoneId = SelectedAudioDevice?.Id,
             CopyToClipboard = CopyToClipboard,
             AutoPaste = AutoPaste,
+            RestoreClipboardAfterPaste = RestoreClipboardAfterPaste,
+            OverlayNearTextCursor = OverlayNearTextCursor,
             Language = languageCode,
             AutoDetectLanguage = languageCode == "auto",
             UseGpu = UseGpu,

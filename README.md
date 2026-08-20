@@ -43,8 +43,9 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
   recording from any app. Text goes straight to the clipboard.
 - **Type at the cursor.** Turn on auto-paste and the text inserts itself where you
   were typing. Works in editors, terminals, browsers, and chat apps.
-- **GPU when you have one.** Auto-detects CUDA (NVIDIA), then Vulkan (AMD and Intel
-  iGPUs), then falls back to CPU. A long clip transcribes in well under a second on a GPU.
+- **GPU when you have one.** Vulkan acceleration works out of the box on NVIDIA, AMD
+  and Intel GPUs, with CPU fallback. NVIDIA users can install the optional CUDA pack
+  from Settings for maximum speed — it's a separate download so the installer stays small.
 - **Coding vocabulary built in.** A two-layer system biases Whisper toward developer
   terms and fixes the ones it still gets wrong (for example "cube cuddle" becomes
   `kubectl`, "post gres" becomes `PostgreSQL`). Fully editable in Settings.

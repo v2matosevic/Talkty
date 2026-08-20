@@ -618,6 +618,15 @@
                                 <CheckBox Content="Auto-paste at cursor"
                                           IsChecked="{Binding AutoPaste}"
                                           Margin="0,0,0,12"/>
+                                <CheckBox Content="Restore previous clipboard after auto-paste"
+                                          IsChecked="{Binding RestoreClipboardAfterPaste}"
+                                          IsEnabled="{Binding AutoPaste}"
+                                          ToolTip="After the text is pasted, put back whatever was on your clipboard before the recording — dictating no longer eats what you had copied"
+                                          Margin="20,0,0,12"/>
+                                <CheckBox Content="Show recording pill near the text cursor"
+                                          IsChecked="{Binding OverlayNearTextCursor}"
+                                          ToolTip="The pill appears next to where you're typing instead of at the bottom of the screen (falls back to the mouse position when the app doesn't expose a text cursor)"
+                                          Margin="0,0,0,12"/>
                                 <CheckBox Content="Lower volume while recording"
                                           IsChecked="{Binding DuckVolumeWhileRecording}"
                                           ToolTip="Reduce system volume during recording to prevent audio interference"
@@ -682,9 +691,72 @@
                                           ToolTip="Unloads the speech model after 15 minutes of inactivity to free RAM. It reloads automatically while you speak — you won't notice it."
                                           Margin="0,0,0,12"/>
 
-                                <CheckBox Content="Use GPU acceleration (CUDA)"
+                                <CheckBox Content="Use GPU acceleration"
                                           IsChecked="{Binding UseGpu}"
-                                          ToolTip="Enable GPU acceleration for faster transcription. Requires NVIDIA GPU with CUDA."/>
+                                          ToolTip="Much faster transcription on a graphics card. Works out of the box on NVIDIA, AMD and Intel GPUs (Vulkan); NVIDIA users can add the CUDA pack below for maximum speed."/>
+
+                                <!-- CUDA pack offer: NVIDIA GPU present but the optional CUDA
+                                     runtime (no longer bundled — it was ~75% of the installer)
+                                     is not installed yet. -->
+                                <Border Background="{StaticResource Zinc950Brush}"
+                                        CornerRadius="8"
+                                        Padding="12"
+                                        Margin="0,12,0,0"
+                                        Visibility="{Binding ShowCudaPackOffer, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <StackPanel>
+                                        <TextBlock TextWrapping="Wrap"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource Zinc300Brush}"
+                                                   Text="NVIDIA GPU detected. Talkty is using the built-in Vulkan backend — install the CUDA pack (~450 MB download) for maximum transcription speed."/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                            <Button Content="Download CUDA pack"
+                                                    Style="{StaticResource PrimaryButton}"
+                                                    Command="{Binding DownloadCudaPackCommand}"/>
+                                        </StackPanel>
+                                        <Grid Height="6" Margin="0,10,0,0"
+                                              Visibility="{Binding IsCudaPackDownloading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <Border CornerRadius="3" Background="{StaticResource Zinc800Brush}"/>
+                                            <Border CornerRadius="3" HorizontalAlignment="Left">
+                                                <Border.Width>
+                                                    <MultiBinding Converter="{StaticResource PercentageWidthConverter}">
+                                                        <Binding Path="CudaPackProgress"/>
+                                                        <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="ActualWidth"/>
+                                                    </MultiBinding>
+                                                </Border.Width>
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#6E56CF" Offset="0"/>
+                                                        <GradientStop Color="#8B5CF6" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Text="{Binding CudaPackStatus}"
+                                                   FontSize="11"
+                                                   Margin="0,6,0,0"
+                                                   Foreground="{StaticResource Zinc400Brush}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Pack installed this session — needs a restart to load CUDA -->
+                                <Border Background="{StaticResource Zinc950Brush}"
+                                        CornerRadius="8"
+                                        Padding="12"
+                                        Margin="0,12,0,0"
+                                        Visibility="{Binding CudaPackInstalledPendingRestart, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <StackPanel>
+                                        <TextBlock TextWrapping="Wrap"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource StatusGreenBrush}"
+                                                   Text="CUDA pack installed — restart Talkty to activate it."/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                            <Button Content="Restart now"
+                                                    Style="{StaticResource PrimaryButton}"
+                                                    Command="{Binding RestartAppCommand}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </StackPanel>

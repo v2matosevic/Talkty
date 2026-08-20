@@ -9,6 +9,39 @@ public partial class App : Application
     private static Mutex? _mutex;
     private static bool _ownsMutex;
 
+    /// <summary>
+    /// Restarts the application (used after installing the CUDA pack — the Whisper native
+    /// runtime is chosen at first load and can't be swapped in-process). A detached cmd
+    /// waits ~1s (ping trick) so this instance fully exits and releases the single-instance
+    /// mutex before the new one starts.
+    /// </summary>
+    public static void Restart()
+    {
+        try
+        {
+            var exePath = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exePath))
+            {
+                Log.Error("Restart failed: cannot determine executable path");
+                return;
+            }
+
+            Log.Info("Restarting application (CUDA pack activation)");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c ping -n 2 127.0.0.1 >nul & start \"\" \"{exePath}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            });
+            Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Failed to restart application", ex);
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         // Initialize logging first

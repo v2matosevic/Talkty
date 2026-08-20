@@ -8,6 +8,21 @@ public class AppSettings
     public string? SelectedMicrophoneId { get; set; }
     public bool CopyToClipboard { get; set; } = true;
     public bool AutoPaste { get; set; } = false;
+
+    /// <summary>
+    /// After a successful auto-paste, put whatever was on the clipboard before the
+    /// recording back on it — dictation stops eating what the user had copied.
+    /// Off by default: many users deliberately re-paste the transcription afterwards.
+    /// Only text content is preserved (images/files are skipped).
+    /// </summary>
+    public bool RestoreClipboardAfterPaste { get; set; } = false;
+
+    /// <summary>
+    /// Position the recording pill near the text caret of the focused app (falling back
+    /// to the mouse cursor, then bottom-center of the active monitor) instead of always
+    /// bottom-center — keeps the recording state in the user's field of view.
+    /// </summary>
+    public bool OverlayNearTextCursor { get; set; } = true;
     public string Language { get; set; } = "en";
     public bool AutoDetectLanguage { get; set; } = false;
     public string ModelsPath { get; set; } = string.Empty;

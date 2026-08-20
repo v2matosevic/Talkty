@@ -76,26 +76,37 @@ public class VolumeDuckingService : IVolumeDuckingService
             using var enumerator = new MMDeviceEnumerator();
             var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 
-            var volume = device.AudioEndpointVolume;
-            _originalVolume = volume.MasterVolumeLevelScalar;
-
-            // Mark that we've stored the original volume (important for interrupted fades)
-            lock (_lock) _hasStoredOriginalVolume = true;
-
-            if (_originalVolume <= 0.01f)
+            try
             {
-                Log.Debug($"Volume already very low ({_originalVolume:P0}), marking as ducked but not changing");
+                var volume = device.AudioEndpointVolume;
+                _originalVolume = volume.MasterVolumeLevelScalar;
+
+                // Mark that we've stored the original volume (important for interrupted fades)
+                lock (_lock) _hasStoredOriginalVolume = true;
+
+                if (_originalVolume <= 0.01f)
+                {
+                    Log.Debug($"Volume already very low ({_originalVolume:P0}), marking as ducked but not changing");
+                    lock (_lock) _isDucked = true;
+                    return;
+                }
+
+                var targetVolume = _originalVolume * duckLevel;
+                Log.Info($"Ducking volume: {_originalVolume:P0} -> {targetVolume:P0} (duck level: {duckLevel:P0})");
+
+                await FadeVolumeAsync(volume, _originalVolume, targetVolume, ct);
+
                 lock (_lock) _isDucked = true;
-                return;
+                Log.Debug("Volume ducked successfully");
             }
-
-            var targetVolume = _originalVolume * duckLevel;
-            Log.Info($"Ducking volume: {_originalVolume:P0} -> {targetVolume:P0} (duck level: {duckLevel:P0})");
-
-            await FadeVolumeAsync(enumerator, _originalVolume, targetVolume, ct);
-
-            lock (_lock) _isDucked = true;
-            Log.Debug("Volume ducked successfully");
+            finally
+            {
+                // The fade spans awaits; without this the MMDevice is unreferenced after
+                // .AudioEndpointVolume is read and the GC can finalize it MID-FADE, tearing
+                // down the COM interface the loop is using (InvalidComObjectException on
+                // nearly every restore in real-world logs).
+                GC.KeepAlive(device);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -144,12 +155,21 @@ public class VolumeDuckingService : IVolumeDuckingService
             using var enumerator = new MMDeviceEnumerator();
             var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 
-            var volume = device.AudioEndpointVolume;
-            var currentVolume = volume.MasterVolumeLevelScalar;
+            try
+            {
+                var volume = device.AudioEndpointVolume;
+                var currentVolume = volume.MasterVolumeLevelScalar;
 
-            Log.Info($"Restoring volume: {currentVolume:P0} -> {originalVolume:P0}");
+                Log.Info($"Restoring volume: {currentVolume:P0} -> {originalVolume:P0}");
 
-            await FadeVolumeAsync(enumerator, currentVolume, originalVolume, ct);
+                await FadeVolumeAsync(volume, currentVolume, originalVolume, ct);
+            }
+            finally
+            {
+                // See DuckAsync — keeps the GC from finalizing the device (and with it the
+                // volume COM interface) while the fade is still awaiting between steps.
+                GC.KeepAlive(device);
+            }
 
             lock (_lock)
             {
@@ -164,19 +184,19 @@ public class VolumeDuckingService : IVolumeDuckingService
         }
         catch (Exception ex)
         {
-            Log.Error("Failed to restore volume", ex);
-            // Try one more time with instant restore (no fade)
+            // Fade failed — fall back to an instant restore. Only log an ERROR if that
+            // fallback fails too; a recovered fade hiccup is a Warning, not 400 red lines.
             try
             {
-                Log.Info("Attempting instant volume restore after fade failure...");
                 using var retryEnumerator = new MMDeviceEnumerator();
                 var retryDevice = retryEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 retryDevice.AudioEndpointVolume.MasterVolumeLevelScalar = originalVolume;
-                Log.Info($"Volume instantly restored to {originalVolume:P0}");
+                GC.KeepAlive(retryDevice);
+                Log.Warning($"Volume fade-restore failed ({ex.Message}) — instantly restored to {originalVolume:P0}");
             }
             catch (Exception retryEx)
             {
-                Log.Error("Failed to restore volume on retry", retryEx);
+                Log.Error($"Failed to restore volume (fade: {ex.Message})", retryEx);
             }
 
             lock (_lock)
@@ -188,16 +208,11 @@ public class VolumeDuckingService : IVolumeDuckingService
     }
 
     private static async Task FadeVolumeAsync(
-        MMDeviceEnumerator enumerator,
+        AudioEndpointVolume volume,
         float fromLevel,
         float toLevel,
         CancellationToken ct)
     {
-        // Get device once per fade operation — safe within a 250ms window.
-        // The stale COM issue only occurred when reusing across long (20s+) recordings.
-        var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-        var volume = device.AudioEndpointVolume;
-
         for (int i = 1; i <= FadeSteps; i++)
         {
             ct.ThrowIfCancellationRequested();

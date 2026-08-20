@@ -30,6 +30,13 @@
     <PublishSingleFile>false</PublishSingleFile>
     <!-- Pre-compile IL to native at publish time — reduces JIT overhead on first launch -->
     <PublishReadyToRun>true</PublishReadyToRun>
+
+    <!-- CUDA is NOT bundled by default: it's ~578MB of a ~940MB publish and only helps
+         NVIDIA users, who still get GPU acceleration out of the box via the bundled
+         Vulkan backend. The app offers CUDA as an in-app download (CudaPackService).
+         Build with -p:BundleCuda=true to produce the old fat output (e.g. to source the
+         CUDA pack zip — see installer/make-cuda-pack.ps1). -->
+    <BundleCuda Condition="'$(BundleCuda)' == ''">false</BundleCuda>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,13 +46,15 @@
     <!-- Whisper.net for speech recognition -->
     <PackageReference Include="Whisper.net" Version="1.9.0" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" />
-    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
-    <!-- Vulkan GPU backend for AMD/Intel iGPU acceleration (10-12x over CPU) -->
+    <!-- Native-only package; referenced only for BundleCuda builds. Normal builds get
+         CUDA via the downloadable pack instead (the DLL layout on disk is identical). -->
+    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" Condition="'$(BundleCuda)' == 'true'" />
+    <!-- Vulkan GPU backend — works on NVIDIA, AMD and Intel GPUs (10-12x over CPU) -->
     <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.0" />
     <!-- Sherpa-ONNX for alternative engines (SenseVoice, Moonshine) -->
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.10.31" />
     <!-- Archive extraction for model archives (tar.bz2) -->
-    <PackageReference Include="SharpCompress" Version="0.38.0" />
+    <PackageReference Include="SharpCompress" Version="1.0.0" />
     <!-- Windows DPAPI for encrypting the OpenRouter API key at rest in settings.json -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
@@ -59,10 +68,18 @@
     <InternalsVisibleTo Include="Talkty.Tests" />
   </ItemGroup>
 
-  <!-- Copy CUDA runtime DLLs to output for GPU acceleration -->
+  <!-- Strip runtime folders that can never load in a win-x64 publish. The Whisper.net
+       runtime packages copy every RID's natives (linux .so files included) — 128MB of
+       dead weight in the installer without this. -->
+  <Target Name="PruneNonWinX64Runtimes" AfterTargets="Publish">
+    <RemoveDir Directories="$(PublishDir)runtimes\cuda\linux-x64;$(PublishDir)runtimes\vulkan\linux-x64;$(PublishDir)runtimes\win-arm64;$(PublishDir)runtimes\win-x86" />
+    <Message Text="Pruned non-win-x64 runtime folders from publish output" Importance="high" />
+  </Target>
+
+  <!-- Copy CUDA runtime DLLs to output for GPU acceleration (BundleCuda builds only) -->
   <!-- CUDA DLLs must be in main output directory so Windows DLL loader can find them -->
   <!-- when ggml-cuda-whisper.dll loads and needs cublas64_13.dll etc. -->
-  <Target Name="CopyCudaDlls" AfterTargets="Build" Condition="Exists('$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll')">
+  <Target Name="CopyCudaDlls" AfterTargets="Build" Condition="'$(BundleCuda)' == 'true' and Exists('$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll')">
     <PropertyGroup>
       <CudaBinPath>$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64</CudaBinPath>
     </PropertyGroup>
@@ -74,7 +91,7 @@
   </Target>
 
   <!-- Also copy for Publish -->
-  <Target Name="CopyCudaDllsPublish" AfterTargets="Publish" Condition="Exists('$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll')">
+  <Target Name="CopyCudaDllsPublish" AfterTargets="Publish" Condition="'$(BundleCuda)' == 'true' and Exists('$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64\cublas64_13.dll')">
     <PropertyGroup>
       <CudaBinPath>$(ProgramFiles)\NVIDIA GPU Computing Toolkit\CUDA\v13.1\bin\x64</CudaBinPath>
     </PropertyGroup>

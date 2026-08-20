@@ -1,5 +1,5 @@
 {
-  "version": "1.2.2",
+  "version": "1.3.0",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Settings rebuilt with a left navigation (Model, Audio & Language, Vocabulary, Cloud & Prompting, Behavior, Hotkey) and a resizable window. Text replacements are now editable in Settings (one \"misheard => correct\" rule per line). The API key is masked with a reveal toggle, history entries have copy/delete on hover plus a Clear-all, and dark scrollbars and inputs replace the white OS controls. Accuracy: abbreviations like \"e.g.\" survive punctuation cleanup, and cloud transcription retries once on transient errors. Hover the recording pill for the \"esc cancels\" hint."
+  "release_notes": "The installer is 88% smaller (58 MB) — CUDA is no longer bundled. GPU acceleration still works out of the box via Vulkan (NVIDIA, AMD, Intel); NVIDIA users can add the optional CUDA pack from Settings > Behavior for maximum speed, and upgrades keep your existing CUDA files automatically. Fixed: a dictation could fail right after the app sat idle (the model-unload race), and volume ducking errored on nearly every recording. Auto-paste now tells you when it couldn't paste and why (e.g. apps running as administrator). New opt-ins: show the recording pill near the text cursor, and restore your previous clipboard after auto-paste."
 }

@@ -24,7 +24,10 @@ global hotkey (Win32 RegisterHotKey)
 ```
 
 While recording, a small always-on-top overlay pill (`OverlayWindow`, `WS_EX_NOACTIVATE`
-so it never steals focus) shows a live waveform, a timer, and the Prompting toggle.
+so it never steals focus) shows a live waveform, a timer, and the Prompting toggle. It
+positions at the bottom-center of the monitor the cursor is on; an opt-in setting anchors
+it just below the focused app's text caret instead (`GetGUIThreadInfo`, visible-caret flag
+required, mouse-position fallback).
 
 ## Engines
 
@@ -33,7 +36,7 @@ time and swaps implementations based on the selected model profile:
 
 | Engine | Backend | Notes |
 |--------|---------|-------|
-| `WhisperEngine` | Whisper.net (whisper.cpp) | The default. Runtime auto-detect: CUDA → Vulkan → CPU. |
+| `WhisperEngine` | Whisper.net (whisper.cpp) | The default. Runtime auto-detect: CUDA (if the pack is installed) → Vulkan (bundled) → CPU. |
 | `SherpaOnnxEngine` | SherpaOnnx (SenseVoice) | Legacy — only reachable via old settings. |
 | `OpenRouterEngine` | OpenRouter audio API | Opt-in cloud transcription. |
 
@@ -41,6 +44,15 @@ time and swaps implementations based on the selected model profile:
 (`BestOf=1`), no context carry-over between recordings, temperature 0 with the standard
 0.2 fallback increment (so a repetition loop can re-decode), physical-core thread count
 capped at 8, and an off-the-load-path warmup so the UI shows "Ready" immediately.
+
+The processor is built with the user's actual language and vocabulary up front
+(`SetLanguageHint` / `SetVocabularyPrompt`, forwarded on engine creation) so the first
+transcription after any load — including idle-unload reloads — never pays a rebuild.
+The warmup task is tracked and cancel-awaited before the processor is disposed, rebuilt,
+or used for a real transcription: `WhisperProcessor` wraps a single native state, so
+concurrent `ProcessAsync` calls (or a dispose mid-processing) corrupt or throw. If a
+wedged warmup outlives the bounded wait, the engine abandons the processor rather than
+disposing it — a leaked model beats a lost dictation.
 
 **Idle unload:** the app lives in the tray, and a loaded model holds hundreds of MB to
 multiple GB of RAM. After 15 minutes without a transcription, `TranscriptionService`
@@ -58,6 +70,34 @@ still on a retired value to the closest kept one.
 
 Models download on demand from HuggingFace (`ModelDownloadService`: HTTP range resume,
 retries with backoff) into `%AppData%\Talkty\Models\`.
+
+## The CUDA pack
+
+The installer ships the Vulkan backend only (it accelerates NVIDIA, AMD and Intel GPUs);
+the CUDA runtime — ~578 MB uncompressed, most of it `cublasLt` — is an optional in-app
+download handled by `CudaPackService`. Settings > Behavior offers it when GPU mode is on,
+an NVIDIA driver is present (nvidia-smi/nvml in System32), and the pack files are missing.
+
+Design points worth keeping intact:
+
+- **One manifest.** `CudaPackService.RequiredFiles` is the single list of CUDA files
+  (relative to the app root). `WhisperEngine.CheckCudaAvailability` checks the same list,
+  so "installed" and "loadable" can never disagree. The csproj `CopyCudaDlls` targets and
+  `installer/make-cuda-pack.ps1` mirror it — sync all of them on a CUDA version bump.
+- **Never a truncated DLL.** The zip downloads and extracts into `.cuda-pack-tmp` next to
+  the exe (same volume), and files land via `File.Move` — a rename. A crash mid-install
+  leaves a file *absent* (the offer reappears and repairs) but never *truncated*, which
+  would pass the existence checks and select the CUDA runtime "no fallback".
+- **Resumable.** Download retries with exponential backoff and resumes via HTTP Range;
+  a cancelled download keeps its partial zip and continues next time. A process-wide gate
+  serializes installs, and the Settings window cancels its download on close.
+- **Restart to activate.** Whisper.net picks its native runtime at first load and can't
+  swap in-process; `App.Restart()` relaunches with `--restarted`, which makes the new
+  instance wait (up to 10 s) on the single-instance mutex instead of exiting while the
+  old instance finishes disposing a multi-GB model.
+
+The pack zip is built by `installer/make-cuda-pack.ps1` and uploaded once to the
+version-independent release tag `cuda-pack-cu13`.
 
 ## Vocabulary: the two-layer system
 
@@ -88,6 +128,14 @@ It is the most test-covered class in the repo — edge cases live in `Talkty.Tes
   `SetForegroundWindow`) only runs if the user actually switched apps.
 - Modifier keys are explicitly flushed before the synthetic Ctrl+V, and the clipboard is
   re-set right before the paste.
+- Every paste returns a `PasteOutcome`; anything but `Pasted` surfaces as a toast telling
+  the user the text is on the clipboard and why. Elevated targets are detected via the
+  process token (`TokenElevation`) — Windows UIPI silently drops keystrokes sent to an
+  admin window from a non-elevated process, which used to look like a successful paste.
+- Opt-in clipboard restore: the pre-recording clipboard text is snapshotted before
+  anything overwrites it and put back shortly after a successful paste — but only if the
+  clipboard still holds the transcription, so a rapid follow-up dictation is never
+  clobbered by a stale restore.
 
 ## Prompting
 

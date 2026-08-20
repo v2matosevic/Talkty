@@ -6,7 +6,7 @@
 # named exactly:
 #   TalktyCudaPack-cu13-win-x64.zip
 # (CudaPackService.PackUrl points at that tag/asset; the tag is version-independent
-# so app releases never need to re-upload ~250MB.)
+# so app releases never need to re-upload ~450MB.)
 #
 # Zip layout mirrors the app install dir:
 #   cublas64_13.dll / cublasLt64_13.dll / cudart64_13.dll   (app root)

@@ -141,8 +141,11 @@ public static class Constants
 
     /// <summary>
     /// Delay after a successful auto-paste before restoring the user's previous clipboard
-    /// (when that option is on). Apps consume WM_PASTE synchronously within a few ms;
-    /// 300ms leaves generous headroom for slow Electron apps.
+    /// (when that option is on). Apps consume WM_PASTE synchronously within a few ms; 500ms
+    /// leaves headroom for slow Electron apps. Known limitation: a target that reads the
+    /// clipboard even later (stalled UI thread, some RDP sessions) would paste the restored
+    /// old text — the restore path additionally verifies the clipboard still holds our
+    /// transcription before touching it, which caps the damage to "no restore".
     /// </summary>
-    public const int ClipboardRestoreDelayMs = 300;
+    public const int ClipboardRestoreDelayMs = 500;
 }

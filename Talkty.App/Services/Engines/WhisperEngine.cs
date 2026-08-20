@@ -33,47 +33,29 @@ public class WhisperEngine : ITranscriptionEngine
     public string? BackendInfo { get; private set; }
 
     /// <summary>
-    /// Check if CUDA runtime DLLs are available.
-    /// CUDA DLLs must be in the main app directory for Windows DLL loader to find them.
+    /// Check if CUDA runtime DLLs are available. The file list is
+    /// <see cref="CudaPackService.RequiredFiles"/> — the single manifest shared with the
+    /// in-app pack installer, so "installed" and "loadable" can never disagree.
     /// </summary>
     private static bool CheckCudaAvailability()
     {
         try
         {
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var cudaRuntimePath = Path.Combine(baseDir, "runtimes", "cuda", "win-x64");
-
-            Log.Debug($"Checking CUDA availability...");
-            Log.Debug($"  App directory: {baseDir}");
-            Log.Debug($"  CUDA runtime path: {cudaRuntimePath}");
-
-            // ggml-cuda-whisper.dll should be in runtimes/cuda/win-x64 (from NuGet)
-            var whisperCudaDll = Path.Combine(cudaRuntimePath, "ggml-cuda-whisper.dll");
-
-            // CUDA runtime DLLs (cublas, cudart) must be in main app directory
-            // for Windows DLL loader to find them when ggml-cuda-whisper.dll loads
-            var cudaDlls = new[]
-            {
-                ("cublas64_13.dll", baseDir),
-                ("cublasLt64_13.dll", baseDir),
-                ("cudart64_13.dll", baseDir),
-                ("ggml-cuda-whisper.dll", cudaRuntimePath)
-            };
-
             var foundDlls = new List<string>();
             var missingDlls = new List<string>();
 
-            foreach (var (dll, searchPath) in cudaDlls)
+            foreach (var relative in CudaPackService.RequiredFiles)
             {
-                var dllPath = Path.Combine(searchPath, dll);
+                var dllPath = Path.Combine(baseDir, relative);
                 if (File.Exists(dllPath))
                 {
                     var size = new FileInfo(dllPath).Length / (1024.0 * 1024.0);
-                    foundDlls.Add($"{dll} ({size:F1} MB)");
+                    foundDlls.Add($"{Path.GetFileName(relative)} ({size:F1} MB)");
                 }
                 else
                 {
-                    missingDlls.Add($"{dll} (expected in {searchPath})");
+                    missingDlls.Add(relative);
                 }
             }
 
@@ -364,32 +346,91 @@ public class WhisperEngine : ITranscriptionEngine
     }
 
     /// <summary>
-    /// Cancels any in-flight warmup and waits for it to finish so the processor it runs on
-    /// can be disposed safely. Bounded wait — warmup itself has a 5s internal timeout.
-    /// Warmup never takes <see cref="_lock"/>, so calling this with or without the lock
-    /// held cannot deadlock.
+    /// Cancels any in-flight warmup and waits (bounded) for it to finish so the processor it
+    /// runs on can be disposed or reused safely. Returns true when warmup is confirmed done.
+    ///
+    /// The task/cts pair is snapshotted under <see cref="_lock"/> so a concurrent
+    /// <see cref="LoadModelAsync"/> (which disposes and replaces the cts under the same lock)
+    /// can never hand us a mismatched pair; Cancel on an already-disposed cts is swallowed.
+    /// Warmup itself never takes the lock, so calling this with or without the lock held
+    /// cannot deadlock (Monitor is reentrant).
     /// </summary>
-    private void CancelWarmupAndWait()
+    private bool CancelWarmupAndWait()
     {
-        var task = _warmupTask;
-        if (task == null || task.IsCompleted) return;
+        Task? task;
+        CancellationTokenSource? cts;
+        lock (_lock)
+        {
+            task = _warmupTask;
+            cts = _warmupCts;
+        }
+        if (task == null || task.IsCompleted) return true;
 
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException) { /* replaced by a concurrent load — task is winding down */ }
+
+        bool finished;
         try
         {
-            _warmupCts?.Cancel();
-            if (!task.Wait(TimeSpan.FromSeconds(6)))
-            {
-                Log.Warning("Warmup did not finish within 6s — proceeding with dispose anyway");
-            }
+            finished = task.Wait(TimeSpan.FromSeconds(6));
         }
         catch (AggregateException)
         {
-            // Warmup swallows its own exceptions; nothing real can surface here.
+            // Warmup swallows its own exceptions; a fault still means it has finished.
+            finished = true;
         }
-        finally
+
+        if (!finished)
         {
-            _warmupTask = null;
+            Log.Warning("Warmup did not finish within 6s — its processor must not be disposed");
         }
+
+        lock (_lock)
+        {
+            if (_warmupTask == task) _warmupTask = null;
+        }
+        return finished;
+    }
+
+    /// <summary>
+    /// Async twin of <see cref="CancelWarmupAndWait"/> for the transcription path: a real
+    /// transcription supersedes the warmup, and <see cref="WhisperProcessor"/> holds a single
+    /// native state — two concurrent ProcessAsync calls on one instance corrupt it. Called
+    /// before every ProcessAsync so a short dictation right after an idle-unload reload can't
+    /// overlap the still-running warmup (the language-hint fix removed the processor rebuild
+    /// that used to serialize them by accident).
+    /// </summary>
+    private async Task<bool> CancelWarmupAndWaitAsync()
+    {
+        Task? task;
+        CancellationTokenSource? cts;
+        lock (_lock)
+        {
+            task = _warmupTask;
+            cts = _warmupCts;
+        }
+        if (task == null || task.IsCompleted) return true;
+
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException) { }
+
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromSeconds(6));
+        }
+        catch (TimeoutException)
+        {
+            // Native decode is wedged — running a second ProcessAsync on the same state
+            // would corrupt it. The caller fails the transcription instead.
+            Log.Error("Warmup still running after cancel + 6s wait — refusing concurrent processing");
+            return false;
+        }
+
+        lock (_lock)
+        {
+            if (_warmupTask == task) _warmupTask = null;
+        }
+        return true;
     }
 
     public async Task<TranscriptionResult> TranscribeAsync(
@@ -442,6 +483,19 @@ public class WhisperEngine : ITranscriptionEngine
             {
                 Log.Debug($"Processor rebuild needed: languageChanged={languageChanged}, vocabularyChanged={vocabularyChanged}");
                 await RebuildProcessor(targetLanguage, vocabularyPrompt);
+            }
+
+            // A real transcription supersedes the warmup — wind it down first. The processor
+            // holds a single native state; two concurrent ProcessAsync calls corrupt it.
+            if (!await CancelWarmupAndWaitAsync())
+            {
+                return new TranscriptionResult
+                {
+                    Success = false,
+                    ErrorMessage = "Engine is busy — please try again",
+                    Timestamp = startTime,
+                    Duration = DateTime.Now - startTime
+                };
             }
 
             Log.Debug($"Starting Whisper processing with {options.TimeoutMs}ms timeout...");
@@ -600,13 +654,22 @@ public class WhisperEngine : ITranscriptionEngine
         {
             // The warmup may still be processing on the current processor — let it wind
             // down before disposing, or Dispose throws "Cannot dispose while processing".
-            CancelWarmupAndWait();
+            var warmupDone = CancelWarmupAndWait();
 
             lock (_lock)
             {
                 if (_factory == null || CurrentProfile == null) return;
 
-                _processor?.Dispose();
+                if (warmupDone)
+                {
+                    _processor?.Dispose();
+                }
+                else
+                {
+                    // Deliberate leak: disposing a processor whose native decode is wedged
+                    // throws/corrupts. One abandoned processor beats a lost dictation.
+                    Log.Warning("Abandoning busy processor instead of disposing it");
+                }
 
                 var threads = GetOptimalThreadCount();
                 _processor = BuildProcessor(_factory, language, threads, CurrentProfile.Value.SupportsAutoDetect(), vocabularyPrompt);
@@ -621,7 +684,17 @@ public class WhisperEngine : ITranscriptionEngine
     private void DisposeInternal()
     {
         // Wind down any in-flight warmup before touching the processor it runs on.
-        CancelWarmupAndWait();
+        if (!CancelWarmupAndWait())
+        {
+            // Native decode is wedged mid-flight: disposing the processor throws and
+            // disposing the factory under a live processor is native-unsafe. Abandon both —
+            // one leaked model beats a crash; process teardown reclaims the memory.
+            Log.Error("Warmup still running — abandoning processor and factory instead of disposing");
+            _processor = null;
+            _factory = null;
+            CurrentProfile = null;
+            return;
+        }
 
         if (_processor != null)
         {
@@ -645,6 +718,8 @@ public class WhisperEngine : ITranscriptionEngine
         lock (_lock)
         {
             DisposeInternal();
+            _warmupCts?.Dispose();
+            _warmupCts = null;
         }
         GC.SuppressFinalize(this);
     }

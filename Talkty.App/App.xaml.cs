@@ -27,10 +27,12 @@ public partial class App : Application
             }
 
             Log.Info("Restarting application (CUDA pack activation)");
+            // --restarted makes the new instance WAIT on the single-instance mutex instead
+            // of exiting if this instance's teardown (native model dispose) outlives the delay.
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/c ping -n 2 127.0.0.1 >nul & start \"\" \"{exePath}\"",
+                Arguments = $"/c ping -n 2 127.0.0.1 >nul & start \"\" \"{exePath}\" --restarted",
                 CreateNoWindow = true,
                 UseShellExecute = false,
             });
@@ -83,15 +85,37 @@ public partial class App : Application
 
         if (!createdNew)
         {
-            Log.Warning("Another instance is already running. Exiting.");
-            MessageBox.Show(
-                "Talkty is already running. Check your system tray.",
-                "Talkty",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // Self-restart (CUDA pack activation): the old instance may still be tearing
+            // down a multi-GB native model when we launch — wait for its mutex instead of
+            // bailing, or the restart race leaves the user with NO running instance.
+            var isRestart = e.Args.Contains("--restarted");
+            var acquired = false;
+            if (isRestart)
+            {
+                Log.Info("Restarted instance — waiting up to 10s for the old instance to exit");
+                try
+                {
+                    acquired = _mutex.WaitOne(TimeSpan.FromSeconds(10));
+                }
+                catch (AbandonedMutexException)
+                {
+                    // Old instance died without releasing — the mutex is ours now.
+                    acquired = true;
+                }
+            }
 
-            Shutdown();
-            return;
+            if (!acquired)
+            {
+                Log.Warning("Another instance is already running. Exiting.");
+                MessageBox.Show(
+                    "Talkty is already running. Check your system tray.",
+                    "Talkty",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                Shutdown();
+                return;
+            }
         }
 
         _ownsMutex = true;

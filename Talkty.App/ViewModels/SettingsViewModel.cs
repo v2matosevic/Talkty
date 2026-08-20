@@ -92,6 +92,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                             && !_cudaPackService.IsCudaInstalled;
     }
 
+    private CancellationTokenSource? _cudaDownloadCts;
+
     private bool CanDownloadCudaPack() => !IsCudaPackDownloading;
 
     [RelayCommand(CanExecute = nameof(CanDownloadCudaPack))]
@@ -100,6 +102,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsCudaPackDownloading = true;
         CudaPackProgress = 0;
         CudaPackStatus = "Downloading…";
+        _cudaDownloadCts?.Dispose();
+        _cudaDownloadCts = new CancellationTokenSource();
         try
         {
             var progress = new Progress<double>(p =>
@@ -108,13 +112,18 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 CudaPackStatus = $"Downloading… {p:P0}";
             });
 
-            var (success, message) = await _cudaPackService.DownloadAndInstallAsync(progress);
+            var (success, message) = await _cudaPackService.DownloadAndInstallAsync(
+                progress, _cudaDownloadCts.Token);
             CudaPackStatus = message;
             if (success)
             {
                 CudaPackInstalledPendingRestart = true;
                 UpdateCudaPackOffer();
             }
+        }
+        catch (OperationCanceledException)
+        {
+            CudaPackStatus = "Download cancelled — it will resume where it left off.";
         }
         finally
         {
@@ -744,6 +753,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        // Abort an in-flight CUDA pack download — it must not outlive the Settings window
+        // (a headless download plus a re-opened window could otherwise run two installers
+        // over the same DLLs). The partial download is kept and resumes next time.
+        _cudaDownloadCts?.Cancel();
+        _cudaDownloadCts?.Dispose();
 
         // Unsubscribe from audio level events
         _audioCaptureService.AudioLevelChanged -= OnAudioLevelChanged;

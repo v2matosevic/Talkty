@@ -12,6 +12,9 @@
 #   cublas64_13.dll / cublasLt64_13.dll / cudart64_13.dll   (app root)
 #   runtimes/cuda/win-x64/*.dll                             (Whisper.net CUDA natives)
 #
+# The authoritative file manifest lives in CudaPackService.RequiredFiles (shared with
+# WhisperEngine's availability check) — keep the lists below in sync on a CUDA version bump.
+#
 # Sources, in order of preference:
 #   1) -SourceDir <fat publish or install dir> (e.g. a -p:BundleCuda=true publish, or B:\Talkty)
 #   2) NuGet cache (whisper.net.runtime.cuda) + CUDA Toolkit v13.1 bin

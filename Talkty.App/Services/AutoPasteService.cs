@@ -64,6 +64,12 @@ public class AutoPasteService : IAutoPasteService
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr hObject);
 
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetTokenInformation(IntPtr tokenHandle, int tokenInformationClass, out uint tokenInformation, int tokenInformationLength, out int returnLength);
+
     [DllImport("user32.dll")]
     private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
 
@@ -85,6 +91,8 @@ public class AutoPasteService : IAutoPasteService
     }
 
     private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    private const uint TOKEN_QUERY = 0x0008;
+    private const int TokenElevationClass = 20; // TOKEN_INFORMATION_CLASS.TokenElevation
     private const int ASFW_ANY = -1;
     private const int SW_RESTORE = 9;
     private const int SW_SHOW = 5;
@@ -254,15 +262,17 @@ public class AutoPasteService : IAutoPasteService
             sw.Stop();
             Log.Info($"=== AUTO-PASTE END === Total: {sw.ElapsedMilliseconds}ms, class: \"{windowClass}\", process: \"{processName}\"");
 
-            // We still try (Talkty itself might be elevated, in which case it works), but
-            // in the normal non-elevated case UIPI drops the keystrokes without any error —
-            // report it so the user hears "press Ctrl+V yourself" instead of silence.
-            return isElevated ? PasteOutcome.TargetElevated : PasteOutcome.Pasted;
+            // We still try, but when the target is elevated and we are not, UIPI drops the
+            // keystrokes without any error — report it so the user hears "press Ctrl+V
+            // yourself" instead of silence. An elevated Talkty pastes fine, so no warning then.
+            return isElevated && !Environment.IsPrivilegedProcess
+                ? PasteOutcome.TargetElevated
+                : PasteOutcome.Pasted;
         }
         catch (Exception ex)
         {
             Log.Error("Failed to simulate paste", ex);
-            return PasteOutcome.FocusRestoreFailed;
+            return PasteOutcome.Failed;
         }
     }
 
@@ -346,6 +356,11 @@ public class AutoPasteService : IAutoPasteService
                     int size = exePath.Capacity;
                     if (QueryFullProcessImageName(hProcess, 0, exePath, ref size))
                         processName = System.IO.Path.GetFileNameWithoutExtension(exePath.ToString());
+
+                    // PROCESS_QUERY_LIMITED_INFORMATION is granted to medium-IL callers even
+                    // for elevated targets (that's its purpose), so an OpenProcess success
+                    // proves nothing about elevation — ask the process token instead.
+                    isElevated = IsProcessElevated(hProcess);
                 }
                 finally
                 {
@@ -354,14 +369,33 @@ public class AutoPasteService : IAutoPasteService
             }
             else
             {
-                // OpenProcess failed — likely the target is elevated (admin) and we're not.
-                // UIPI will block SendInput to this window.
+                // OpenProcess failed outright — a protected/PPL or cross-session process.
+                // UIPI will block SendInput to this window; treat like elevated.
                 isElevated = true;
-                processName = "(access denied — likely elevated)";
+                processName = "(access denied — protected process)";
             }
         }
 
         return (windowClass, processName, isElevated);
+    }
+
+    /// <summary>
+    /// True when the process behind <paramref name="hProcess"/> runs with an elevated token.
+    /// TOKEN_QUERY on an elevated same-user process is granted to medium-IL callers.
+    /// </summary>
+    private static bool IsProcessElevated(IntPtr hProcess)
+    {
+        if (!OpenProcessToken(hProcess, TOKEN_QUERY, out var hToken))
+            return false;
+        try
+        {
+            return GetTokenInformation(hToken, TokenElevationClass, out uint elevated, sizeof(uint), out _)
+                   && elevated != 0;
+        }
+        finally
+        {
+            CloseHandle(hToken);
+        }
     }
 
     /// <summary>

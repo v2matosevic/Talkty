@@ -43,6 +43,9 @@ public partial class OverlayWindow : Window
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
 
+    /// <summary>GUITHREADINFO.flags bit: set when the caret is actually visible.</summary>
+    private const uint GUI_CARETBLINKING = 0x1;
+
     /// <summary>Vertical gap (device px) between the caret line / mouse pointer and the pill.</summary>
     private const int NearCursorOffsetPx = 28;
 
@@ -171,7 +174,9 @@ public partial class OverlayWindow : Window
         var threadId = GetWindowThreadProcessId(foreground, out _);
         var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
         if (!GetGUIThreadInfo(threadId, ref info)) return false;
-        if (info.hwndCaret == IntPtr.Zero) return false;
+        // Require a VISIBLE caret — apps can keep a caret registered (hwndCaret set) while
+        // it's hidden, and its stale rect would anchor the pill somewhere meaningless.
+        if (info.hwndCaret == IntPtr.Zero || (info.flags & GUI_CARETBLINKING) == 0) return false;
 
         // rcCaret is in client coordinates of hwndCaret — convert to screen.
         var topLeft = new POINT { X = info.rcCaret.Left, Y = info.rcCaret.Top };

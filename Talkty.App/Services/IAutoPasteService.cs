@@ -22,6 +22,9 @@ public enum PasteOutcome
     /// did not arrive.
     /// </summary>
     TargetElevated,
+
+    /// <summary>An unexpected error occurred while pasting.</summary>
+    Failed,
 }
 
 /// <summary>

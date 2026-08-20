@@ -737,8 +737,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                                     "That app runs as administrator, so Windows blocks auto-paste — press Ctrl+V to paste.",
                                 PasteOutcome.NoTarget =>
                                     "The window to paste into is gone — text is on the clipboard (Ctrl+V).",
-                                _ =>
+                                PasteOutcome.FocusRestoreFailed =>
                                     "Couldn't focus the target window — text is on the clipboard (Ctrl+V).",
+                                _ =>
+                                    "Auto-paste failed — text is on the clipboard (Ctrl+V).",
                             };
                             RequestShowToast?.Invoke(this, new ToastEventArgs
                             {
@@ -754,9 +756,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
                             await Task.Delay(Constants.ClipboardRestoreDelayMs);
                             Application.Current.Dispatcher.Invoke(() =>
                             {
-                                _clipboardService.SetText(clipboardToRestore);
+                                // Only restore if the clipboard still holds OUR transcription.
+                                // If the user (or a rapid follow-up dictation) already changed
+                                // it, restoring would clobber the newer content.
+                                if (_clipboardService.GetTextOrNull() == textForClipboard)
+                                {
+                                    _clipboardService.SetText(clipboardToRestore);
+                                    Log.Info("Previous clipboard content restored after paste");
+                                }
+                                else
+                                {
+                                    Log.Debug("Clipboard changed since paste — skipping restore");
+                                }
                             });
-                            Log.Info("Previous clipboard content restored after paste");
                         }
                     }
                 }

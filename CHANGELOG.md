@@ -2,6 +2,13 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.3.2] - 2026-09-05
+
+- Words added in Settings now reach local Whisper transcription in English, with personal terms prioritized over the starter vocabulary.
+- Vocabulary edits apply to the next recording and survive idle model reloads. Hints stay short, with whole words preserved.
+- Recording controls and history are easier to use at different window sizes; cancellation and microphone activity have clearer feedback.
+- History saves stay in order, audio meter updates no longer queue behind a busy window, and a microphone test cannot overlap dictation.
+
 ## [1.3.1] - 2026-09-05
 
 - Cancelled prompting no longer pastes the raw transcription. Pending auto-paste also respects cancellation.

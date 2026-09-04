@@ -2,6 +2,12 @@
 
 Local improvement pass, started 4 September 2026 and completed 5 September 2026.
 
+Current handoff: version 1.3.2 supersedes this historical 1.3.1 installation.
+Read [VOCABULARY-ACCURACY.md](VOCABULARY-ACCURACY.md) for the accuracy fix and final
+delivery evidence, and [UX-PERFORMANCE-2026-09.md](UX-PERFORMANCE-2026-09.md) for the
+desktop changes. The combined app is installed, with 99 tests passed. Public release
+metadata remains at 1.3.0.
+
 ## Changes
 
 - Each new recording releases the previous microphone device. Failed starts also release it. Late callbacks from a retired device cannot add samples to, or complete, a new recording.
@@ -43,7 +49,7 @@ Cancellation prevents pending work. It cannot undo paste input already sent, or 
 
 ## Installation on this PC
 
-Version 1.3.1 was installed at `B:/Talkty` on 5 September 2026 at the user's request. The Inno Setup upgrade exited successfully without requiring a Windows restart, and Windows now registers version 1.3.1.
+Version 1.3.1 was installed at `B:/Talkty` on 5 September 2026 at the user's request. The Inno Setup upgrade exited successfully without requiring a Windows restart, and Windows registered version 1.3.1 at that point. The later 1.3.2 upgrade is recorded in the current handoff above.
 
 All 488 installed payload files match the published build by SHA-256. Settings (excluding launch counters) and history match their pre-install fingerprints. The existing CUDA pack remains present. The installer is `installer/output/TalktySetup-1.3.1.exe`; installation and verification logs are alongside it.
 
@@ -57,5 +63,6 @@ No GitHub release has been published. `version.json` remains at the currently pu
 
 - Collect Marko's live dictation/cancellation feedback before changing microphone processing or decoding settings.
 - Use representative audio and expected transcripts to assess recognition accuracy and latency. Existing code and headless tests do not establish those measurements.
-- Public release remains separate: upload the 1.3.1 installer, then update `version.json` with the matching version and release notes. Do not announce an update before its installer is available.
+- Keep the installed 1.3.2 build and personal vocabulary corrections. Collect repeatable mishearings before switching away from Turbo.
+- Public release remains separate: when authorized, publish the verified 1.3.2 installer, then update `version.json` with matching release notes. Do not announce an update before its installer is available.
 - The 1.3.0 installer remains in `installer/output` as a rollback artifact. Installation logs and fingerprints contain no settings values or audio.

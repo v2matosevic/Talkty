@@ -114,14 +114,18 @@ version-independent release tag `cuda-pack-cu13`.
 
 ## Vocabulary: the two-layer system
 
-1. **Prompt biasing** — a deliberately short natural sentence fed to Whisper's
-   `initial_prompt`. Short because Whisper regurgitates prompt content during silence;
-   every extra term is a hallucination risk. Applied only when the language is English
-   (an English prompt degrades non-English decoding).
+1. **Prompt biasing**: `VocabularyPromptBuilder` selects whole terms from saved
+   `CustomVocabulary`, prioritizing user additions, then selected high-value presets.
+   It normalizes whitespace, deduplicates case-insensitively and caps hints at 200
+   UTF-8 bytes. Startup, each recording and settings changes share this builder.
+   Local Whisper with explicitly selected English is the supported path; auto-language,
+   other languages and other engines receive no English hint. Pending reload hints
+   remain separate from the vocabulary actually applied to the current processor.
 2. **Deterministic replacements** — case-insensitive, word-boundary regex replacements
    applied *after* transcription ("cube cuddle" → `kubectl`). These cannot hallucinate,
-   so anything that can live here instead of the prompt, does. Keys must never be real
-   English words — that rewrites legitimate speech.
+   so predictable spelling corrections can live here. Global defaults must not replace
+   ambiguous real English words. Explicit personal phrase corrections belong in that
+   user's settings rather than the defaults. See [VOCABULARY-ACCURACY.md](VOCABULARY-ACCURACY.md).
 
 `TextPostProcessor` also strips non-speech tokens (`[MUSIC]`, `♪`) anywhere and
 YouTube-closing hallucinations ("Thanks for watching") only at the very end of the

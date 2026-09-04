@@ -65,3 +65,30 @@ for this verification.
 
 Installer, manifest, fingerprint results and logs are in ignored `installer/output/`.
 Public release metadata remains at 1.3.0; no public release was cut.
+
+## Final personal correction and handoff
+
+During wrap-up, Marko reported that "Claude Code" sometimes became "cloud code".
+The product name is correctly written as two words. Added "Claude Code" to his saved
+vocabulary and these case-insensitive personal replacement rules:
+
+- `cloud code` => `Claude Code`
+- `claude code` => `Claude Code`
+
+These are personal settings, not new global defaults. An intentionally spoken
+"cloud code" will also match this explicit rule. Standalone "cloud" remains unchanged.
+The installed TextPostProcessor verified both phrase corrections and preserved
+"Deploy to the cloud." and "The cloud codebase.". Settings were written atomically
+while the app was stopped between recordings; the history hash remained unchanged
+during this operation. Restart at 00:50 verified 50 history entries, CUDA Turbo,
+Alt+Q and completed warmup. No rebuild was needed for these personal settings.
+
+Source commits: vocabulary `32f922c`, release record `a39c391`, desktop UI `b18a390`,
+and UI delivery documentation `e0b49aa`. Automatic push review could not attribute
+these commits and returned `ask-human` for all four, so GitHub sync remains pending
+confirmation under the global working rules. The app installation is complete.
+
+Next session: collect actual repeatable mishearings, retain focused personal terms,
+and compare the same recordings before/after any model or decoding change. Recognition
+accuracy remains unmeasured on a reference corpus. The optional native UI check is in
+the desktop document. There is no outstanding installation step.

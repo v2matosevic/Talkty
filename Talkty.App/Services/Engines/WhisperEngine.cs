@@ -16,6 +16,7 @@ public class WhisperEngine : ITranscriptionEngine
     private readonly object _lock = new();
     private string _currentLanguage = "en";
     private string? _currentVocabularyPrompt;
+    private string? _vocabularyHint;
     private string? _languageHint;
     private bool _useGpu = false;
 
@@ -197,7 +198,9 @@ public class WhisperEngine : ITranscriptionEngine
     /// </summary>
     public void SetVocabularyPrompt(string? prompt)
     {
-        _currentVocabularyPrompt = prompt;
+        // A settings hint is not yet applied to the live processor. Keep them separate
+        // so the next recording still detects the change and rebuilds when needed.
+        _vocabularyHint = prompt;
     }
 
     /// <summary>
@@ -285,6 +288,7 @@ public class WhisperEngine : ITranscriptionEngine
                     _currentLanguage = profile.SupportsAutoDetect() ? (_languageHint ?? "auto") : "en";
 
                     var threads = GetOptimalThreadCount();
+                    _currentVocabularyPrompt = _vocabularyHint;
                     Log.Debug($"Building WhisperProcessor with language={_currentLanguage}, threads={threads}, vocabulary={(!string.IsNullOrWhiteSpace(_currentVocabularyPrompt) ? $"{_currentVocabularyPrompt.Length} chars" : "none")}...");
                     _processor = BuildProcessor(_factory, _currentLanguage, threads, profile.SupportsAutoDetect(), _currentVocabularyPrompt);
 

@@ -449,7 +449,7 @@
                                              Margin="0,0,0,8"/>
 
                                     <Grid>
-                                        <TextBlock Text="Comma-separated terms that help the AI recognize coding words correctly."
+                                        <TextBlock Text="Comma-separated spelling hints for local Whisper in English. Your added words take priority; keep the list focused on words it mishears. Changes apply to the next recording."
                                                    FontSize="10"
                                                    Foreground="{StaticResource Zinc500Brush}"
                                                    TextWrapping="Wrap"

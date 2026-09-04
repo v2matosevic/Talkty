@@ -9,16 +9,6 @@ namespace Talkty.App.Models;
 public static class DefaultVocabulary
 {
     /// <summary>
-    /// Contextual prompt for Whisper's initial_prompt. Deliberately short — Whisper
-    /// REGURGITATES prompt content during silence or ambiguous audio, so every extra
-    /// term in here is a hallucination risk. Only include terms that Whisper genuinely
-    /// mishears (acoustically ambiguous proper nouns). Everything else relies on the
-    /// deterministic replacement layer, which can't hallucinate.
-    /// </summary>
-    public static string PromptContext { get; } =
-        "I'm coding with Claude from Anthropic, using kubectl, PostgreSQL, and TypeScript.";
-
-    /// <summary>
     /// Post-transcription text replacements for words that Whisper consistently misrecognizes.
     /// Key = what Whisper produces (case-insensitive match), Value = correct replacement.
     /// These are applied deterministically after transcription — 100% reliable.
@@ -82,8 +72,8 @@ public static class DefaultVocabulary
 
     /// <summary>
     /// Curated list of coding and technology terms for the vocabulary prompt.
-    /// These are joined into the contextual prompt and also stored in settings
-    /// for user customization.
+    /// Stored in settings for customization. VocabularyPromptBuilder selects a bounded
+    /// subset for Whisper, prioritizing user additions over this starter catalog.
     /// </summary>
     public static IReadOnlyList<string> CodingTerms { get; } =
     [

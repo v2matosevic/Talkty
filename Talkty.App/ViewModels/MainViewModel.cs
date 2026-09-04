@@ -139,10 +139,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Pre-set vocabulary prompt so the processor is built with it from the start
             // (avoids a processor rebuild on the first transcription). English-only — must
             // match the per-transcription gate or the first transcription forces a rebuild.
-            if (settings.UseCustomVocabulary && !settings.AutoDetectLanguage && settings.Language == "en")
-            {
-                _transcriptionService.SetVocabularyPrompt(DefaultVocabulary.PromptContext);
-            }
+            _transcriptionService.SetVocabularyPrompt(VocabularyPromptBuilder.Build(settings));
 
             // Pre-set the language too — same reason as the vocabulary prompt: the processor
             // must be built with the language actually used at transcription time, or the
@@ -586,13 +583,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var startTime = DateTime.Now;
             var language = _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language;
 
-            // Build vocabulary prompt — use contextual sentences for stronger Whisper bias.
-            // English-only: an English initial_prompt biases non-English (and auto-detect)
-            // decoding toward English tokens and prompt regurgitation.
-            string? vocabularyPrompt = null;
-            if (_settingsService.Settings.UseCustomVocabulary && language == "en")
+            // Use the same bounded, saved vocabulary at startup and on each recording.
+            var vocabularyPrompt = VocabularyPromptBuilder.Build(_settingsService.Settings);
+            if (vocabularyPrompt != null)
             {
-                vocabularyPrompt = DefaultVocabulary.PromptContext;
                 Log.Debug($"Vocabulary prompt: {vocabularyPrompt.Length} chars");
             }
 
@@ -1118,6 +1112,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Keep the engine's language hint in sync so idle-unload reloads build the
         // processor with the right language directly.
         _transcriptionService.SetLanguageHint(settings.AutoDetectLanguage ? "auto" : settings.Language);
+
+        // Refresh the reload hint too; the live Whisper processor detects and applies
+        // vocabulary changes on the next recording, without changing the selected model.
+        _transcriptionService.SetVocabularyPrompt(VocabularyPromptBuilder.Build(settings));
 
         _settingsService.Save();
 

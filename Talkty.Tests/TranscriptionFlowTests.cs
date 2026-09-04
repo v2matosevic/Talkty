@@ -187,6 +187,63 @@ public class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task SavedVocabularyReachesStartupAndTheActualRecording() => ui.Run(async () =>
+    {
+        using var context = new Context(settings =>
+        {
+            settings.UseCustomVocabulary = true;
+            settings.CustomVocabulary = [.. DefaultVocabulary.CodingTerms, "QuillForge"];
+        });
+        var startupHint = context.Engine.VocabularyHint;
+        Assert.StartsWith("QuillForge, ", startupHint);
+        await context.Record();
+        Assert.Equal(startupHint, context.Engine.LastVocabularyPrompt);
+    });
+
+    [Fact]
+    public Task VocabularyEditsAndDisableReachNextRecordingAndReloadHint() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        var updated = new AppSettings { UseCustomVocabulary = true, CustomVocabulary = ["QuillForge"] };
+        context.ViewModel.ApplySettings(updated);
+        Assert.Equal("QuillForge", context.Engine.VocabularyHint);
+        await context.Record();
+        Assert.Equal("QuillForge", context.Engine.LastVocabularyPrompt);
+
+        updated.CustomVocabulary = ["Northstar"];
+        context.ViewModel.ApplySettings(updated);
+        await context.Record();
+        Assert.Equal("Northstar", context.Engine.LastVocabularyPrompt);
+        Assert.Equal("Northstar", context.Engine.VocabularyHint);
+
+        updated.UseCustomVocabulary = false;
+        context.ViewModel.ApplySettings(updated);
+        await context.Record();
+        Assert.Null(context.Engine.LastVocabularyPrompt);
+        Assert.Null(context.Engine.VocabularyHint);
+    });
+
+    [Theory]
+    [InlineData("hr", false)]
+    [InlineData("en", true)]
+    public Task LanguageChangeClearsEnglishHint(string language, bool auto) => ui.Run(async () =>
+    {
+        using var context = new Context(settings =>
+        {
+            settings.UseCustomVocabulary = true;
+            settings.CustomVocabulary = ["QuillForge"];
+        });
+        context.ViewModel.ApplySettings(new AppSettings
+        {
+            UseCustomVocabulary = true, CustomVocabulary = ["QuillForge"],
+            Language = language, AutoDetectLanguage = auto
+        });
+        await context.Record();
+        Assert.Null(context.Engine.VocabularyHint);
+        Assert.Null(context.Engine.LastVocabularyPrompt);
+    });
+
     private sealed class Context : IDisposable
     {
         public FakeSettings Settings { get; } = new();
@@ -199,8 +256,9 @@ public class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
         public List<string> Warnings { get; } = [];
         public List<string> Statuses { get; } = [];
 
-        public Context()
+        public Context(Action<AppSettings>? configure = null)
         {
+            configure?.Invoke(Settings.Settings);
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
                 new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
@@ -258,19 +316,22 @@ public class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
         public IReadOnlyList<string> SupportedLanguages => ["en"];
         public int Calls { get; private set; }
         public string Text { get; set; } = "Build the feature";
+        public string? VocabularyHint { get; private set; }
+        public string? LastVocabularyPrompt { get; private set; }
         public Func<CancellationToken, Action<string>?, Task<TranscriptionResult>>? Run { get; set; }
         public Task<TranscriptionResult> TranscribeAsync(float[] audioSamples, string language = "en",
             CancellationToken cancellationToken = default, Action<string>? onFirstSegment = null,
             string? vocabularyPrompt = null)
         {
             Calls++;
+            LastVocabularyPrompt = vocabularyPrompt;
             if (Run != null) return Run(cancellationToken, onFirstSegment);
             onFirstSegment?.Invoke("First part");
             return Task.FromResult(new TranscriptionResult { Success = true, Text = Text });
         }
         public Task<bool> LoadModelAsync(ModelProfile profile, string modelPath, bool useGpu = false) => Task.FromResult(true);
         public Task<bool> EnsureModelLoadedAsync() => Task.FromResult(true);
-        public void SetVocabularyPrompt(string? prompt) { }
+        public void SetVocabularyPrompt(string? prompt) => VocabularyHint = prompt;
         public void SetCloudApiKey(string? apiKey) { }
         public void SetLanguageHint(string? language) { }
         public void SetIdleUnload(bool enabled) { }

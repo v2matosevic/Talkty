@@ -8,6 +8,18 @@ delivery evidence, and [UX-PERFORMANCE-2026-09.md](UX-PERFORMANCE-2026-09.md) fo
 desktop changes. The combined app is installed, with 99 tests passed. Public release
 metadata remains at 1.3.0.
 
+## End-of-day status, 5 September 2026
+
+- Installed and ready: `B:/Talkty/Talkty.App.exe`, version 1.3.2. No installation step remains.
+- Local installer: `installer/output/TalktySetup-1.3.2.exe`. Verified publish: `Talkty.App/bin/Release/verified-1.3.2-20260905/`.
+- Completed verification: 99 tests pass in Debug and Release; three off-screen desktop sizes inspected; 488 installed payload hashes match. Confidence is high for these checks. Recognition accuracy and real microphone feel remain unmeasured.
+- Personal settings include the phrase-specific Claude Code correction. Keep the current Turbo model and those settings; the correction does not replace standalone “cloud”.
+- All implementation and delivery work is committed locally. GitHub sync awaits the explicit push approval already requested; the end-of-day documentation request does not authorize that separately blocked action.
+- Public GitHub release was checked directly: v1.3.0. Keep `version.json` at that version until a newer installer is publicly available. Publishing 1.3.2 is a separate decision, not a requirement for using the installed app.
+- Next session starts with the two-minute native recording/cancellation/history check in [UX-PERFORMANCE-2026-09.md](UX-PERFORMANCE-2026-09.md), followed by any repeatable mishearing examples. Do not repeat installation or rebuild merely to resume work.
+
+Implementation/delivery commits: `46222ca` (recording reliability), `32f922c` (vocabulary), `a39c391` (1.3.2 delivery), `b18a390` (desktop UX/performance), `e0b49aa` (installed UI evidence), `0b2a27a` (personal correction and accuracy handoff). Detailed test limits and history-preservation evidence remain in the linked documents.
+
 ## Changes
 
 - Each new recording releases the previous microphone device. Failed starts also release it. Late callbacks from a retired device cannot add samples to, or complete, a new recording.

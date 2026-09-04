@@ -92,3 +92,18 @@ Next session: collect actual repeatable mishearings, retain focused personal ter
 and compare the same recordings before/after any model or decoding change. Recognition
 accuracy remains unmeasured on a reference corpus. The optional native UI check is in
 the desktop document. There is no outstanding installation step.
+
+## End-of-day status, 2026-09-05
+
+The final read-only check confirmed installed file version `1.3.2.0`, one running
+`B:/Talkty/Talkty.App.exe` process, and a clean working tree before this status note.
+GitHub's live main ref is still `46222ca946bdc06105d0ee5c96de869942ee0233`; its latest
+published release is `v1.3.0`. Local source, installed version and public release
+are therefore deliberately recorded separately.
+
+The user requested documentation and an end to today's work after this check.
+No push approval was received, no GitHub release was created, and the app was left
+running. Pending work is GitHub sync after approval and a separate public-release
+decision. Personal dictionary rules live in the user's settings, not in the installer.
+No further setup is required for the installed app. Use `git log origin/main..HEAD`
+to see the pending commits; this final documentation adds to that range.

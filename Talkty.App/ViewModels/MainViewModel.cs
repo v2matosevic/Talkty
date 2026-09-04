@@ -10,6 +10,10 @@ namespace Talkty.App.ViewModels;
 public partial class MainViewModel : ObservableObject, IDisposable
 {
     private bool _disposed;
+    private float _latestAudioLevel;
+    private int _audioUpdatePending;
+    private Task _historySaveTask = Task.CompletedTask;
+    internal Task PendingHistorySave => _historySaveTask;
 
     private readonly ISettingsService _settingsService;
     private readonly IAudioCaptureService _audioCaptureService;
@@ -209,24 +213,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void SaveHistoryToDisk()
+    private void QueueHistorySave()
     {
-        try
-        {
-            var entries = History.Select(h => new TranscriptionHistoryEntry
+        // Snapshot on the UI thread, then persist in order. Enumerating History on a
+        // worker could race with Clear/Delete, and older writes could resurrect entries.
+        var entries = History.Select(h => new TranscriptionHistoryEntry
             {
                 Text = h.Text,
                 RawTranscription = h.RawTranscription,
                 Timestamp = h.Timestamp,
                 DurationSeconds = h.Duration.TotalSeconds
             }).ToList();
-
-            _settingsService.SaveHistory(entries);
-        }
-        catch (Exception ex)
+        _historySaveTask = _historySaveTask.ContinueWith(_ =>
         {
-            Log.Error("Failed to save history to disk", ex);
-        }
+            try { _settingsService.SaveHistory(entries); }
+            catch (Exception ex) { Log.Error("Failed to save history to disk", ex); }
+        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
     }
 
     public async Task LoadModelAsync(ModelProfile profile, bool useGpu = false)
@@ -382,10 +384,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!IsListening && _audioCaptureService.IsRecording)
+        {
+            ShowWarning("Stop the microphone test in Settings before recording.");
+            return;
+        }
+
         if (!IsModelLoaded)
         {
             Log.Warning("Model not loaded - cannot start listening");
-            StatusText = "Model not loaded";
+            StatusText = "Choose a model in Settings";
+            RequestShowSettings?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -405,6 +414,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Cancels the current recording without transcribing.
     /// Called when user presses ESC during recording.
     /// </summary>
+    [RelayCommand]
     public void CancelRecording()
     {
         if (!IsListening && !IsTranscribing)
@@ -828,8 +838,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     {
                         History.RemoveAt(History.Count - 1);
                     }
+                    QueueHistorySave();
                 });
-                _ = Task.Run(SaveHistoryToDisk);
             }
             else
             {
@@ -967,14 +977,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnAudioLevelChanged(object? sender, float level)
     {
-        // InvokeAsync (fire-and-forget) so the NAudio callback thread never blocks on UI
-        Application.Current.Dispatcher.InvokeAsync(() => AudioLevel = level);
+        if (_disposed || !IsListening) return;
+        Volatile.Write(ref _latestAudioLevel, float.IsFinite(level) ? Math.Clamp(level, 0, 1) : 0);
+        // A busy UI needs the newest meter reading, not a backlog of audio callbacks.
+        if (Interlocked.Exchange(ref _audioUpdatePending, 1) != 0) return;
+        Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            Interlocked.Exchange(ref _audioUpdatePending, 0);
+            if (!_disposed) AudioLevel = IsListening ? Volatile.Read(ref _latestAudioLevel) : 0;
+        }, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    partial void OnIsListeningChanged(bool value)
+    {
+        Volatile.Write(ref _latestAudioLevel, 0);
+        AudioLevel = 0;
     }
 
     [RelayCommand]
     public void OpenSettings()
     {
         Log.Info("OpenSettings command");
+        if (IsListening || IsTranscribing)
+        {
+            ShowWarning("Finish or cancel the current recording before opening Settings.");
+            return;
+        }
         RequestShowSettings?.Invoke(this, EventArgs.Empty);
     }
 
@@ -1050,7 +1078,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (item == null) return;
         History.Remove(item);
-        _ = Task.Run(SaveHistoryToDisk);
+        QueueHistorySave();
         Log.Info("History entry deleted");
     }
 
@@ -1060,7 +1088,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (History.Count == 0) return;
         var count = History.Count;
         History.Clear();
-        _ = Task.Run(SaveHistoryToDisk);
+        QueueHistorySave();
         Log.Info($"History cleared ({count} entries)");
         StatusText = "History cleared";
     }
@@ -1179,6 +1207,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             _transcriptionCts?.Dispose();
 
+            // Workers only use immutable snapshots, so shutdown can finish disk writes
+            // without waiting on the dispatcher or losing the last history action.
+            _historySaveTask.GetAwaiter().GetResult();
+
             Log.Info("MainViewModel disposed");
         }
 
@@ -1188,6 +1220,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 public class TranscriptionHistoryItem
 {
+    private string? _displayText;
+    private string? _displayTranscription;
+
     /// <summary>Final output that was copied/pasted: the generated prompt when Prompting ran, else the transcription.</summary>
     public string Text { get; init; } = "";
 
@@ -1203,6 +1238,11 @@ public class TranscriptionHistoryItem
 
     /// <summary>What the user actually said. For a prompted entry it's the raw field; otherwise Text already is it.</summary>
     public string Transcription => IsPrompt ? RawTranscription! : Text;
+
+    // Let the available width control ellipsis. Fixed character limits waste space
+    // in a resized window; line breaks should not expand a compact history card.
+    public string DisplayText => _displayText ??= Text.ReplaceLineEndings(" ");
+    public string DisplayTranscription => _displayTranscription ??= Transcription.ReplaceLineEndings(" ");
 
     public string Preview => Truncate(Text, 60);                       // final-output preview (prompt when prompted)
     public string TranscriptionPreview => Truncate(Transcription, 100); // "what I said"

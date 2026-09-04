@@ -9,7 +9,7 @@ namespace Talkty.Tests;
 
 // The real view-model pipeline runs on a WPF dispatcher, with no windows, microphone,
 // model, network requests, system clipboard access, or persisted user settings.
-public class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
+public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
 {
     [Theory]
     [InlineData(false)]
@@ -285,12 +285,14 @@ public class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
         public string GetModelPath(ModelProfile profile) => "";
         public bool ModelExists(ModelProfile profile) => false;
         public List<TranscriptionHistoryEntry> LoadHistory() => [];
-        public void SaveHistory(List<TranscriptionHistoryEntry> history) { }
+        public Action<List<TranscriptionHistoryEntry>>? OnSaveHistory { get; set; }
+        public void SaveHistory(List<TranscriptionHistoryEntry> history) => OnSaveHistory?.Invoke(history);
     }
 
     private sealed class FakeAudio : IAudioCaptureService
     {
-        public event EventHandler<float>? AudioLevelChanged { add { } remove { } }
+        public event EventHandler<float>? AudioLevelChanged;
+        public void EmitLevel(float level) => AudioLevelChanged?.Invoke(this, level);
         public bool IsRecording { get; private set; }
         public float[] Samples { get; set; } = [0.1f, -0.1f];
         public Func<Task<bool>> Flush { get; set; } = () => Task.FromResult(true);

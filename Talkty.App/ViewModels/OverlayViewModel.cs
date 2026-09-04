@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using System.Diagnostics;
 
 namespace Talkty.App.ViewModels;
 
@@ -26,27 +27,32 @@ public partial class OverlayViewModel : ObservableObject
     [ObservableProperty]
     private bool _isPromptMode;
 
-    private DateTime _startTime;
+    private readonly Stopwatch _elapsed = new();
     private System.Windows.Threading.DispatcherTimer? _timer;
 
     public void StartTimer()
     {
-        _startTime = DateTime.Now;
-        _timer = new System.Windows.Threading.DispatcherTimer
+        StopTimer();
+        ElapsedTime = "00:00";
+        AudioLevel = 0;
+        _elapsed.Restart();
+        _timer ??= new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(100)
+            Interval = TimeSpan.FromMilliseconds(250)
         };
-        _timer.Tick += (s, e) =>
-        {
-            var elapsed = DateTime.Now - _startTime;
-            ElapsedTime = elapsed.ToString(@"mm\:ss");
-        };
+        _timer.Tick -= OnTimerTick;
+        _timer.Tick += OnTimerTick;
         _timer.Start();
     }
 
     public void StopTimer()
     {
         _timer?.Stop();
-        _timer = null;
+        _elapsed.Stop();
     }
+
+    private void OnTimerTick(object? sender, EventArgs e) => ElapsedTime = FormatElapsed(_elapsed.Elapsed);
+
+    internal static string FormatElapsed(TimeSpan elapsed) =>
+        elapsed.TotalHours >= 1 ? elapsed.ToString(@"h\:mm\:ss") : elapsed.ToString(@"mm\:ss");
 }

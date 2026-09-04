@@ -281,11 +281,16 @@
                     <Border x:Name="Root"
                             Background="{TemplateBinding Background}"
                             CornerRadius="8"
+                            BorderThickness="1"
+                            BorderBrush="Transparent"
                             Width="{TemplateBinding Width}"
                             Height="{TemplateBinding Height}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Zinc300Brush}"/>
+                        </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Root" Property="Background" Value="{StaticResource Zinc900Brush}"/>
                         </Trigger>

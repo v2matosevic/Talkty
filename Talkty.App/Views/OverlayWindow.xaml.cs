@@ -49,8 +49,6 @@ public partial class OverlayWindow : Window
     /// <summary>Vertical gap (device px) between the caret line / mouse pointer and the pill.</summary>
     private const int NearCursorOffsetPx = 28;
 
-    private static readonly Random _random = new();
-
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
@@ -112,6 +110,12 @@ public partial class OverlayWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         IsVisibleChanged += OnIsVisibleChanged;
+        SizeChanged += OnOverlaySizeChanged;
+        Closed += (_, _) =>
+        {
+            ViewModel.StopTimer();
+            ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        };
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -136,6 +140,31 @@ public partial class OverlayWindow : Window
         {
             PositionOverlay();
         }
+        else if (e.NewValue is false)
+        {
+            ViewModel.StopTimer();
+        }
+    }
+
+    private void OnOverlaySizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!IsVisible || !IsLoaded || e.PreviousSize.Width <= 0) return;
+        // Status labels and hover actions resize the pill. Keep its original center
+        // and monitor instead of chasing the mouse/caret again on every resize.
+        var (dpiX, dpiY) = GetDpiScale();
+        var center = new POINT
+        {
+            X = (int)((Left + e.PreviousSize.Width / 2) * dpiX),
+            Y = (int)((Top + e.PreviousSize.Height / 2) * dpiY)
+        };
+        var monitor = MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info)) return;
+        var work = info.rcWork;
+        Left = Math.Clamp(Left - (e.NewSize.Width - e.PreviousSize.Width) / 2,
+            work.Left / dpiX, Math.Max(work.Left / dpiX, work.Right / dpiX - e.NewSize.Width));
+        Top = Math.Clamp(Top, work.Top / dpiY,
+            Math.Max(work.Top / dpiY, work.Bottom / dpiY - e.NewSize.Height));
     }
 
     /// <summary>
@@ -261,16 +290,16 @@ public partial class OverlayWindow : Window
     {
         // Already on UI thread — PropertyChanged fires on UI thread after our InvokeAsync fix.
         // No Dispatcher.Invoke needed; execute directly.
-        var baseHeight = 6.0;
-        var maxHeight = 14.0;
-        var range = maxHeight - baseHeight;
+        // Deterministic response to the actual peak. Quiet speech remains visible;
+        // digital silence rests flat instead of showing a decorative waveform.
+        var amplitude = Math.Sqrt(float.IsFinite(level) ? Math.Clamp(level, 0, 1) : 0);
 
         if (Bar1 != null)
-            Bar1.Height = baseHeight + (range * level * (0.7 + _random.NextDouble() * 0.3));
+            Bar1.Height = 3 + 8 * amplitude;
         if (Bar2 != null)
-            Bar2.Height = baseHeight + 2 + (range * level * (0.9 + _random.NextDouble() * 0.2));
+            Bar2.Height = 3 + 13 * amplitude;
         if (Bar3 != null)
-            Bar3.Height = baseHeight + (range * level * (0.6 + _random.NextDouble() * 0.3));
+            Bar3.Height = 3 + 8 * amplitude;
     }
 
     private void PositionOnActiveMonitor()

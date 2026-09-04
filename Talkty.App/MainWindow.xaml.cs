@@ -205,6 +205,13 @@ public partial class MainWindow : Window
 
     private void OnHotkeyPressed(object? sender, EventArgs e)
     {
+        // Settings and dictation share a recorder. A modal microphone test must not
+        // become the beginning of a real dictation or be stopped by the global hotkey.
+        if (_settingsWindow?.IsVisible == true)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
         var now = DateTime.Now;
         var elapsed = now - _lastHotkeyTime;
 
@@ -307,6 +314,7 @@ public partial class MainWindow : Window
             case nameof(MainViewModel.IsListening):
                 Log.Debug($"IsListening changed to: {_viewModel.IsListening}");
                 _overlayWindow.ViewModel.IsListening = _viewModel.IsListening;
+                if (!_viewModel.IsListening) _overlayWindow.ViewModel.StopTimer();
                 break;
             case nameof(MainViewModel.IsTranscribing):
                 Log.Debug($"IsTranscribing changed to: {_viewModel.IsTranscribing}");
@@ -332,6 +340,10 @@ public partial class MainWindow : Window
                     // Prompting adds a second network round-trip after transcription — show it
                     // on the pill so the extra wait doesn't read as a stuck "..."
                     _overlayWindow.ViewModel.StatusText = "Prompting…";
+                }
+                else
+                {
+                    _overlayWindow.ViewModel.StatusText = _viewModel.StatusText;
                 }
                 break;
         }
@@ -584,8 +596,23 @@ public partial class MainWindow : Window
         Log.Info("Window closed to tray");
     }
 
-    private void RecordButton_Click(object sender, MouseButtonEventArgs e)
+    private void HistoryList_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        _viewModel.ToggleListeningCommand.Execute(null);
+        // Let focused action buttons receive Enter/Space themselves.
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.ButtonBase) return;
+        if (HistoryList.SelectedItem is not TranscriptionHistoryItem item) return;
+        if ((e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None) ||
+            (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control))
+        {
+            _viewModel.CopyHistoryItemCommand.Execute(item);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            var index = HistoryList.SelectedIndex;
+            _viewModel.DeleteHistoryItemCommand.Execute(item);
+            HistoryList.SelectedIndex = Math.Min(index, HistoryList.Items.Count - 1);
+            e.Handled = true;
+        }
     }
 }

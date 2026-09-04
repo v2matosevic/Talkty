@@ -87,20 +87,20 @@
                 </Grid>
 
                 <!-- Timer / Status -->
-                <TextBlock VerticalAlignment="Center" MinWidth="40">
+                <TextBlock VerticalAlignment="Center" MinWidth="40" MaxWidth="220"
+                           TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusText}">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
-                            <Setter Property="Text" Value="{Binding ElapsedTime}"/>
+                            <Setter Property="Text" Value="{Binding StatusText}"/>
                             <Setter Property="Foreground" Value="#E4E4E7"/>
                             <Setter Property="FontSize" Value="13"/>
                             <Setter Property="FontWeight" Value="Medium"/>
                             <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsTranscribing}" Value="True">
-                                    <Setter Property="Text" Value="..."/>
+                                <DataTrigger Binding="{Binding IsListening}" Value="True">
+                                    <Setter Property="Text" Value="{Binding ElapsedTime}"/>
                                 </DataTrigger>
-                                <!-- Declared after IsTranscribing so it overrides "..." while the
-                                     LLM expands the transcription into an agent prompt. -->
+                                <!-- Distinguish prompt refinement from speech transcription. -->
                                 <DataTrigger Binding="{Binding StatusText}" Value="Prompting…">
                                     <Setter Property="Text" Value="Prompting…"/>
                                     <Setter Property="Foreground" Value="{StaticResource StatusPurpleBrush}"/>

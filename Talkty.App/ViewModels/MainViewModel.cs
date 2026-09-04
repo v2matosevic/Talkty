@@ -465,7 +465,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task StartListeningAsync()
+    internal async Task StartListeningAsync()
     {
         bool volumeDucked = false;
         try
@@ -512,8 +512,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task StopListeningAndTranscribeAsync()
+    internal async Task StopListeningAndTranscribeAsync()
     {
+        var cycle = _transcriptionCts;
+        var cancellationToken = cycle?.Token ?? default;
         try
         {
             // Capture the foreground window NOW (at stop time) — this is the app
@@ -550,7 +552,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Without this flush, the last 200-400ms of speech is lost — exactly "the last
             // part of what I said" in the user's transcript.
             Log.Debug("Calling AudioCaptureService.StopRecordingAndFlushAsync()");
-            await _audioCaptureService.StopRecordingAndFlushAsync(Constants.RecordingFlushTimeoutMs);
+            var flushed = await _audioCaptureService.StopRecordingAndFlushAsync(Constants.RecordingFlushTimeoutMs);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!flushed)
+                ShowWarning("The microphone did not finish cleanly. The end of this recording may be missing.");
 
             Log.Debug("Getting recorded audio samples");
             var audioSamples = _audioCaptureService.GetRecordedAudioAsFloat();
@@ -560,8 +565,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 Log.Warning("No audio recorded!");
                 StatusText = "No audio recorded";
+                ShowWarning("No audio was recorded. Check your microphone in Settings.");
                 IsTranscribing = false;
                 RequestHideOverlay?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            // Skip digital silence from muted/disconnected devices without risking quiet speech.
+            if (Array.TrueForAll(audioSamples, sample => sample == 0f))
+            {
+                StatusText = "No audio detected";
+                ShowWarning("No audio was detected. Check that your microphone is not muted.");
                 return;
             }
 
@@ -590,7 +604,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Streaming callback: copy first segment to clipboard immediately (before full transcription completes).
             // This lets clipboard-only users paste sooner. Auto-paste waits for full text.
             Action<string>? onFirstSegment = null;
-            if (_settingsService.Settings.CopyToClipboard)
+            // Partial clipboard writes help manual paste only. In auto-paste/prompt mode
+            // they overwrite the user's clipboard even when the operation is cancelled.
+            if (_settingsService.Settings.CopyToClipboard && !_settingsService.Settings.AutoPaste && !PromptMode)
             {
                 onFirstSegment = (text) =>
                 {
@@ -614,7 +630,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                         Application.Current.Dispatcher.Invoke(() =>
                         {
-                            _clipboardService.SetText(text);
+                            if (!cancellationToken.IsCancellationRequested)
+                                _clipboardService.SetText(text);
                         });
                         Log.Info($"First segment → clipboard ({text.Length} chars)");
                     }
@@ -625,8 +642,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 };
             }
 
-            var cancellationToken = _transcriptionCts?.Token ?? default;
             var result = await _transcriptionService.TranscribeAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt);
+            cancellationToken.ThrowIfCancellationRequested();
             var elapsed = DateTime.Now - startTime;
 
             Log.Info($"Transcription completed in {elapsed.TotalSeconds:F1}s. Success: {result.Success}");
@@ -650,6 +667,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 // Clean up punctuation: merge false sentence breaks, normalize spacing
                 result.Text = TextPostProcessor.CleanupPunctuation(result.Text);
+                if (string.IsNullOrWhiteSpace(result.Text))
+                {
+                    StatusText = "No speech detected";
+                    ShowWarning("No speech was detected. Nothing was copied.");
+                    return;
+                }
 
                 Log.Info($"Transcribed text ({result.Text.Length} chars): \"{result.Text}\"");
 
@@ -664,6 +687,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         StatusText = "Refining prompt...";
                         var rawTranscription = result.Text;
                         var refined = await _promptRefinementService.RefineAsync(result.Text, cancellationToken);
+                        // Refiners can return null on cancellation. Never treat that as
+                        // permission to paste the raw transcript.
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (!string.IsNullOrWhiteSpace(refined))
                         {
                             Log.Info($"Prompt mode: expanded into agent prompt ({result.Text.Length} → {refined.Length} chars)");
@@ -699,6 +725,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     }
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
+                StatusText = "Saved to history";
                 if (_settingsService.Settings.CopyToClipboard)
                 {
                     // Update clipboard with full text (overwrites first-segment partial if multi-segment)
@@ -706,9 +734,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     bool clipboardSuccess = false;
                     Application.Current.Dispatcher.Invoke(() =>
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         clipboardSuccess = _clipboardService.SetText(result.Text);
                         Log.Debug($"Clipboard copy result: {clipboardSuccess}");
                     });
+
+                    StatusText = clipboardSuccess ? "Copied to clipboard" : "Saved to history; clipboard unavailable";
+                    if (!clipboardSuccess)
+                        ShowWarning("Could not copy the text. Your transcription is saved in History.");
 
                     if (_settingsService.Settings.AutoPaste && clipboardSuccess)
                     {
@@ -716,18 +749,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         // Overlay stays visible during paste — hiding it would cause focus changes.
                         Log.Debug("Auto-pasting at cursor");
                         var textForClipboard = result.Text;
-                        var pasteOutcome = await Task.Run(() => _autoPasteService.PasteToTargetWindow(
-                            ensureClipboardText: () =>
+                        var clipboardReadyForPaste = true;
+                        var pasteOutcome = await Task.Run(() =>
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            return _autoPasteService.PasteToTargetWindow(ensureClipboardText: () =>
                             {
                                 // Re-set clipboard right before Ctrl+V — focus switching can
                                 // cause some apps to clear or claim the clipboard.
                                 Application.Current.Dispatcher.Invoke(() =>
                                 {
-                                    _clipboardService.SetText(textForClipboard);
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    clipboardReadyForPaste = _clipboardService.SetText(textForClipboard);
+                                    if (!clipboardReadyForPaste)
+                                        throw new InvalidOperationException("Clipboard became unavailable before paste.");
                                 });
-                            }));
+                            }, cancellationToken);
+                        });
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                        if (pasteOutcome != PasteOutcome.Pasted)
+                        if (!clipboardReadyForPaste)
+                        {
+                            StatusText = "Saved to history; clipboard unavailable";
+                            ShowWarning("The clipboard became unavailable before paste. Your transcription is saved in History.");
+                        }
+                        else if (pasteOutcome != PasteOutcome.Pasted)
                         {
                             // The text is safe on the clipboard — say WHY it didn't land
                             // instead of leaving the user staring at an unchanged window.
@@ -772,8 +818,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         }
                     }
                 }
-
-                StatusText = "Copied to clipboard";
 
                 // History update + disk persist — fire-and-forget, don't block status reset
                 Application.Current.Dispatcher.Invoke(() =>
@@ -827,9 +871,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 StatusText = "Ready";
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            Log.Info("Transcription cancelled; output discarded");
+            StatusText = "Cancelled";
+        }
         catch (Exception ex)
         {
             Log.Error("StopListeningAndTranscribe failed", ex);
+            ShowWarning("Transcription could not finish. Please try again.");
             StatusText = $"Error: {ex.Message}";
             IsTranscribing = false;
             RequestHideOverlay?.Invoke(this, EventArgs.Empty);
@@ -841,7 +891,29 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _ = _volumeDuckingService.RestoreAsync();
             }
         }
+        finally
+        {
+            // Covers cancellation and every early return, including empty cleaned output.
+            if (ReferenceEquals(_transcriptionCts, cycle))
+            {
+                if (IsTranscribing)
+                {
+                    IsTranscribing = false;
+                    RequestHideOverlay?.Invoke(this, EventArgs.Empty);
+                }
+                cycle?.Dispose();
+                _transcriptionCts = null;
+            }
+        }
     }
+
+    private void ShowWarning(string message) =>
+        RequestShowToast?.Invoke(this, new ToastEventArgs
+        {
+            Message = message,
+            Type = ToastType.Warning,
+            DurationMs = 5000
+        });
 
     /// <summary>
     /// Trims leading and trailing silence from audio samples.
@@ -949,8 +1021,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (item != null)
         {
             Log.Debug($"Copying history item: {item.Preview}");
-            _clipboardService.SetText(item.Text);
-            StatusText = "Copied to clipboard";
+            var copied = _clipboardService.SetText(item.Text);
+            StatusText = copied ? "Copied to clipboard" : "Could not copy";
+            if (!copied) ShowWarning("Could not copy the text. It is still available in History.");
+            else RequestShowToast?.Invoke(this, new ToastEventArgs
+            {
+                Message = item.IsPrompt ? "Copied prompt to clipboard" : "Copied to clipboard",
+                Type = ToastType.Success,
+                DurationMs = 2000
+            });
         }
     }
 
@@ -960,8 +1039,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (item != null)
         {
             Log.Debug($"Copying history transcription: {item.TranscriptionPreview}");
-            _clipboardService.SetText(item.Transcription);
-            StatusText = "Copied transcription";
+            var copied = _clipboardService.SetText(item.Transcription);
+            StatusText = copied ? "Copied transcription" : "Could not copy";
+            if (!copied) ShowWarning("Could not copy the text. It is still available in History.");
+            else RequestShowToast?.Invoke(this, new ToastEventArgs
+            {
+                Message = "Copied transcription",
+                Type = ToastType.Success,
+                DurationMs = 2000
+            });
         }
     }
 

@@ -558,7 +558,6 @@ public partial class MainWindow : Window
         {
             Log.Debug($"History item clicked: {item.Preview}");
             _viewModel.CopyHistoryItemCommand.Execute(item);
-            Toast.Show(item.IsPrompt ? "Copied prompt to clipboard" : "Copied to clipboard", ToastType.Success, 2000);
         }
     }
 
@@ -569,7 +568,6 @@ public partial class MainWindow : Window
         if (sender is FrameworkElement element && element.DataContext is TranscriptionHistoryItem item)
         {
             _viewModel.CopyHistoryTranscriptionCommand.Execute(item);
-            Toast.Show("Copied transcription", ToastType.Success, 2000);
             e.Handled = true;
         }
     }

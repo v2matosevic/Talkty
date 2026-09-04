@@ -54,6 +54,8 @@ public interface IAutoPasteService
     /// <param name="ensureClipboardText">
     /// Delegate that re-sets the clipboard text if it was cleared during focus restore.
     /// Must handle Dispatcher marshalling internally. Called right before Ctrl+V.
+    /// Throw if the clipboard cannot be prepared; the paste will be aborted.
     /// </param>
-    PasteOutcome PasteToTargetWindow(Action? ensureClipboardText = null);
+    /// <param name="cancellationToken">Cancels waiting and prevents a pending paste.</param>
+    PasteOutcome PasteToTargetWindow(Action? ensureClipboardText = null, CancellationToken cancellationToken = default);
 }

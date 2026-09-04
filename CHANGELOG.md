@@ -2,6 +2,14 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.3.1] - 2026-09-05
+
+- Cancelled prompting no longer pastes the raw transcription. Pending auto-paste also respects cancellation.
+- Repeated recordings release the previous microphone device and cannot mix in late audio from an older recording.
+- Smaller initial recording buffer, with automatic growth for longer dictations.
+- Muted recordings that contain digital silence skip transcription. Empty cleaned results leave the clipboard alone.
+- Microphone flush failures and clipboard copy failures are visible. Failed clipboard preparation aborts paste, and history actions only show success when copying worked.
+
 ## [1.2.2] - 2026-07-02
 
 - Text replacements are now editable in Settings > Vocabulary — one rule per

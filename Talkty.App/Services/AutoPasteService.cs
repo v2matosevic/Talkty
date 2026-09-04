@@ -180,12 +180,13 @@ public class AutoPasteService : IAutoPasteService
     }
 
     /// <inheritdoc />
-    public PasteOutcome PasteToTargetWindow(Action? ensureClipboardText = null)
+    public PasteOutcome PasteToTargetWindow(Action? ensureClipboardText = null, CancellationToken cancellationToken = default)
     {
         // Snapshot the handle once — we're on thread pool, UI thread could reassign mid-flight.
         var target = Volatile.Read(ref _targetWindowHandle);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var sw = System.Diagnostics.Stopwatch.StartNew();
             Log.Info($"=== AUTO-PASTE START === Target: {target}");
 
@@ -200,7 +201,8 @@ public class AutoPasteService : IAutoPasteService
             var currentFgInfo = GetWindowDiagnostics(currentFg);
             Log.Debug($"Current foreground before paste: {currentFgInfo}");
 
-            WaitForModifierKeysRelease();
+            WaitForModifierKeysRelease(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Modifier keys released");
 
             FlushModifierKeys();
@@ -222,21 +224,6 @@ public class AutoPasteService : IAutoPasteService
                 }
                 Thread.Sleep(Constants.PasteFocusRetryDelayMs);
                 Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Focus restored");
-
-                // Re-set clipboard ONLY after focus switch — switching focus can cause
-                // some apps to clear or claim the clipboard.
-                if (ensureClipboardText != null)
-                {
-                    try
-                    {
-                        ensureClipboardText();
-                        Log.Debug($"[+{sw.ElapsedMilliseconds}ms] Clipboard re-set after focus restore");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning($"Clipboard re-set failed: {ex.Message}");
-                    }
-                }
             }
             else
             {
@@ -255,9 +242,13 @@ public class AutoPasteService : IAutoPasteService
             // Check if the hotkey's Alt key activated a menu bar in the target app.
             // Only send ESC to dismiss it if a menu is actually detected — avoids
             // blindly sending ESC which breaks Telegram (search), browsers (cancel), etc.
+            cancellationToken.ThrowIfCancellationRequested();
             DismissMenuBarIfActive(target);
 
-            SendCtrlV();
+            // Refresh only after a focus switch. A failed refresh must abort rather
+            // than paste stale clipboard content. Recheck cancellation just before input.
+            if (!CommitPaste(SendCtrlV, targetIsForeground ? null : ensureClipboardText, cancellationToken))
+                return PasteOutcome.Failed;
 
             sw.Stop();
             Log.Info($"=== AUTO-PASTE END === Total: {sw.ElapsedMilliseconds}ms, class: \"{windowClass}\", process: \"{processName}\"");
@@ -269,11 +260,24 @@ public class AutoPasteService : IAutoPasteService
                 ? PasteOutcome.TargetElevated
                 : PasteOutcome.Pasted;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            Log.Debug("Auto-paste cancelled before input");
+            return PasteOutcome.Failed;
+        }
         catch (Exception ex)
         {
             Log.Error("Failed to simulate paste", ex);
             return PasteOutcome.Failed;
         }
+    }
+
+    internal static bool CommitPaste(Func<bool> sendPaste, Action? prepareClipboard, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        prepareClipboard?.Invoke();
+        cancellationToken.ThrowIfCancellationRequested();
+        return sendPaste();
     }
 
     /// <summary>
@@ -433,11 +437,12 @@ public class AutoPasteService : IAutoPasteService
         Log.Debug("Modifier keys flushed");
     }
 
-    private void WaitForModifierKeysRelease()
+    private void WaitForModifierKeysRelease(CancellationToken cancellationToken)
     {
         var timeout = DateTime.Now.AddMilliseconds(Constants.PasteModifierReleaseTimeoutMs);
         while (DateTime.Now < timeout)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             bool altPressed = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
             bool ctrlPressed = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             bool shiftPressed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -485,7 +490,7 @@ public class AutoPasteService : IAutoPasteService
         }
     }
 
-    private void SendCtrlV()
+    private bool SendCtrlV()
     {
         var inputs = new INPUT[4];
 
@@ -513,6 +518,7 @@ public class AutoPasteService : IAutoPasteService
         {
             Log.Debug($"Ctrl+V sent successfully ({result} inputs)");
         }
+        return result == inputs.Length;
     }
 
 }

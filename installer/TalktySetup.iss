@@ -11,6 +11,9 @@
 #define MyAppURL "https://github.com/v2matosevic/Talkty"
 #define MyAppExeName "Talkty.App.exe"
 #define MyAppDescription "Local speech-to-text powered by Whisper"
+#ifndef MyAppSourcePath
+  #define MyAppSourcePath SourcePath + "\..\Talkty.App\bin\Release\net8.0-windows\win-x64\publish"
+#endif
 
 [Setup]
 ; Application info
@@ -74,7 +77,7 @@ Name: "startupicon"; Description: "Start Talkty when Windows starts"; GroupDescr
 
 [Files]
 ; All application files
-Source: "..\Talkty.App\bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,*linux*,*.so"
+Source: "{#MyAppSourcePath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,*linux*,*.so"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

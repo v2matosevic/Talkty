@@ -29,6 +29,19 @@ positions at the bottom-center of the monitor the cursor is on; an opt-in settin
 it just below the focused app's text caret instead (`GetGUIThreadInfo`, visible-caret flag
 required, mouse-position fallback).
 
+## Recording and output
+
+Recording/output invariants (v1.3.1):
+
+- Release the previous microphone device before opening another. Callbacks must belong to the current device before they can append audio or complete its flush.
+- A stop request is not a completed flush. Continue accepting the current device's last buffers until `RecordingStopped`; report timeouts and driver errors as unsuccessful flushes.
+- Carry the recording cancellation token through inference, prompt refinement, and auto-paste. Recheck it after awaited operations and immediately before paste input.
+- Copy an early first segment only in plain clipboard-only mode. Auto-paste and Prompting wait for final output. Digital silence and empty cleaned transcripts leave the clipboard alone.
+- Clipboard preparation failure must abort paste. Only report success when clipboard copying or Windows input delivery actually succeeds.
+
+Regression coverage and the installed build record are in
+[IMPROVEMENTS-2026-09.md](./IMPROVEMENTS-2026-09.md).
+
 ## Engines
 
 `TranscriptionService` is the engine manager. It owns one `ITranscriptionEngine` at a

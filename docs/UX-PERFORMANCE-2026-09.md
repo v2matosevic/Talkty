@@ -47,10 +47,14 @@ Test renders and layout measurements regenerate under `Talkty.Tests/bin/ui-evide
 
 Confidence: high for the tested state, persistence and layout changes. Native keyboard focus, mixed-monitor DPI and real microphone feel still need an interactive check. No recognition-accuracy or real-world inference-speed improvement is claimed for this UX pass.
 
-After installing the combined update, allow two minutes:
+The combined update is installed. Allow two minutes for the interactive check:
 
 1. Tab to Start recording, record a short sentence, and use the hotkey to stop. Check the timer, meter reset and transcription label.
 2. Select a history row with arrow keys. Copy it with Enter, then verify its complete text in an editor. Resize the window and scroll to older entries.
 3. Start another recording and click Cancel. Open Settings and test the microphone; confirm the global recording hotkey does not start dictation until Settings is closed.
 
-Packaging and installation are coordinated with the concurrent vocabulary pass. The previously installed 1.3.1 build is distinct from this follow-on source until the combined update is installed.
+## Local delivery
+
+The combined update is installed and running at `B:/Talkty` as version 1.3.2. The vocabulary session verified the Inno upgrade (exit 0), all 488 installed payload hashes, unchanged settings, the retained CUDA pack and successful startup with LargeTurbo on CUDA and Alt+Q registered. See [VOCABULARY-ACCURACY.md](VOCABULARY-ACCURACY.md) for delivery evidence and the history-fingerprint limitation while the user continued dictating.
+
+The desktop source is committed as `b18a390`, on top of vocabulary commit `32f922c` and delivery record `a39c391`. The app DLL was independently checked against `Talkty.App/bin/Release/verified-1.3.2-20260905/`. Public release metadata remains at 1.3.0; no public release was cut.

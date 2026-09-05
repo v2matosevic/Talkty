@@ -2,6 +2,11 @@
 
 Local improvement pass, started 4 September 2026 and completed 5 September 2026.
 
+Public release update, 5 September 2026: all completed work is now pushed and
+[1.3.2 is published](https://github.com/v2matosevic/Talkty/releases/tag/v1.3.2).
+The update notice now advertises 1.3.2. [Release verification](RELEASE-1.3.2.md)
+supersedes the historical pending-approval and 1.3.0 public-status notes below.
+
 Current handoff: version 1.3.2 supersedes this historical 1.3.1 installation.
 Read [VOCABULARY-ACCURACY.md](VOCABULARY-ACCURACY.md) for the accuracy fix and final
 delivery evidence, and [UX-PERFORMANCE-2026-09.md](UX-PERFORMANCE-2026-09.md) for the

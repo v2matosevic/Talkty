@@ -325,7 +325,7 @@ public static class ModelProfileExtensions
         ModelProfile.DistilLargeV3 => true,        // Best English (GPU)
         ModelProfile.LargeTurboQ5 => true,         // Best multilingual balance (CPU)
         ModelProfile.SmallQ5 => true,              // Best for low-power CPU systems
-        ModelProfile.CloudGpt4oTranscribe => true, // Best cloud quality
+        ModelProfile.CloudMaiTranscribe2 => true,  // Main cloud model: cheapest, fast, clean output
         _ => false
     };
 

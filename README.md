@@ -105,7 +105,9 @@ that is stored **encrypted on your device** (Windows DPAPI), never in plain text
 
 - **Cloud transcription** sends one recording to a hosted model when you select a
   cloud model in Settings. Useful for long or difficult audio. Local Whisper stays
-  the offline default the rest of the time.
+  the offline default the rest of the time. The recommended cloud model is
+  Microsoft's MAI-Transcribe 2: the cheapest option, fast, and it leaves out filler
+  words. It covers 60 languages but not Croatian or Serbian.
 - **Prompting** takes the words you just dictated and rewrites them into a clean,
   structured prompt for a coding agent (Claude Code, Cursor, Codex). It keeps every
   detail you said and drops the filler. If anything fails, it falls back to your raw

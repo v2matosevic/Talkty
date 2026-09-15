@@ -50,6 +50,16 @@ public class CloudModelTests
         Assert.Equal(expected, sent);
     }
 
+    [Fact]
+    public void EmptyTranscriptIsDistinctFromMalformedResponse()
+    {
+        // MAI-Transcribe 2's real answer shape; an empty "text" means no speech, not a broken reply.
+        Assert.Equal("", OpenRouterEngine.ExtractText("""{"text":"","usage":{"seconds":4,"cost":0.0001}}"""));
+        Assert.Equal("hello", OpenRouterEngine.ExtractText("""{"text":"hello","usage":{"seconds":1,"cost":0.00003}}"""));
+        Assert.Null(OpenRouterEngine.ExtractText("""{"error":{"message":"oops"}}"""));
+        Assert.Null(OpenRouterEngine.ExtractText("not json"));
+    }
+
     private static JsonDocument Serialize(ModelProfile profile, string language) =>
         JsonDocument.Parse(JsonSerializer.Serialize(OpenRouterEngine.BuildPayload(profile, "AAAA", language)));
 }

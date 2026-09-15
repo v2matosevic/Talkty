@@ -106,9 +106,10 @@ public class OpenRouterEngine : ITranscriptionEngine
             return Fail("No cloud model selected.");
         }
 
-        // OpenRouter's upstream provider caps a single file at ~60s. Warn loudly rather than
-        // silently truncating — chunking longer audio is a future enhancement.
-        if (audioDuration > Constants.CloudMaxAudioSeconds)
+        // OpenRouter gives the upstream provider ~60s to answer, which long files can exceed on
+        // slower models — chunking is a future enhancement. MAI-Transcribe 2 is exempt: it returned
+        // a 144s clip in ~10s (measured 2026-09-15).
+        if (audioDuration > Constants.CloudMaxAudioSeconds && profile != ModelProfile.CloudMaiTranscribe2)
         {
             Log.Warning($"Audio is {audioDuration:F0}s — exceeds OpenRouter's ~{Constants.CloudMaxAudioSeconds}s/request limit; the call may time out. Consider a shorter recording.");
         }
@@ -159,10 +160,16 @@ public class OpenRouterEngine : ITranscriptionEngine
             var text = ExtractText(body);
             var elapsed = DateTime.Now - startTime;
 
+            if (text is null)
+            {
+                return Fail("Cloud transcription returned no text.", startTime);
+            }
             if (string.IsNullOrWhiteSpace(text))
             {
-                Log.Warning($"OpenRouter returned empty text. Body: {Truncate(body, 500)}");
-                return Fail("Cloud transcription returned no text.", startTime);
+                // A well-formed empty transcript means the model heard no speech (MAI-Transcribe 2
+                // answers a quiet, speechless mic this way). Same wording as the local path.
+                Log.Info("Cloud transcription heard no speech");
+                return Fail("No speech was detected. Nothing was copied.", startTime);
             }
 
             // NOTE: deliberately do NOT fire OnFirstSegment here. That callback is the
@@ -243,8 +250,9 @@ public class OpenRouterEngine : ITranscriptionEngine
 
     /// <summary>
     /// Pulls the transcript out of OpenRouter's response: <c>{ "text": "...", "usage": {...} }</c>.
+    /// Null means the response was malformed; an empty string means no speech was recognized.
     /// </summary>
-    private static string? ExtractText(string body)
+    internal static string? ExtractText(string body)
     {
         try
         {

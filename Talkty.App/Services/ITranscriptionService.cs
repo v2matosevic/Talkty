@@ -19,12 +19,21 @@ public interface ITranscriptionService : IDisposable
     /// <param name="language">Language code (e.g., "en", "auto"). Defaults to "en".</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="onFirstSegment">Optional callback fired when the first segment is ready (for early clipboard copy).</param>
+    /// <param name="vocabularyTerms">Optional keyword hints for cloud models that take a term list.</param>
     Task<TranscriptionResult> TranscribeAsync(
         float[] audioSamples,
         string language = "en",
         CancellationToken cancellationToken = default,
         Action<string>? onFirstSegment = null,
-        string? vocabularyPrompt = null);
+        string? vocabularyPrompt = null,
+        IReadOnlyList<string>? vocabularyTerms = null);
+
+    /// <summary>
+    /// Call at recording start. With a cloud model selected, opens the HTTPS connection and
+    /// initializes the audio encoder while the user speaks, so the request at stop time pays
+    /// for neither. No-op for local models.
+    /// </summary>
+    void PrewarmCloud();
 
     /// <summary>
     /// Pre-sets the vocabulary prompt so the processor is built with it on model load.

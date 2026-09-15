@@ -24,18 +24,9 @@ public static class VocabularyPromptBuilder
             settings.ModelProfile.GetEngine() != TranscriptionEngine.Whisper)
             return null;
 
-        var terms = (settings.CustomVocabulary ?? DefaultVocabulary.CodingTerms)
-            .Where(term => !string.IsNullOrWhiteSpace(term))
-            .Select(term => string.Join(" ", term.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
-            .Where(term => !term.Any(char.IsControl))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            // User additions beat the large preloaded catalog, even when appended in Settings.
-            // LINQ's stable ordering preserves the user's order within each priority.
-            .OrderBy(term => !PresetTerms.Contains(term) ? 0 : PriorityPresetTerms.Contains(term) ? 1 : 2);
-
         var selected = new List<string>();
         int bytes = 0;
-        foreach (var term in terms)
+        foreach (var term in OrderedTerms(settings))
         {
             int cost = Encoding.UTF8.GetByteCount(term) + (selected.Count == 0 ? 0 : 2);
             if (bytes + cost > MaxPromptBytes) continue;
@@ -45,4 +36,28 @@ public static class VocabularyPromptBuilder
 
         return selected.Count == 0 ? null : string.Join(", ", selected);
     }
+
+    /// <summary>
+    /// Keyword hints for cloud models that take a term list (MAI-Transcribe 2). Same saved
+    /// vocabulary and priority as <see cref="Build"/>, capped at what the model accepts. Not
+    /// limited to English: these are spellings of names, not an English sentence.
+    /// </summary>
+    public static IReadOnlyList<string>? BuildCloudTerms(AppSettings settings)
+    {
+        if (!settings.UseCustomVocabulary)
+            return null;
+
+        var terms = OrderedTerms(settings).Take(Constants.CloudMaxVocabularyTerms).ToList();
+        return terms.Count == 0 ? null : terms;
+    }
+
+    private static IEnumerable<string> OrderedTerms(AppSettings settings) =>
+        (settings.CustomVocabulary ?? DefaultVocabulary.CodingTerms)
+            .Where(term => !string.IsNullOrWhiteSpace(term))
+            .Select(term => string.Join(" ", term.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+            .Where(term => !term.Any(char.IsControl))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            // User additions beat the large preloaded catalog, even when appended in Settings.
+            // LINQ's stable ordering preserves the user's order within each priority.
+            .OrderBy(term => !PresetTerms.Contains(term) ? 0 : PriorityPresetTerms.Contains(term) ? 1 : 2);
 }

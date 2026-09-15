@@ -3,13 +3,15 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using NAudio.MediaFoundation;
+using NAudio.Wave;
 using Talkty.App.Models;
 
 namespace Talkty.App.Services.Engines;
 
 /// <summary>
 /// Cloud transcription engine backed by OpenRouter's audio API.
-/// Sends recorded audio (WAV) to <c>POST /api/v1/audio/transcriptions</c> and returns
+/// Sends recorded audio (MP3, WAV fallback) to <c>POST /api/v1/audio/transcriptions</c> and returns
 /// the transcribed text. The model is selected per <see cref="ModelProfile"/> (GPT-4o
 /// Transcribe, Whisper Large V3, Qwen3 ASR, etc.).
 ///
@@ -20,15 +22,26 @@ public class OpenRouterEngine : ITranscriptionEngine
 {
     private const string Endpoint = "https://openrouter.ai/api/v1/audio/transcriptions";
 
+    private const string KeyEndpoint = "https://openrouter.ai/api/v1/key";
+
     // One HttpClient for the engine's lifetime — creating per-request exhausts sockets.
-    private static readonly HttpClient Http = new()
+    private static readonly HttpClient Http = new(new SocketsHttpHandler
+    {
+        // Dictations are often minutes apart; the default pool drops the TLS connection after a
+        // minute, so the next request paid a fresh handshake. PrewarmAsync reopens it regardless.
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(10)
+    })
     {
         // Hard ceiling; the per-request timeout is enforced via the linked CancellationToken.
         Timeout = TimeSpan.FromMilliseconds(Constants.CloudTranscriptionTimeoutMs + 10_000)
     };
 
+    // Set once Media Foundation fails (Windows N editions ship without it): WAV from then on.
+    private static volatile bool _mp3Unavailable;
+
     private readonly object _lock = new();
     private string? _apiKey;
+    private int _prewarming;
 
     public string EngineName => "OpenRouter";
     public TranscriptionEngine EngineType => TranscriptionEngine.OpenRouter;
@@ -53,6 +66,36 @@ public class OpenRouterEngine : ITranscriptionEngine
         lock (_lock)
         {
             _apiKey = apiKey?.Trim();
+        }
+    }
+
+    /// <summary>
+    /// Runs at recording start: starts Media Foundation and opens the HTTPS connection while the
+    /// user is still speaking. Measured 2026-09-15: the first request in a fresh process took
+    /// 2.6 s against 1.1 s warm, and the first MP3 encode ~0.5 s of encoder startup. Never throws.
+    /// </summary>
+    public async Task PrewarmAsync()
+    {
+        if (Interlocked.Exchange(ref _prewarming, 1) == 1) return;
+        try
+        {
+            await Task.Run(() => TryEncodeMp3(new float[Constants.SampleRate / 10], Constants.SampleRate));
+
+            var key = _apiKey;
+            if (string.IsNullOrWhiteSpace(key)) return;
+            using var request = new HttpRequestMessage(HttpMethod.Get, KeyEndpoint);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            using var cts = new CancellationTokenSource(5000);
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            Log.Debug($"Cloud prewarm done: HTTP {(int)response.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            Log.Debug($"Cloud prewarm skipped: {ex.Message}");
+        }
+        finally
+        {
+            Volatile.Write(ref _prewarming, 0);
         }
     }
 
@@ -123,9 +166,13 @@ public class OpenRouterEngine : ITranscriptionEngine
 
         try
         {
-            var wav = EncodeWav(audioSamples, Constants.SampleRate);
-            var base64Audio = Convert.ToBase64String(wav);
-            var json = JsonSerializer.Serialize(BuildPayload(profile.Value, base64Audio, options.Language));
+            // Off the UI thread: Media Foundation wants an MTA thread, and a long take encodes in ~0.3 s.
+            var (audio, format) = await Task.Run(() => EncodeForUpload(audioSamples, Constants.SampleRate), linkedCts.Token);
+            var hints = profile == ModelProfile.CloudMaiTranscribe2
+                ? Math.Min(options.VocabularyTerms?.Count ?? 0, Constants.CloudMaxVocabularyTerms)
+                : 0;
+            Log.Info($"Upload: {audio.Length:N0} bytes {format}, {hints} vocabulary hints");
+            var json = JsonSerializer.Serialize(BuildPayload(profile.Value, Convert.ToBase64String(audio), format, options.Language, options.VocabularyTerms));
 
             // One retry on transient failures (rate limit / gateway hiccups). Auth and
             // client errors are permanent — retrying those just doubles the wait.
@@ -139,7 +186,7 @@ public class OpenRouterEngine : ITranscriptionEngine
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                Log.Debug($"POST {Endpoint} ({wav.Length} bytes audio, {json.Length} bytes body, attempt {attempt})");
+                Log.Debug($"POST {Endpoint} ({audio.Length} bytes {format}, {json.Length} bytes body, attempt {attempt})");
                 using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseContentRead, linkedCts.Token);
                 body = await response.Content.ReadAsStringAsync(linkedCts.Token);
                 status = response.StatusCode;
@@ -207,7 +254,8 @@ public class OpenRouterEngine : ITranscriptionEngine
     /// <summary>
     /// Request body for <c>/audio/transcriptions</c>. Internal for tests.
     /// </summary>
-    internal static Dictionary<string, object?> BuildPayload(ModelProfile profile, string base64Audio, string? language)
+    internal static Dictionary<string, object?> BuildPayload(
+        ModelProfile profile, string base64Audio, string format, string? language, IReadOnlyList<string>? vocabularyTerms = null)
     {
         var payload = new Dictionary<string, object?>
         {
@@ -215,7 +263,7 @@ public class OpenRouterEngine : ITranscriptionEngine
             ["input_audio"] = new Dictionary<string, object?>
             {
                 ["data"] = base64Audio,
-                ["format"] = "wav"
+                ["format"] = format
             },
             // Deterministic output to match the local engines' zero-temperature behaviour.
             ["temperature"] = 0
@@ -225,23 +273,32 @@ public class OpenRouterEngine : ITranscriptionEngine
         if (!string.IsNullOrWhiteSpace(language) && language != "auto")
             payload["language"] = language;
 
-        // MAI-Transcribe defaults to "verbatim", which keeps "um", "uh" and false starts in the pasted
-        // text; "clean" matches what Whisper gives. OpenRouter forwards provider.options.azure to Azure
-        // untouched (an invalid value comes back as a provider 400), so send it only to this model.
+        // OpenRouter forwards provider.options.azure to Azure untouched (an invalid value or a 51st
+        // phrase comes back as a provider 400), so these options go only to the model that owns them.
         if (profile == ModelProfile.CloudMaiTranscribe2)
         {
+            var azure = new Dictionary<string, object?>
+            {
+                // Default "verbatim" keeps "um", "uh" and false starts in the pasted text; "clean"
+                // matches what Whisper gives.
+                ["enhancedMode"] = new Dictionary<string, object?>
+                {
+                    ["modelOptions"] = new Dictionary<string, object?> { ["transcribeStyle"] = "clean" }
+                }
+            };
+
+            // Keyword biasing from the user's saved vocabulary (additions first).
+            if (vocabularyTerms is { Count: > 0 })
+            {
+                azure["phraseList"] = new Dictionary<string, object?>
+                {
+                    ["phrases"] = vocabularyTerms.Take(Constants.CloudMaxVocabularyTerms).ToArray()
+                };
+            }
+
             payload["provider"] = new Dictionary<string, object?>
             {
-                ["options"] = new Dictionary<string, object?>
-                {
-                    ["azure"] = new Dictionary<string, object?>
-                    {
-                        ["enhancedMode"] = new Dictionary<string, object?>
-                        {
-                            ["modelOptions"] = new Dictionary<string, object?> { ["transcribeStyle"] = "clean" }
-                        }
-                    }
-                }
+                ["options"] = new Dictionary<string, object?> { ["azure"] = azure }
             };
         }
 
@@ -301,6 +358,47 @@ public class OpenRouterEngine : ITranscriptionEngine
         s.Length <= max ? s : s[..max] + "…";
 
     /// <summary>
+    /// MP3 when Windows' Media Foundation encoder is available, otherwise WAV. Upload time dominated
+    /// cloud latency: a 144 s take uploaded in 26 s as WAV and 5 s as MP3, with the same words.
+    /// </summary>
+    internal static (byte[] Audio, string Format) EncodeForUpload(float[] samples, int sampleRate)
+    {
+        var mp3 = TryEncodeMp3(samples, sampleRate);
+        return mp3 != null ? (mp3, "mp3") : (EncodeWav(samples, sampleRate), "wav");
+    }
+
+    private static byte[]? TryEncodeMp3(float[] samples, int sampleRate)
+    {
+        if (_mp3Unavailable) return null;
+        try
+        {
+            MediaFoundationApi.Startup();
+            using var pcm = new RawSourceWaveStream(new MemoryStream(ToPcm16(samples)), new WaveFormat(sampleRate, 16, 1));
+            using var output = new MemoryStream();
+            MediaFoundationEncoder.EncodeToMp3(pcm, output, Constants.CloudMp3BitRate);
+            return output.Length > 0 ? output.ToArray() : null;
+        }
+        catch (Exception ex)
+        {
+            _mp3Unavailable = true;
+            Log.Warning($"MP3 encoding unavailable, cloud uploads fall back to WAV: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static byte[] ToPcm16(float[] samples)
+    {
+        var pcm = new byte[samples.Length * sizeof(short)];
+        for (int i = 0; i < samples.Length; i++)
+        {
+            var value = (short)(Math.Clamp(samples[i], -1f, 1f) * short.MaxValue);
+            pcm[2 * i] = (byte)value;
+            pcm[2 * i + 1] = (byte)(value >> 8);
+        }
+        return pcm;
+    }
+
+    /// <summary>
     /// Encodes float PCM samples (range -1..1) into a 16-bit mono WAV byte array.
     /// The local pipeline keeps audio as float; the cloud API wants an encoded container.
     /// </summary>
@@ -332,11 +430,7 @@ public class OpenRouterEngine : ITranscriptionEngine
         // data chunk
         w.Write("data"u8.ToArray());
         w.Write(dataSize);
-        foreach (var sample in samples)
-        {
-            var clamped = Math.Clamp(sample, -1f, 1f);
-            w.Write((short)(clamped * short.MaxValue));
-        }
+        w.Write(ToPcm16(samples));
 
         w.Flush();
         return ms.ToArray();

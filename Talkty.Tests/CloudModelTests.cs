@@ -60,6 +60,70 @@ public class CloudModelTests
         Assert.Null(OpenRouterEngine.ExtractText("not json"));
     }
 
-    private static JsonDocument Serialize(ModelProfile profile, string language) =>
-        JsonDocument.Parse(JsonSerializer.Serialize(OpenRouterEngine.BuildPayload(profile, "AAAA", language)));
+    [Fact]
+    public void MaiPayloadSendsVocabularyAsPhraseListAlongsideCleanStyle()
+    {
+        using var doc = Serialize(ModelProfile.CloudMaiTranscribe2, "en", ["Revori", "Kenshi"]);
+        var azure = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure");
+        var phrases = azure.GetProperty("phraseList").GetProperty("phrases").EnumerateArray().Select(p => p.GetString()!).ToArray();
+        Assert.Equal(["Revori", "Kenshi"], phrases);
+        Assert.Equal("clean", azure.GetProperty("enhancedMode").GetProperty("modelOptions").GetProperty("transcribeStyle").GetString());
+    }
+
+    [Fact]
+    public void PhraseListStopsAtFiftyTerms()
+    {
+        // Azure answers a 51st phrase with a provider 400 (measured 2026-09-15).
+        var terms = Enumerable.Range(1, 60).Select(i => $"term{i}").ToList();
+        using var doc = Serialize(ModelProfile.CloudMaiTranscribe2, "en", terms);
+        var phrases = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure")
+            .GetProperty("phraseList").GetProperty("phrases");
+        Assert.Equal(50, phrases.GetArrayLength());
+        Assert.Equal("term1", phrases[0].GetString());
+    }
+
+    [Fact]
+    public void NoPhraseListWithoutVocabulary()
+    {
+        using var doc = Serialize(ModelProfile.CloudMaiTranscribe2, "en", []);
+        var azure = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure");
+        Assert.False(azure.TryGetProperty("phraseList", out _));
+    }
+
+    [Fact]
+    public void OtherCloudModelsIgnoreVocabularyTerms()
+    {
+        using var doc = Serialize(ModelProfile.CloudGpt4oMiniTranscribe, "en", ["Revori"]);
+        Assert.False(doc.RootElement.TryGetProperty("provider", out _));
+    }
+
+    [Fact]
+    public void PayloadNamesTheUploadFormat()
+    {
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(
+            OpenRouterEngine.BuildPayload(ModelProfile.CloudMaiTranscribe2, "AAAA", "mp3", "en")));
+        Assert.Equal("mp3", doc.RootElement.GetProperty("input_audio").GetProperty("format").GetString());
+    }
+
+    [Fact]
+    public void UploadIsCompressedMp3OrFallsBackToWav()
+    {
+        // One second of a 440 Hz tone. Media Foundation is present on desktop Windows; a machine
+        // without it (Windows N, some servers) must still get a valid WAV.
+        var samples = Enumerable.Range(0, 16000).Select(i => 0.3f * MathF.Sin(2 * MathF.PI * 440 * i / 16000)).ToArray();
+        var (audio, format) = OpenRouterEngine.EncodeForUpload(samples, 16000);
+        if (format == "mp3")
+        {
+            Assert.True(audio.Length < samples.Length * 2 / 3, $"MP3 should be far smaller than 16-bit PCM, was {audio.Length} bytes");
+        }
+        else
+        {
+            Assert.Equal("wav", format);
+            Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(audio, 0, 4));
+            Assert.Equal(44 + samples.Length * 2, audio.Length);
+        }
+    }
+
+    private static JsonDocument Serialize(ModelProfile profile, string language, IReadOnlyList<string>? terms = null) =>
+        JsonDocument.Parse(JsonSerializer.Serialize(OpenRouterEngine.BuildPayload(profile, "AAAA", "wav", language, terms)));
 }

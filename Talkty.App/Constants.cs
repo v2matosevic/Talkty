@@ -92,6 +92,18 @@ public static class Constants
     public const int CloudMaxAudioSeconds = 55;
 
     /// <summary>
+    /// Most vocabulary hints MAI-Transcribe 2 accepts per request: its phrase list answers a 51st
+    /// term with a provider 400 (measured 2026-09-15).
+    /// </summary>
+    public const int CloudMaxVocabularyTerms = 50;
+
+    /// <summary>
+    /// MP3 bitrate for cloud uploads (16 kHz mono speech). 48 kbps matched WAV word for word on
+    /// MAI-Transcribe 2 at a fifth of the size; 24-32 kbps started changing words.
+    /// </summary>
+    public const int CloudMp3BitRate = 48000;
+
+    /// <summary>
     /// Per-attempt timeout for the prompt-refinement LLM call (raw transcription → structured agent
     /// prompt), used when "Prompting" is enabled. Kept tight so a slow/stuck model in the fallback
     /// chain drops through to the next instead of hanging the user (a healthy call is ~1-3s).

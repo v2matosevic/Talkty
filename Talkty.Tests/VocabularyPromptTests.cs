@@ -66,6 +66,35 @@ public class VocabularyPromptTests
     }
 
     [Fact]
+    public void CloudTermsPutUserAdditionsFirstAndStopAtFifty()
+    {
+        var settings = new AppSettings { CustomVocabulary = [.. DefaultVocabulary.CodingTerms, "Revori", "Kenshi"] };
+        var terms = VocabularyPromptBuilder.BuildCloudTerms(settings)!;
+        Assert.Equal(["Revori", "Kenshi"], terms.Take(2));
+        Assert.Equal(Talkty.App.Constants.CloudMaxVocabularyTerms, terms.Count);
+    }
+
+    [Theory]
+    [InlineData("hr", false, ModelProfile.CloudMaiTranscribe2)]
+    [InlineData("en", true, ModelProfile.CloudMaiTranscribe2)]
+    [InlineData("de", false, ModelProfile.LargeTurbo)]
+    public void CloudTermsAreSpellingsNotAnEnglishPromptSoAnyLanguageGetsThem(string language, bool auto, ModelProfile model)
+    {
+        var settings = new AppSettings
+        {
+            Language = language, AutoDetectLanguage = auto, ModelProfile = model, CustomVocabulary = ["  Revori ", "revori", "Athena\tAgent"]
+        };
+        Assert.Equal(["Revori", "Athena Agent"], VocabularyPromptBuilder.BuildCloudTerms(settings));
+    }
+
+    [Fact]
+    public void DisabledOrEmptyVocabularySendsNoCloudTerms()
+    {
+        Assert.Null(VocabularyPromptBuilder.BuildCloudTerms(new AppSettings { UseCustomVocabulary = false, CustomVocabulary = ["Revori"] }));
+        Assert.Null(VocabularyPromptBuilder.BuildCloudTerms(new AppSettings { CustomVocabulary = [] }));
+    }
+
+    [Fact]
     public void MissingVocabularyGetsBoundedDefaults()
     {
         var prompt = VocabularyPromptBuilder.Build(new AppSettings())!;

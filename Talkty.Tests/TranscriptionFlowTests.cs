@@ -244,6 +244,21 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         Assert.Null(context.Engine.LastVocabularyPrompt);
     });
 
+    [Fact]
+    public Task RecordingPrewarmsTheCloudAndSendsVocabularyTerms() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.ViewModel.ApplySettings(new AppSettings
+        {
+            UseCustomVocabulary = true, Language = "hr", CustomVocabulary = [.. DefaultVocabulary.CodingTerms, "Revori"]
+        });
+        await context.Record();
+        Assert.Equal(1, context.Engine.PrewarmCalls);
+        var terms = context.Engine.LastVocabularyTerms!;
+        Assert.Equal("Revori", terms[0]);
+        Assert.Equal(Talkty.App.Constants.CloudMaxVocabularyTerms, terms.Count);
+    });
+
     private sealed class Context : IDisposable
     {
         public FakeSettings Settings { get; } = new();
@@ -320,13 +335,16 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public string Text { get; set; } = "Build the feature";
         public string? VocabularyHint { get; private set; }
         public string? LastVocabularyPrompt { get; private set; }
+        public IReadOnlyList<string>? LastVocabularyTerms { get; private set; }
+        public int PrewarmCalls { get; private set; }
         public Func<CancellationToken, Action<string>?, Task<TranscriptionResult>>? Run { get; set; }
         public Task<TranscriptionResult> TranscribeAsync(float[] audioSamples, string language = "en",
             CancellationToken cancellationToken = default, Action<string>? onFirstSegment = null,
-            string? vocabularyPrompt = null)
+            string? vocabularyPrompt = null, IReadOnlyList<string>? vocabularyTerms = null)
         {
             Calls++;
             LastVocabularyPrompt = vocabularyPrompt;
+            LastVocabularyTerms = vocabularyTerms;
             if (Run != null) return Run(cancellationToken, onFirstSegment);
             onFirstSegment?.Invoke("First part");
             return Task.FromResult(new TranscriptionResult { Success = true, Text = Text });
@@ -335,6 +353,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public Task<bool> EnsureModelLoadedAsync() => Task.FromResult(true);
         public void SetVocabularyPrompt(string? prompt) => VocabularyHint = prompt;
         public void SetCloudApiKey(string? apiKey) { }
+        public void PrewarmCloud() => PrewarmCalls++;
         public void SetLanguageHint(string? language) { }
         public void SetIdleUnload(bool enabled) { }
         public void Dispose() { }

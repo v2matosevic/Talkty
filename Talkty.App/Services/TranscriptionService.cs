@@ -65,6 +65,12 @@ public class TranscriptionService : ITranscriptionService
         }
     }
 
+    public void PrewarmCloud()
+    {
+        if (_currentEngine is Engines.OpenRouterEngine openRouter)
+            _ = openRouter.PrewarmAsync();
+    }
+
     public void SetLanguageHint(string? language)
     {
         _pendingLanguage = language;
@@ -203,7 +209,8 @@ public class TranscriptionService : ITranscriptionService
         string language = "en",
         CancellationToken cancellationToken = default,
         Action<string>? onFirstSegment = null,
-        string? vocabularyPrompt = null)
+        string? vocabularyPrompt = null,
+        IReadOnlyList<string>? vocabularyTerms = null)
     {
         Log.Info($"TranscriptionService.TranscribeAsync: Samples={audioSamples.Length}, Language={language}{(vocabularyPrompt != null ? $", Vocabulary={vocabularyPrompt.Length} chars" : "")}");
 
@@ -259,7 +266,8 @@ public class TranscriptionService : ITranscriptionService
                 Language = effectiveLanguage,
                 TimeoutMs = (int)ITranscriptionService.DefaultTimeout.TotalMilliseconds,
                 OnFirstSegment = onFirstSegment,
-                VocabularyPrompt = vocabularyPrompt
+                VocabularyPrompt = vocabularyPrompt,
+                VocabularyTerms = vocabularyTerms
             };
 
             return await _currentEngine.TranscribeAsync(audioSamples, options, cancellationToken);

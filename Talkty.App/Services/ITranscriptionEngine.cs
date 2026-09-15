@@ -25,6 +25,12 @@ public record TranscriptionOptions
     public string? VocabularyPrompt { get; init; }
 
     /// <summary>
+    /// Optional keyword hints for cloud models that take a term list (MAI-Transcribe 2's
+    /// phrase list). Whisper uses <see cref="VocabularyPrompt"/> instead.
+    /// </summary>
+    public IReadOnlyList<string>? VocabularyTerms { get; init; }
+
+    /// <summary>
     /// Callback fired when the first non-empty segment is ready.
     /// Allows the caller to copy partial text to clipboard before full transcription completes.
     /// </summary>

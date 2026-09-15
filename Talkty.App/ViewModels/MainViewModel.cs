@@ -498,6 +498,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // the user speaking — by stop time it's usually ready and the reload costs no
             // perceived latency. TranscribeAsync awaits this same load if it's still going.
             _ = _transcriptionService.EnsureModelLoadedAsync();
+            // Cloud models: open the connection and warm the audio encoder during speech too.
+            _transcriptionService.PrewarmCloud();
 
             IsListening = true;
             StatusText = "Listening...";
@@ -599,6 +601,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 Log.Debug($"Vocabulary prompt: {vocabularyPrompt.Length} chars");
             }
+            // Cloud models that take keyword hints get the same saved words as a list.
+            var vocabularyTerms = VocabularyPromptBuilder.BuildCloudTerms(_settingsService.Settings);
 
             // Load text replacements for post-processing (applied after Whisper output)
             var textReplacements = _settingsService.Settings.UseCustomVocabulary
@@ -646,7 +650,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 };
             }
 
-            var result = await _transcriptionService.TranscribeAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt);
+            var result = await _transcriptionService.TranscribeAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt, vocabularyTerms);
             cancellationToken.ThrowIfCancellationRequested();
             var elapsed = DateTime.Now - startTime;
 

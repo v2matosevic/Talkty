@@ -2,16 +2,39 @@
 
 Local improvement pass, started 4 September 2026 and completed 5 September 2026.
 
-Public release update, 5 September 2026: all completed work is now pushed and
-[1.3.2 is published](https://github.com/v2matosevic/Talkty/releases/tag/v1.3.2).
-The update notice now advertises 1.3.2. [Release verification](RELEASE-1.3.2.md)
-supersedes the historical pending-approval and 1.3.0 public-status notes below.
+**Current handoff, 16 September 2026: [1.3.3 is installed and published](RELEASE-1.3.3.md).**
+Everything below this section is a historical record of the 1.3.1/1.3.2 work; where it
+says a release is pending or `version.json` sits at 1.3.0, read the current status
+section instead. Companion records: [VOCABULARY-ACCURACY.md](VOCABULARY-ACCURACY.md)
+(accuracy fix), [UX-PERFORMANCE-2026-09.md](UX-PERFORMANCE-2026-09.md) (desktop changes)
+and [RELEASE-1.3.2.md](RELEASE-1.3.2.md) (the previous release).
 
-Current handoff: version 1.3.2 supersedes this historical 1.3.1 installation.
-Read [VOCABULARY-ACCURACY.md](VOCABULARY-ACCURACY.md) for the accuracy fix and final
-delivery evidence, and [UX-PERFORMANCE-2026-09.md](UX-PERFORMANCE-2026-09.md) for the
-desktop changes. The combined app is installed, with 99 tests passed. Public release
-metadata remains at 1.3.0.
+## End-of-day status, 16 September 2026
+
+- Installed and public: **1.3.3**. `B:/Talkty` is registered as Talkty 1.3.3, the build is
+  `1dc462d`, the release tag sits at `c60680f`, and `version.json` advertises 1.3.3, so
+  existing installs are offered the update. Nothing is pending.
+- What shipped: MAI-Transcribe 2 is the recommended cloud model; cloud audio uploads as
+  48 kbps MP3 instead of WAV; the encoder and HTTPS connection warm up at recording start;
+  the saved vocabulary reaches MAI as its phrase list (first 50 terms, additions first).
+- Verification: 120 tests pass in Release, 488/488 installed payload hashes match, CI passed
+  on both pushed commits, and GitHub's asset digest plus a fresh download match the local
+  installer SHA-256 `6cb7b290…`. Two real dictations on the final build returned in 1.63 s
+  and 0.66 s. Full evidence and limits: [RELEASE-1.3.3.md](RELEASE-1.3.3.md).
+- Invariants worth keeping: do not revert cloud uploads to WAV (upload size, not inference,
+  dominated cloud latency), and never send more than 50 phrases to MAI (the 51st returns a
+  provider 400). `ModelProfile` is still persisted by number; MAI is enum 16.
+- Tooling: `tools/cloud-engine-check.ps1` drives the real cloud engine against a WAV file
+  with no UI or microphone. It spends real money on the saved OpenRouter key, so keep test
+  clips short; a day of format benchmarking cost about $0.09.
+- Open items: long real dictations on 1.3.3 are unmeasured; MAI does not support Croatian or
+  Serbian; the WAV fallback for Windows without Media Foundation has not run on such a
+  machine; CI reports a Node 20 deprecation notice for `actions/checkout@v4` and
+  `actions/setup-dotnet@v4`; a `.gitignore` change adding `.clipboard-images/` is
+  uncommitted and was not made by this session.
+- Next session: time one long real dictation before considering parallel chunked uploads,
+  and consider adding "OpenRouter" and "version2.hr" to the vocabulary (Marko's call; both
+  still mis-transcribe because they are not in his list).
 
 ## End-of-day status, 5 September 2026
 
@@ -74,12 +97,12 @@ The installed app was opened successfully. Startup logs confirm Alt+Q registered
 
 The installer accepts an optional `MyAppSourcePath` compiler definition so it can package the freshly verified output directly. History card success notifications now come from the successful clipboard operation, preventing the UI from displaying success after a failed copy.
 
-No GitHub release has been published. `version.json` remains at the currently published 1.3.0 and must be updated when the public release is made.
+(Historical, 5 September 2026: no release had been published at that point and `version.json` still pointed at 1.3.0. Both 1.3.2 and 1.3.3 have since been released, and `version.json` advertises 1.3.3.)
 
 ## Resume next session
 
 - Collect Marko's live dictation/cancellation feedback before changing microphone processing or decoding settings.
 - Use representative audio and expected transcripts to assess recognition accuracy and latency. Existing code and headless tests do not establish those measurements.
 - Keep the installed 1.3.2 build and personal vocabulary corrections. Collect repeatable mishearings before switching away from Turbo.
-- Public release remains separate: when authorized, publish the verified 1.3.2 installer, then update `version.json` with matching release notes. Do not announce an update before its installer is available.
+- (Done since: 1.3.2 was published on 5 September and 1.3.3 on 16 September, each time by publishing the verified installer first and updating `version.json` only afterwards. Keep that order for the next release.)
 - The 1.3.0 installer remains in `installer/output` as a rollback artifact. Installation logs and fingerprints contain no settings values or audio.

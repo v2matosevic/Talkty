@@ -25,7 +25,7 @@ Upload sizes: the 11 s clip dropped from 355,886 to 67,823 bytes, and the 144 s 
 
 Formats compared: FLAC (half the size, 12 to 16 s for the long clip), MP3 at 24, 32 and 48 kbps, and Opus at 24 kbps. Opus was smallest with identical words but needs an extra library. MP3 at 24 and 32 kbps started changing words. 48 kbps MP3 was chosen because it needs no new dependency. A warmed connection or HTTP/2 alone did not change request time measurably.
 
-Before the fix, Marko's real dictations of 2.0, 8.5, 12.6 and 17.8 s took 0.5, 1.4, 3.2 and 2.5 s. Real dictations after the fix are not yet measured.
+Before the fix, Marko's real dictations of 2.0, 8.5, 12.6 and 17.8 s took 0.5, 1.4, 3.2 and 2.5 s. After the fix, on the installed build: a 2.3 s dictation took 1.63 s (12,743 bytes of MP3, the first cloud request in that app session, so the warm-up had only 2.3 s of speech to work with) and the next, 1.8 s, took 0.66 s (10,367 bytes). Both carried 50 vocabulary hints. Long real dictations on 1.3.3 are still unmeasured.
 
 Splitting long recordings into parallel requests was considered and rejected. Compression already captured most of the gain for typical dictations under 20 s, and chunk boundaries risk broken words and false sentence breaks.
 
@@ -55,7 +55,11 @@ A synthesized clip with Marko's own terms, sent to MAI-Transcribe 2:
 | App engine, live | Through `OpenRouterEngine`: the vocabulary clip with 50 hints (1.8 s in a fresh process), the 144 s clip as MP3 (2.9 s), and the prewarm step (0.35 to 0.6 s, during speech). A quiet clip gives "No speech was detected". |
 | Install | Final elevated Inno upgrade, exit 0. HKLM entry "Talkty 1.3.3". All 488 installed files match the manifest. settings.json and history.json were unchanged by the install. The 5 CUDA pack files were kept. |
 | Relaunch | Talkty started on MAI-Transcribe 2 ("Cloud model ready"), Alt+Q registered, and the update check ran on 1.3.3. |
-| Real use | On the first 1.3.3 build, MAI-Transcribe 2 was selected in Settings (`modelProfile` 16), and four dictations went through it and were pasted. |
+| Real use | On the first 1.3.3 build, MAI-Transcribe 2 was selected in Settings (`modelProfile` 16), and four dictations went through it and were pasted. On the final build, two real dictations uploaded MP3 with 50 vocabulary hints and returned in 1.63 s and 0.66 s, at $0.000083 and $0.000056. No MP3 fallback warning appeared. |
+
+## Tooling
+
+The throwaway harness used for the live checks is kept as `tools/cloud-engine-check.ps1`. It loads the built `Talkty.App.dll`, decrypts the saved OpenRouter key with the app's own `ApiKeyProtector`, and runs one transcription through the production path (MP3 encoding, payload, HTTP, parsing) against a WAV file, with switches for the model, language, vocabulary hints and the warm-up. It spends real money on the saved key.
 
 ## Test spend
 
@@ -65,7 +69,7 @@ The live tests used Marko's saved OpenRouter key. About 53 minutes of audio went
 
 - Croatian and Serbian are not supported by MAI-Transcribe 2. A pinned `hr` is accepted without error, but recognition of Croatian speech is untested; this machine has no Croatian voice to synthesize one.
 - Filler removal and vocabulary hints were tested on synthesized speech only, not on natural dictation.
-- Real dictation speed after the fix is not yet measured.
+- Real dictation on 1.3.3 is measured only for two short takes (2.3 s and 1.8 s of speech). Long real dictations are not measured.
 - The WAV fallback for Windows without Media Foundation is covered by a unit test that accepts either path. It was not run on such a machine.
 - The Settings window was not rendered for this release; the picker was used live on the first 1.3.3 build.
 

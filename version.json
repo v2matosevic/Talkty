@@ -1,5 +1,5 @@
 {
-  "version": "1.3.2",
+  "version": "1.3.3",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Custom vocabulary now reaches local Whisper transcription in English, with your added terms prioritized. Recording and Prompting cancellation stop pending output, repeated recordings stay separate, and microphone or clipboard failures are visible. Clearer recording controls, keyboard-accessible history, better resizing, ordered history saves, and responsive audio meters. Upgrading keeps your settings, history, models, and existing CUDA pack."
+  "release_notes": "MAI-Transcribe 2 is the new recommended cloud model: the cheapest cloud option, fast, and it leaves out filler words (it does not support Croatian or Serbian). Cloud transcription is much faster because recordings now upload as compressed MP3, and your vocabulary now reaches MAI-Transcribe 2 as spelling hints. Upgrading keeps your settings, history, models, and existing CUDA pack."
 }

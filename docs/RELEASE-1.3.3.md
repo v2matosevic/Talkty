@@ -1,6 +1,6 @@
-# Talkty 1.3.3 (installed locally, not public yet)
+# Talkty 1.3.3 public release
 
-Built and installed on this machine on 15 and 16 September 2026. Marko asked for MAI-Transcribe 2 to become the main cloud model, then reported cloud transcription as slow and ignoring his vocabulary. Both reports were real and are fixed in this build. Nothing is on GitHub yet: `version.json` still advertises 1.3.2, so existing installs are not notified.
+Built and installed on this machine on 15 and 16 September 2026. Marko asked for MAI-Transcribe 2 to become the main cloud model, then reported cloud transcription as slow and ignoring his vocabulary. Both reports were real and are fixed in this build. Published on 16 September 2026 at Marko's explicit request to push, release and publish: https://github.com/v2matosevic/Talkty/releases/tag/v1.3.3
 
 ## What changed
 
@@ -69,8 +69,11 @@ The live tests used Marko's saved OpenRouter key. About 53 minutes of audio went
 - The WAV fallback for Windows without Media Foundation is covered by a unit test that accepts either path. It was not run on such a machine.
 - The Settings window was not rendered for this release; the picker was used live on the first 1.3.3 build.
 
-## Remaining release steps
+## Public release
 
-1. Push `ea17455`, `1df3b1f`, `1dc462d` and the documentation commit to `main`. The coordination push review could not attribute the commits to a live session, so the push waits for Marko.
-2. Create GitHub release `v1.3.3` with `TalktySetup-1.3.3.exe`, and verify the uploaded asset's digest against the SHA-256 above.
-3. Only after the installer is public, bump `version.json` to 1.3.3. The app reads it from GitHub's `main`, and every existing install will be notified.
+- Marko authorized the push and public release on 16 September 2026. `ea17455`, `1df3b1f`, `1dc462d` and `c60680f` (documentation) were pushed to `main`. `origin/main` had not moved, so nothing was rebased.
+- Source CI passed on `c60680f`: https://github.com/v2matosevic/Talkty/actions/runs/35030744420. Its only annotation is GitHub's Node.js 20 deprecation notice for `actions/checkout@v4` and `actions/setup-dotnet@v4`.
+- Release: https://github.com/v2matosevic/Talkty/releases/tag/v1.3.3, tag `v1.3.3` at `c60680f`, marked Latest. The installer was built from `1dc462d`; `c60680f` only adds documentation.
+- GitHub's recorded asset digest and a fresh download both match the installer SHA-256 above.
+- `version.json` was bumped to 1.3.3 in the same commit as this record, after the installer was publicly available. The app reads it from GitHub's `main`, so existing installs are notified.
+- The CUDA pack release `cuda-pack-cu13` is unchanged (`TalktyCudaPack-cu13-win-x64.zip`, 469,462,994 bytes).

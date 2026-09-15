@@ -6,6 +6,9 @@ User-facing changes, newest first. Dates are when the work landed.
 
 - New recommended cloud model: Microsoft MAI-Transcribe 2 via OpenRouter. It is the cheapest cloud option ($0.10 per hour of audio), fast, handles 60 languages and leaves out filler words like "um". It does not support Croatian or Serbian; pick another cloud model or local Whisper for those.
 - GPT-4o Mini Transcribe is no longer the recommended cloud model, and Qwen3 ASR Flash is no longer labelled the cheapest.
+- Cloud transcription is much faster. Recordings are uploaded as compressed MP3 instead of WAV, about a fifth of the size, with the same words in testing. A 2.4-minute recording went from 10 to 26 seconds down to about 3, and short dictations take roughly half as long. The connection also warms up while you are still speaking.
+- Your vocabulary now reaches MAI-Transcribe 2 as spelling hints: the first 50 words, with the ones you added first. In testing, names like "Revori" and "Athena Agent" came out right with hints and wrong without.
+- A cloud recording with no speech in it now says "No speech was detected" instead of showing an error.
 
 ## [1.3.2] - 2026-09-05
 

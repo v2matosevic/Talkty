@@ -57,7 +57,7 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
   (up to several GB for the large models) is freed after 15 minutes of inactivity —
   it reloads automatically while you speak, so you never notice.
 - **Cloud transcription** *(opt-in)*. Route a take through OpenRouter models
-  (GPT-4o Transcribe, Whisper Large V3, Qwen3 ASR, and more) when you want extra
+  (GPT-4o Transcribe, MAI-Transcribe 2, Whisper Large V3, Qwen3 ASR, and more) when you want extra
   accuracy. Local stays the default.
 - **Prompting mode** *(opt-in)*. Hover the recording pill, tap the sparkle, and your
   dictation is expanded into a structured prompt for a coding AI agent before it hits

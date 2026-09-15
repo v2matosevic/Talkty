@@ -2,6 +2,11 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [Unreleased]
+
+- New cloud model: Microsoft MAI-Transcribe 2 via OpenRouter. It is the cheapest cloud option ($0.10 per hour of audio), handles 60 languages and leaves out filler words like "um". It does not support Croatian or Serbian.
+- Qwen3 ASR Flash is no longer labelled the cheapest cloud model.
+
 ## [1.3.2] - 2026-09-05
 
 - Words added in Settings now reach local Whisper transcription in English, with personal terms prioritized over the starter vocabulary.

@@ -89,7 +89,8 @@ public class OpenRouterEngine : ITranscriptionEngine
         TranscriptionOptions options,
         CancellationToken cancellationToken = default)
     {
-        var modelId = CurrentProfile?.GetOpenRouterModelId();
+        var profile = CurrentProfile;
+        var modelId = profile?.GetOpenRouterModelId();
         var audioDuration = audioSamples.Length / (double)Constants.SampleRate;
         Log.Section("CLOUD TRANSCRIPTION (OpenRouter)");
         Log.Info($"Model: {modelId}");
@@ -100,7 +101,7 @@ public class OpenRouterEngine : ITranscriptionEngine
         {
             return Fail("OpenRouter API key not set — add it in Settings.");
         }
-        if (string.IsNullOrWhiteSpace(modelId))
+        if (profile is null || string.IsNullOrWhiteSpace(modelId))
         {
             return Fail("No cloud model selected.");
         }
@@ -123,26 +124,7 @@ public class OpenRouterEngine : ITranscriptionEngine
         {
             var wav = EncodeWav(audioSamples, Constants.SampleRate);
             var base64Audio = Convert.ToBase64String(wav);
-
-            // language="auto" (or empty) → omit the field so the model auto-detects.
-            string? language = string.IsNullOrWhiteSpace(options.Language) || options.Language == "auto"
-                ? null
-                : options.Language;
-
-            var payload = new Dictionary<string, object?>
-            {
-                ["model"] = modelId,
-                ["input_audio"] = new Dictionary<string, object?>
-                {
-                    ["data"] = base64Audio,
-                    ["format"] = "wav"
-                },
-                // Deterministic output to match the local engines' zero-temperature behaviour.
-                ["temperature"] = 0
-            };
-            if (language != null) payload["language"] = language;
-
-            var json = JsonSerializer.Serialize(payload);
+            var json = JsonSerializer.Serialize(BuildPayload(profile.Value, base64Audio, options.Language));
 
             // One retry on transient failures (rate limit / gateway hiccups). Auth and
             // client errors are permanent — retrying those just doubles the wait.
@@ -213,6 +195,50 @@ public class OpenRouterEngine : ITranscriptionEngine
             Log.Error("OpenRouterEngine.TranscribeAsync exception", ex);
             return Fail($"Cloud transcription failed: {ex.Message}", startTime);
         }
+    }
+
+    /// <summary>
+    /// Request body for <c>/audio/transcriptions</c>. Internal for tests.
+    /// </summary>
+    internal static Dictionary<string, object?> BuildPayload(ModelProfile profile, string base64Audio, string? language)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = profile.GetOpenRouterModelId(),
+            ["input_audio"] = new Dictionary<string, object?>
+            {
+                ["data"] = base64Audio,
+                ["format"] = "wav"
+            },
+            // Deterministic output to match the local engines' zero-temperature behaviour.
+            ["temperature"] = 0
+        };
+
+        // language="auto" (or empty) → omit the field so the model auto-detects.
+        if (!string.IsNullOrWhiteSpace(language) && language != "auto")
+            payload["language"] = language;
+
+        // MAI-Transcribe defaults to "verbatim", which keeps "um", "uh" and false starts in the pasted
+        // text; "clean" matches what Whisper gives. OpenRouter forwards provider.options.azure to Azure
+        // untouched (an invalid value comes back as a provider 400), so send it only to this model.
+        if (profile == ModelProfile.CloudMaiTranscribe2)
+        {
+            payload["provider"] = new Dictionary<string, object?>
+            {
+                ["options"] = new Dictionary<string, object?>
+                {
+                    ["azure"] = new Dictionary<string, object?>
+                    {
+                        ["enhancedMode"] = new Dictionary<string, object?>
+                        {
+                            ["modelOptions"] = new Dictionary<string, object?> { ["transcribeStyle"] = "clean" }
+                        }
+                    }
+                }
+            };
+        }
+
+        return payload;
     }
 
     /// <summary>

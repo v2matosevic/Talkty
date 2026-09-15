@@ -280,9 +280,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         // offline default.
         AddModel(CloudModels, ModelProfile.CloudGpt4oTranscribe, "GPT-4o Transcribe", "Top accuracy, robust to accents & jargon", "Best Quality", "#8B5CF6");
         AddModel(CloudModels, ModelProfile.CloudGpt4oMiniTranscribe, "GPT-4o Mini Transcribe", "Fast & inexpensive, great everyday quality", "Recommended", "#8B5CF6");
+        AddModel(CloudModels, ModelProfile.CloudMaiTranscribe2, "MAI-Transcribe 2", "Fast, 60 languages (not Croatian/Serbian), drops filler words", "Cheapest", "#10B981");
         AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3, "Whisper Large V3", "99+ languages, high accuracy");
         AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3Turbo, "Whisper Large V3 Turbo", "99+ languages, faster variant");
-        AddModel(CloudModels, ModelProfile.CloudQwen3Asr, "Qwen3 ASR Flash", "Lowest cost per minute, robust in noise", "Cheapest", "#10B981");
+        AddModel(CloudModels, ModelProfile.CloudQwen3Asr, "Qwen3 ASR Flash", "Low cost, robust in noise");
     }
 
     /// <summary>

@@ -32,7 +32,8 @@ public enum ModelProfile
     CloudGpt4oMiniTranscribe,   // openai/gpt-4o-mini-transcribe — fast & cheap
     CloudWhisperLargeV3,        // openai/whisper-large-v3 — multilingual, accurate
     CloudWhisperLargeV3Turbo,   // openai/whisper-large-v3-turbo — multilingual, faster
-    CloudQwen3Asr               // qwen/qwen3-asr-flash-2026-02-10 — lowest cost
+    CloudQwen3Asr,              // qwen/qwen3-asr-flash-2026-02-10 — low cost, robust in noise
+    CloudMaiTranscribe2         // microsoft/mai-transcribe-2 — lowest cost ($0.10/h), 60 languages
 }
 
 /// <summary>
@@ -57,7 +58,8 @@ public static class ModelProfileExtensions
             or ModelProfile.CloudGpt4oMiniTranscribe
             or ModelProfile.CloudWhisperLargeV3
             or ModelProfile.CloudWhisperLargeV3Turbo
-            or ModelProfile.CloudQwen3Asr => TranscriptionEngine.OpenRouter,
+            or ModelProfile.CloudQwen3Asr
+            or ModelProfile.CloudMaiTranscribe2 => TranscriptionEngine.OpenRouter,
         _ => TranscriptionEngine.Whisper
     };
 
@@ -78,6 +80,7 @@ public static class ModelProfileExtensions
         ModelProfile.CloudWhisperLargeV3 => "openai/whisper-large-v3",
         ModelProfile.CloudWhisperLargeV3Turbo => "openai/whisper-large-v3-turbo",
         ModelProfile.CloudQwen3Asr => "qwen/qwen3-asr-flash-2026-02-10",
+        ModelProfile.CloudMaiTranscribe2 => "microsoft/mai-transcribe-2",
         _ => ""
     };
 
@@ -120,7 +123,8 @@ public static class ModelProfileExtensions
         ModelProfile.CloudGpt4oMiniTranscribe => "GPT-4o Mini Transcribe (Cloud) - Fast & Cheap",
         ModelProfile.CloudWhisperLargeV3 => "Whisper Large V3 (Cloud) - Multilingual",
         ModelProfile.CloudWhisperLargeV3Turbo => "Whisper Large V3 Turbo (Cloud) - Fast Multilingual",
-        ModelProfile.CloudQwen3Asr => "Qwen3 ASR Flash (Cloud) - Lowest Cost",
+        ModelProfile.CloudQwen3Asr => "Qwen3 ASR Flash (Cloud) - Low Cost",
+        ModelProfile.CloudMaiTranscribe2 => "MAI-Transcribe 2 (Cloud) - Cheapest, 60 Languages",
         _ => "Unknown"
     };
 
@@ -144,7 +148,8 @@ public static class ModelProfileExtensions
         ModelProfile.CloudGpt4oMiniTranscribe => "Cloud API. Fast and inexpensive, strong everyday quality. Needs OpenRouter key.",
         ModelProfile.CloudWhisperLargeV3 => "Cloud API. 99+ languages, high accuracy, no local compute. Needs OpenRouter key.",
         ModelProfile.CloudWhisperLargeV3Turbo => "Cloud API. 99+ languages, faster variant. Needs OpenRouter key.",
-        ModelProfile.CloudQwen3Asr => "Cloud API. Lowest cost per minute, robust in noise. Needs OpenRouter key.",
+        ModelProfile.CloudQwen3Asr => "Cloud API. Low cost, robust in noise. Needs OpenRouter key.",
+        ModelProfile.CloudMaiTranscribe2 => "Cloud API. Lowest cost, fast, 60 languages (not Croatian or Serbian), filler words removed. Needs OpenRouter key.",
         _ => ""
     };
 
@@ -209,7 +214,8 @@ public static class ModelProfileExtensions
             or ModelProfile.CloudGpt4oMiniTranscribe
             or ModelProfile.CloudWhisperLargeV3
             or ModelProfile.CloudWhisperLargeV3Turbo
-            or ModelProfile.CloudQwen3Asr => "Cloud",
+            or ModelProfile.CloudQwen3Asr
+            or ModelProfile.CloudMaiTranscribe2 => "Cloud",
         _ => "Unknown"
     };
 
@@ -222,6 +228,7 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurbo => GetWhisperMultilingualLanguages(),
         ModelProfile.LargeTurboQ5 => GetWhisperMultilingualLanguages(),
         ModelProfile.SenseVoice => ["zh", "en", "ja", "ko", "yue", "auto"],
+        ModelProfile.CloudMaiTranscribe2 => GetMaiTranscribe2Languages(),
         // Cloud transcription models are all multilingual.
         ModelProfile.CloudGpt4oTranscribe
             or ModelProfile.CloudGpt4oMiniTranscribe
@@ -253,7 +260,8 @@ public static class ModelProfileExtensions
             or ModelProfile.CloudGpt4oMiniTranscribe
             or ModelProfile.CloudWhisperLargeV3
             or ModelProfile.CloudWhisperLargeV3Turbo
-            or ModelProfile.CloudQwen3Asr => true,
+            or ModelProfile.CloudQwen3Asr
+            or ModelProfile.CloudMaiTranscribe2 => true,
         _ => false
     };
 
@@ -278,7 +286,8 @@ public static class ModelProfileExtensions
             or ModelProfile.CloudGpt4oMiniTranscribe
             or ModelProfile.CloudWhisperLargeV3
             or ModelProfile.CloudWhisperLargeV3Turbo
-            or ModelProfile.CloudQwen3Asr => 4,
+            or ModelProfile.CloudQwen3Asr
+            or ModelProfile.CloudMaiTranscribe2 => 4,
         _ => 3
     };
 
@@ -303,6 +312,7 @@ public static class ModelProfileExtensions
         ModelProfile.CloudGpt4oMiniTranscribe => 4,
         ModelProfile.CloudWhisperLargeV3Turbo => 4,
         ModelProfile.CloudQwen3Asr => 4,
+        ModelProfile.CloudMaiTranscribe2 => 5,     // Microsoft reports #1 on FLEURS (vendor claim)
         _ => 3
     };
 
@@ -331,5 +341,17 @@ public static class ModelProfileExtensions
         "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo", "ht", "ps", "tk", "nn",
         "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha",
         "ba", "jw", "su", "auto"
+    ];
+
+    // MAI-Transcribe-2's 60 languages, per Microsoft's Azure Speech docs (2026-09-10). Its own codes:
+    // Norwegian is "nb" and Filipino "fil", not Whisper's "no"/"tl". No Croatian or Serbian.
+    private static string[] GetMaiTranscribe2Languages() =>
+    [
+        "af", "ar", "as", "az", "bg", "bn", "bs", "ca", "cs", "da", "de", "el",
+        "en", "es", "et", "fa", "fi", "fil", "fr", "gl", "gu", "he", "hi", "hu",
+        "hy", "id", "is", "it", "ja", "kk", "kn", "ko", "lt", "lv", "mk", "ml",
+        "mr", "ms", "nb", "ne", "nl", "or", "pa", "pl", "pt", "ro", "ru", "sk",
+        "sl", "sv", "sw", "ta", "te", "th", "tr", "uk", "ur", "vi", "yue", "zh",
+        "auto"
     ];
 }

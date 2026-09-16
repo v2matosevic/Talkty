@@ -103,6 +103,9 @@ public static class Constants
     /// </summary>
     public const int CloudMp3BitRate = 48000;
 
+    /// <summary>MAI speech uploads: Opus at 24 kbps, with MP3/WAV encoder fallback.</summary>
+    public const int CloudOpusBitRate = 24000;
+
     /// <summary>
     /// Per-attempt timeout for the prompt-refinement LLM call (raw transcription → structured agent
     /// prompt), used when "Prompting" is enabled. Kept tight so a slow/stuck model in the fallback

@@ -4,7 +4,7 @@ Drives Talkty's real OpenRouterEngine against a WAV file, without the UI or a mi
 
 .DESCRIPTION
 Loads the built Talkty.App.dll, decrypts the saved OpenRouter key with the app's own
-ApiKeyProtector, and runs one transcription through the production code path: MP3 encoding,
+ApiKeyProtector, and runs one transcription through the production code path: Opus/MP3 encoding,
 payload building, HTTP, parsing. Use it to check a cloud model end to end after changing the
 engine, or to compare models, languages and vocabulary hints on the same audio.
 

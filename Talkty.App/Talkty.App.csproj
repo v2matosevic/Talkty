@@ -41,6 +41,8 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Concentus.Native.NetCore" Version="1.5.2" />
+    <PackageReference Include="Concentus.Oggfile" Version="1.0.7" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <!-- Whisper.net for speech recognition -->
@@ -61,6 +63,8 @@
 
   <ItemGroup>
     <Resource Include="Resources\tray.ico" />
+    <None Include="..\THIRD_PARTY_LICENSES" Link="THIRD_PARTY_LICENSES"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Let the test project reach internal helpers (e.g. the prompt completeness guard). -->

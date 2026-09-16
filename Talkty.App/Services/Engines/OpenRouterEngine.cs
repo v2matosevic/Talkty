@@ -1,8 +1,14 @@
 using System.IO;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Encodings.Web;
+using Concentus;
+using Concentus.Enums;
+using Concentus.Oggfile;
 using NAudio.MediaFoundation;
 using NAudio.Wave;
 using Talkty.App.Models;
@@ -11,7 +17,7 @@ namespace Talkty.App.Services.Engines;
 
 /// <summary>
 /// Cloud transcription engine backed by OpenRouter's audio API.
-/// Sends recorded audio (MP3, WAV fallback) to <c>POST /api/v1/audio/transcriptions</c> and returns
+/// Sends recorded audio (Opus for MAI, MP3/WAV fallback) to <c>POST /api/v1/audio/transcriptions</c> and returns
 /// the transcribed text. The model is selected per <see cref="ModelProfile"/> (GPT-4o
 /// Transcribe, Whisper Large V3, Qwen3 ASR, etc.).
 ///
@@ -23,6 +29,28 @@ public class OpenRouterEngine : ITranscriptionEngine
     private const string Endpoint = "https://openrouter.ai/api/v1/audio/transcriptions";
 
     private const string KeyEndpoint = "https://openrouter.ai/api/v1/key";
+
+    // JSON is sent only to the API, never embedded in HTML. Avoid escaping '+' in base64 audio.
+    private static readonly JsonSerializerOptions PayloadJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+    private static readonly Lazy<Task> EncoderWarmup = new(() => Task.Run(() =>
+    {
+        EncodeForUpload(new float[Constants.SampleRate / 10], Constants.SampleRate);
+        TryEncodeMp3(new float[Constants.SampleRate / 10], Constants.SampleRate);
+    }));
+    private static readonly Lazy<bool> NativeOpusAvailable = new(() =>
+    {
+        // Load only our packaged library. The codec's default search uses the host executable's
+        // directory, which is wrong when hosted by tests/PowerShell. Keep it loaded for process life.
+        var root = Path.GetDirectoryName(typeof(OpenRouterEngine).Assembly.Location)!;
+        foreach (var path in new[] { Path.Combine(root, "opus.dll"), Path.Combine(root, "runtimes", "win-x64", "native", "opus.dll") })
+        {
+            if (NativeLibrary.TryLoad(path, out _)) return true;
+        }
+        return false;
+    });
 
     // One HttpClient for the engine's lifetime — creating per-request exhausts sockets.
     private static readonly HttpClient Http = new(new SocketsHttpHandler
@@ -41,7 +69,7 @@ public class OpenRouterEngine : ITranscriptionEngine
 
     private readonly object _lock = new();
     private string? _apiKey;
-    private int _prewarming;
+    private Task? _prewarmTask;
 
     public string EngineName => "OpenRouter";
     public TranscriptionEngine EngineType => TranscriptionEngine.OpenRouter;
@@ -74,28 +102,33 @@ public class OpenRouterEngine : ITranscriptionEngine
     /// user is still speaking. Measured 2026-09-15: the first request in a fresh process took
     /// 2.6 s against 1.1 s warm, and the first MP3 encode ~0.5 s of encoder startup. Never throws.
     /// </summary>
-    public async Task PrewarmAsync()
+    public Task PrewarmAsync()
     {
-        if (Interlocked.Exchange(ref _prewarming, 1) == 1) return;
+        lock (_lock)
+        {
+            // Callers awaiting warm-up must await the active work, not an already-completed task.
+            return _prewarmTask is { IsCompleted: false } ? _prewarmTask : _prewarmTask = RunPrewarmAsync();
+        }
+    }
+
+    private async Task RunPrewarmAsync()
+    {
         try
         {
-            await Task.Run(() => TryEncodeMp3(new float[Constants.SampleRate / 10], Constants.SampleRate));
-
+            // Start both independently. Encoder initialization must not postpone the TLS handshake.
+            var encoderWarmup = EncoderWarmup.Value;
             var key = _apiKey;
             if (string.IsNullOrWhiteSpace(key)) return;
             using var request = new HttpRequestMessage(HttpMethod.Get, KeyEndpoint);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
             using var cts = new CancellationTokenSource(5000);
-            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cts.Token);
             Log.Debug($"Cloud prewarm done: HTTP {(int)response.StatusCode}");
+            await encoderWarmup;
         }
         catch (Exception ex)
         {
             Log.Debug($"Cloud prewarm skipped: {ex.Message}");
-        }
-        finally
-        {
-            Volatile.Write(ref _prewarming, 0);
         }
     }
 
@@ -124,6 +157,8 @@ public class OpenRouterEngine : ITranscriptionEngine
         CurrentProfile = profile;
         BackendInfo = $"OpenRouter (cloud) — {profile.GetOpenRouterModelId()}";
         Log.Info($"OpenRouterEngine ready: model={profile.GetOpenRouterModelId()}");
+        // Cover very short first dictations too; this never delays model readiness.
+        _ = PrewarmAsync();
         return Task.FromResult(true);
     }
 
@@ -158,6 +193,7 @@ public class OpenRouterEngine : ITranscriptionEngine
         }
 
         var startTime = DateTime.Now;
+        var clock = Stopwatch.StartNew();
 
         // Cloud needs a longer budget than the local 30s default (network + queue + inference).
         // ESC still aborts immediately via the caller's cancellationToken.
@@ -167,12 +203,16 @@ public class OpenRouterEngine : ITranscriptionEngine
         try
         {
             // Off the UI thread: Media Foundation wants an MTA thread, and a long take encodes in ~0.3 s.
-            var (audio, format) = await Task.Run(() => EncodeForUpload(audioSamples, Constants.SampleRate), linkedCts.Token);
+            var (audio, format) = await Task.Run(() => EncodeForUpload(audioSamples, Constants.SampleRate,
+                profile == ModelProfile.CloudMaiTranscribe2, linkedCts.Token), linkedCts.Token);
+            var encodeMs = clock.ElapsedMilliseconds;
             var hints = profile == ModelProfile.CloudMaiTranscribe2
                 ? Math.Min(options.VocabularyTerms?.Count ?? 0, Constants.CloudMaxVocabularyTerms)
                 : 0;
             Log.Info($"Upload: {audio.Length:N0} bytes {format}, {hints} vocabulary hints");
-            var json = JsonSerializer.Serialize(BuildPayload(profile.Value, Convert.ToBase64String(audio), format, options.Language, options.VocabularyTerms));
+            var json = SerializePayload(profile.Value, audio, format, options.Language, options.VocabularyTerms);
+            var payloadMs = clock.ElapsedMilliseconds - encodeMs;
+            Log.Info($"Cloud preparation: encode={encodeMs}ms, payload={payloadMs}ms, body={json.Length} bytes");
 
             // One retry on transient failures (rate limit / gateway hiccups). Auth and
             // client errors are permanent — retrying those just doubles the wait.
@@ -184,12 +224,18 @@ public class OpenRouterEngine : ITranscriptionEngine
                 attempt++;
                 using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                var requestClock = Stopwatch.StartNew();
+                var content = new CloudRequestContent(json, requestClock);
+                request.Content = content;
 
                 Log.Debug($"POST {Endpoint} ({audio.Length} bytes {format}, {json.Length} bytes body, attempt {attempt})");
-                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseContentRead, linkedCts.Token);
+                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+                var headersMs = requestClock.ElapsedMilliseconds;
                 body = await response.Content.ReadAsStringAsync(linkedCts.Token);
                 status = response.StatusCode;
+                Log.Info($"Cloud HTTP: attempt={attempt}, status={(int)status}, version={response.Version}, " +
+                    $"bodyWritten={content.BodyWrittenMs?.ToString() ?? "unknown"}ms, headers={headersMs}ms, " +
+                    $"responseRead={requestClock.ElapsedMilliseconds - headersMs}ms, total={requestClock.ElapsedMilliseconds}ms");
 
                 if (response.IsSuccessStatusCode) break;
 
@@ -205,7 +251,7 @@ public class OpenRouterEngine : ITranscriptionEngine
             }
 
             var text = ExtractText(body);
-            var elapsed = DateTime.Now - startTime;
+            var elapsed = clock.Elapsed;
 
             if (text is null)
             {
@@ -305,6 +351,11 @@ public class OpenRouterEngine : ITranscriptionEngine
         return payload;
     }
 
+    internal static byte[] SerializePayload(ModelProfile profile, byte[] audio, string format,
+        string? language, IReadOnlyList<string>? vocabularyTerms = null) =>
+        JsonSerializer.SerializeToUtf8Bytes(BuildPayload(profile, Convert.ToBase64String(audio), format,
+            language, vocabularyTerms), PayloadJsonOptions);
+
     /// <summary>
     /// Pulls the transcript out of OpenRouter's response: <c>{ "text": "...", "usage": {...} }</c>.
     /// Null means the response was malformed; an empty string means no speech was recognized.
@@ -358,13 +409,43 @@ public class OpenRouterEngine : ITranscriptionEngine
         s.Length <= max ? s : s[..max] + "…";
 
     /// <summary>
-    /// MP3 when Windows' Media Foundation encoder is available, otherwise WAV. Upload time dominated
-    /// cloud latency: a 144 s take uploaded in 26 s as WAV and 5 s as MP3, with the same words.
+    /// Native Opus for MAI, MP3 for other providers or when Opus cannot initialize, then WAV.
+    /// Native encoding keeps CPU preparation comparable to MP3 with less than half the upload.
     /// </summary>
-    internal static (byte[] Audio, string Format) EncodeForUpload(float[] samples, int sampleRate)
+    internal static (byte[] Audio, string Format) EncodeForUpload(float[] samples, int sampleRate,
+        bool preferOpus = true, CancellationToken cancellationToken = default)
     {
+        if (preferOpus)
+        {
+            try { return (EncodeOpus(samples, sampleRate, cancellationToken), "opus"); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { Log.Warning($"Opus encoding unavailable; trying MP3: {ex.Message}"); }
+        }
         var mp3 = TryEncodeMp3(samples, sampleRate);
         return mp3 != null ? (mp3, "mp3") : (EncodeWav(samples, sampleRate), "wav");
+    }
+
+    internal static byte[] EncodeOpus(float[] samples, int sampleRate, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!NativeOpusAvailable.Value)
+            throw new NotSupportedException("Packaged native Opus encoder is missing; managed encoding would delay transcription.");
+        using var encoder = OpusCodecFactory.CreateEncoder(sampleRate, 1, OpusApplication.OPUS_APPLICATION_AUDIO);
+        if (encoder is Concentus.Structs.OpusEncoder)
+            throw new NotSupportedException("Native Opus was not selected; using the faster MP3 fallback.");
+        Log.Debug($"Cloud Opus encoder: {encoder.GetType().Name}, {encoder.GetVersionString()}");
+        encoder.Bitrate = Constants.CloudOpusBitRate;
+        encoder.Complexity = 5;
+        using var output = new MemoryStream();
+        var writer = new OpusOggWriteStream(encoder, output, inputSampleRate: sampleRate, leaveOpen: true);
+        // Bound cancellation latency and avoid making another full PCM copy for long recordings.
+        for (int offset = 0; offset < samples.Length; offset += sampleRate)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            writer.WriteSamples(samples, offset, Math.Min(sampleRate, samples.Length - offset));
+        }
+        writer.Finish();
+        return output.ToArray();
     }
 
     private static byte[]? TryEncodeMp3(float[] samples, int sampleRate)

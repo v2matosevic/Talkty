@@ -1,0 +1,306 @@
+[
+  {
+    "experiment": "multipart.json",
+    "result": {
+      "variant": "json-invalid",
+      "seconds": 1.0,
+      "audioBytes": 7127,
+      "bodyBytes": 9799,
+      "encodeMs": 107,
+      "headersMs": 479,
+      "totalMs": 488,
+      "status": 400,
+      "cost": null,
+      "text": null,
+      "error": {
+        "message": "Provider returned 400",
+        "code": 400
+      }
+    }
+  },
+  {
+    "experiment": "multipart.json",
+    "result": {
+      "variant": "multipart-invalid",
+      "seconds": 1.0,
+      "audioBytes": 7127,
+      "bodyBytes": 7682,
+      "encodeMs": 107,
+      "headersMs": 246,
+      "totalMs": 246,
+      "status": 400,
+      "cost": null,
+      "text": null,
+      "error": {
+        "message": "Invalid multipart/form-data body",
+        "code": 400
+      }
+    }
+  },
+  {
+    "experiment": "short-results.json",
+    "result": {
+      "variant": "baseline",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 135622,
+      "encodeMs": 78,
+      "headersMs": 639,
+      "totalMs": 645,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "short-results.json",
+    "result": {
+      "variant": "mp3",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 128447,
+      "encodeMs": 78,
+      "headersMs": 583,
+      "totalMs": 583,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "short-results.json",
+    "result": {
+      "variant": "opus",
+      "seconds": 16.0,
+      "audioBytes": 46449,
+      "bodyBytes": 62220,
+      "encodeMs": 608,
+      "headersMs": 653,
+      "totalMs": 654,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "short-results.json",
+    "result": {
+      "variant": "opus",
+      "seconds": 16.0,
+      "audioBytes": 46449,
+      "bodyBytes": 62220,
+      "encodeMs": 608,
+      "headersMs": 628,
+      "totalMs": 628,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "short-results.json",
+    "result": {
+      "variant": "mp3",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 128447,
+      "encodeMs": 78,
+      "headersMs": 595,
+      "totalMs": 595,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "short-results.json",
+    "result": {
+      "variant": "baseline",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 135622,
+      "encodeMs": 78,
+      "headersMs": 577,
+      "totalMs": 577,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "native-results.json",
+    "result": {
+      "variant": "baseline",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 135622,
+      "encodeMs": 67,
+      "headersMs": 886,
+      "totalMs": 893,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "native-results.json",
+    "result": {
+      "variant": "mp3",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 128447,
+      "encodeMs": 67,
+      "headersMs": 765,
+      "totalMs": 765,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "native-results.json",
+    "result": {
+      "variant": "opus",
+      "seconds": 16.0,
+      "audioBytes": 46449,
+      "bodyBytes": 62220,
+      "encodeMs": 682,
+      "headersMs": 719,
+      "totalMs": 719,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "native-loaded-results.json",
+    "result": {
+      "variant": "baseline",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 135622,
+      "encodeMs": 60,
+      "headersMs": 697,
+      "totalMs": 703,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "native-loaded-results.json",
+    "result": {
+      "variant": "mp3",
+      "seconds": 16.0,
+      "audioBytes": 96119,
+      "bodyBytes": 128447,
+      "encodeMs": 60,
+      "headersMs": 824,
+      "totalMs": 824,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "native-loaded-results.json",
+    "result": {
+      "variant": "opus",
+      "seconds": 16.0,
+      "audioBytes": 44126,
+      "bodyBytes": 59124,
+      "encodeMs": 59,
+      "headersMs": 733,
+      "totalMs": 733,
+      "status": 200,
+      "cost": 0.00044444444444444447,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "long-results.json",
+    "result": {
+      "variant": "baseline",
+      "seconds": 33.0,
+      "audioBytes": 198719,
+      "bodyBytes": 280477,
+      "encodeMs": 92,
+      "bodyWrittenMs": 71,
+      "headersMs": 919,
+      "totalMs": 926,
+      "status": 200,
+      "cost": 0.0009444444444444445,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "long-results.json",
+    "result": {
+      "variant": "opus",
+      "seconds": 33.0,
+      "audioBytes": 90837,
+      "bodyBytes": 121404,
+      "encodeMs": 81,
+      "bodyWrittenMs": 0,
+      "headersMs": 846,
+      "totalMs": 846,
+      "status": 200,
+      "cost": 0.0009166666666666666,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript.",
+      "error": null
+    }
+  },
+  {
+    "experiment": "multipart-unquoted.json",
+    "result": {
+      "variant": "json-invalid",
+      "seconds": 1.0,
+      "audioBytes": 7127,
+      "bodyBytes": 9799,
+      "encodeMs": 46,
+      "bodyWrittenMs": null,
+      "headersMs": 477,
+      "totalMs": 483,
+      "status": 400,
+      "cost": null,
+      "text": null,
+      "error": {
+        "message": "Provider returned 400",
+        "code": 400
+      }
+    }
+  },
+  {
+    "experiment": "multipart-unquoted.json",
+    "result": {
+      "variant": "multipart-invalid",
+      "seconds": 1.0,
+      "audioBytes": 7127,
+      "bodyBytes": 7708,
+      "encodeMs": 46,
+      "bodyWrittenMs": null,
+      "headersMs": 224,
+      "totalMs": 224,
+      "status": 400,
+      "cost": null,
+      "text": null,
+      "error": {
+        "message": "Invalid multipart/form-data body",
+        "code": 400
+      }
+    }
+  }
+]

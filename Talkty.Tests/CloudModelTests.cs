@@ -1,4 +1,9 @@
 using System.Text.Json;
+using System.Text;
+using System.Diagnostics;
+using System.IO;
+using Concentus;
+using Concentus.Oggfile;
 using Talkty.App.Models;
 using Talkty.App.Services.Engines;
 using Xunit;
@@ -111,7 +116,7 @@ public class CloudModelTests
         // One second of a 440 Hz tone. Media Foundation is present on desktop Windows; a machine
         // without it (Windows N, some servers) must still get a valid WAV.
         var samples = Enumerable.Range(0, 16000).Select(i => 0.3f * MathF.Sin(2 * MathF.PI * 440 * i / 16000)).ToArray();
-        var (audio, format) = OpenRouterEngine.EncodeForUpload(samples, 16000);
+        var (audio, format) = OpenRouterEngine.EncodeForUpload(samples, 16000, preferOpus: false);
         if (format == "mp3")
         {
             Assert.True(audio.Length < samples.Length * 2 / 3, $"MP3 should be far smaller than 16-bit PCM, was {audio.Length} bytes");
@@ -122,6 +127,66 @@ public class CloudModelTests
             Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(audio, 0, 4));
             Assert.Equal(44 + samples.Length * 2, audio.Length);
         }
+    }
+
+    [Fact]
+    public void OpusUploadDecodesAndIncludesTheTail()
+    {
+        // Non-frame-aligned input, with audible data right to the end. Catch forgotten Finish()
+        // and mismatched sample rates, which can silently truncate or stretch dictation.
+        var samples = Enumerable.Range(0, 16000 * 3 + 137)
+            .Select(i => 0.3f * MathF.Sin(2 * MathF.PI * 440 * i / 16000)).ToArray();
+        var (audio, format) = OpenRouterEngine.EncodeForUpload(samples, 16000);
+        Assert.Equal("opus", format);
+        Assert.Equal("OggS", Encoding.ASCII.GetString(audio, 0, 4));
+        Assert.True(audio.Length < samples.Length, $"Expected compressed speech upload, got {audio.Length} bytes");
+        using var decoder = OpusCodecFactory.CreateDecoder(16000, 1);
+        using var stream = new MemoryStream(audio);
+        var reader = new OpusOggReadStream(decoder, stream);
+        var decoded = new List<short>();
+        while (reader.HasNextPacket)
+        {
+            var packet = reader.DecodeNextPacket();
+            if (packet != null) decoded.AddRange(packet);
+        }
+        Assert.InRange(decoded.Count, samples.Length - 320, samples.Length + 640);
+        Assert.Contains(decoded.Skip(samples.Length - 1000), s => Math.Abs((int)s) > 1000);
+    }
+
+    [Fact]
+    public void CancelledOpusDoesNotFallBackAndKeepEncoding()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Assert.Throws<OperationCanceledException>(() =>
+            OpenRouterEngine.EncodeForUpload(new float[16000], 16000, cancellationToken: cts.Token));
+    }
+
+    [Fact]
+    public void CompactJsonPreservesAudioAndVocabularyExactly()
+    {
+        byte[] audio = [251, 239, 190, 255, 255, 255];
+        string[] terms = ["C++", "a \"quoted\" term", "Žuti"];
+        var body = OpenRouterEngine.SerializePayload(ModelProfile.CloudMaiTranscribe2, audio, "opus", "auto", terms);
+        Assert.DoesNotContain("\\u002B", Encoding.UTF8.GetString(body));
+        using var doc = JsonDocument.Parse(body);
+        Assert.Equal(audio, doc.RootElement.GetProperty("input_audio").GetProperty("data").GetBytesFromBase64());
+        var azure = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure");
+        Assert.Equal(terms, azure.GetProperty("phraseList").GetProperty("phrases").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal("clean", azure.GetProperty("enhancedMode").GetProperty("modelOptions").GetProperty("transcribeStyle").GetString());
+    }
+
+    [Fact]
+    public async Task TimedContentSendsExactBytesAndLength()
+    {
+        byte[] body = Encoding.UTF8.GetBytes("{\"text\":\"Žuti\"}");
+        using var content = new CloudRequestContent(body, Stopwatch.StartNew());
+        Assert.Equal(body.Length, content.Headers.ContentLength);
+        Assert.Null(content.BodyWrittenMs);
+        using var target = new MemoryStream();
+        await content.CopyToAsync(target);
+        Assert.Equal(body, target.ToArray());
+        Assert.NotNull(content.BodyWrittenMs);
     }
 
     private static JsonDocument Serialize(ModelProfile profile, string language, IReadOnlyList<string>? terms = null) =>

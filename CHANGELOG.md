@@ -2,6 +2,14 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [1.3.4] - 2026-09-16
+
+- MAI-Transcribe 2 sends smaller audio uploads using native Opus compression. Requests were 56–57% smaller than 1.3.3 on two test recordings, with identical transcripts. This reduces the amount to upload, particularly helpful on slower connections; it is not a claim of 56–57% faster transcription.
+- Cloud connection and encoder warm-up now run together and begin when the model is ready, reducing avoidable preparation before short first dictations.
+- Saved vocabulary hints and clean transcription are preserved. MP3/WAV fallback remains available, and other cloud models continue using MP3.
+- Added detailed latency diagnostics for encoding, request preparation and the cloud request. Network and provider response times can still vary.
+- Upgrading preserves settings, history, downloaded models and an existing CUDA pack.
+
 ## [1.3.3] - 2026-09-15
 
 - New recommended cloud model: Microsoft MAI-Transcribe 2 via OpenRouter. It is the cheapest cloud option ($0.10 per hour of audio), fast, handles 60 languages and leaves out filler words like "um". It does not support Croatian or Serbian; pick another cloud model or local Whisper for those.

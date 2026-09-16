@@ -48,9 +48,11 @@ The final self-contained build's production engine returned the short fixture in
 
 Installed locally at `B:\Talkty`. Eight changed/new files matched the published layout by SHA-256; manifest: `installer/output/latency-installed-manifest.json`. The previous files are backed up in `installer/output/pre-latency-20260916`. Settings and history hashes were unchanged during replacement. The old app was idle before restart; the new process launched as PID 30124.
 
-Relaunch log `talkty_2026-09-16_14-06-27.log` confirms MAI ready and Alt+Q registered. Process module inspection confirms `B:\Talkty\opus.dll` and both Concentus assemblies loaded. The final packaging-only change makes the third-party license notice part of future publishes; republishing left all eight installed manifest hashes identical. Real microphone use after this installation is not yet measured.
+Relaunch log `talkty_2026-09-16_14-06-27.log` confirms MAI ready and Alt+Q registered. Process module inspection confirms `B:\Talkty\opus.dll` and both Concentus assemblies loaded. The final packaging-only change makes the third-party license notice part of future publishes; republishing left all eight installed manifest hashes identical.
 
-This is a local performance build, not a public release; `version.txt` and the public update manifest stay at 1.3.3. The old installer registration therefore remains 1.3.3. No public installer or update was published.
+Follow-up verification at 14:31: all eight installed hashes still matched. Three real dictations at 14:30 reached paste in 1,246 / 623 / 568 ms; their engine times were 1,070 / 543 / 504 ms. All uploaded Opus with 50 vocabulary hints and succeeded on the first HTTP attempt. Three observations confirm real use, not a reliable before/after speed distribution. Marko then said it seemed really good and explicitly authorized publishing the release.
+
+The initial installation was a local performance build with version 1.3.3. The authorized public release carrying these changes is 1.3.4; see `docs/RELEASE-1.3.4.md` for its delivery evidence.
 
 Total reported cost from successful comparison requests plus the final production-engine check: **$0.007639**, under the announced one-cent budget. Four invalid multipart/control probes returned HTTP 400 without usage costs. Approximately 275 billable seconds were reported by successful calls; no additional paid calls are planned for this patch.
 

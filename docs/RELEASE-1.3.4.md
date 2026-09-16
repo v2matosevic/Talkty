@@ -22,4 +22,11 @@ Full measurements, limits and test costs: [latency investigation](CLOUD-LATENCY-
 
 ## Delivery evidence
 
-Release build, installer, CI and publication evidence will be recorded here as each check completes. The public update manifest is advanced only after the installer is available.
+- Published 16 September 2026: [Talkty 1.3.4](https://github.com/v2matosevic/Talkty/releases/tag/v1.3.4), marked Latest. Tag target/source build: `9c0cad8642d9b2e242d4524abc16d786af0a5c9b`; includes implementation `5772301`.
+- Source CI [35096896973](https://github.com/v2matosevic/Talkty/actions/runs/35096896973) passed on the exact release source. Local restore/build/test also passed: 124 tests, zero build warnings/errors.
+- Clean self-contained publish: `installer/output/release-1.3.4`; assembly reports `1.3.4+9c0cad8642d9b2e242d4524abc16d786af0a5c9b`. Installer payload: 492 files, 231.43 MiB, including native `opus.dll` and third-party notices; no CUDA or unsupported platform runtimes.
+- Inno compilation succeeded. Installer: `TalktySetup-1.3.4.exe`, **61,372,937 bytes**. SHA-256: `aa9a88d6434438174121a5a6f6e577a74b875ff3f6595f5684715642cf7169b7`. GitHub's asset digest and a fresh downloaded copy both matched before publication.
+- Local evidence: `installer/output/build-1.3.4.log`, `installer/output/payload-1.3.4.csv`, `installer/output/download-1.3.4/TalktySetup-1.3.4.exe`. Inno reports only the existing unused `DataDirPage` hint.
+- Public `version.json` is advanced after release publication, with update text describing smaller requests and remaining provider variability. Existing installations receive it through their normal update check. The optional CUDA pack release is unchanged.
+- No further paid transcriptions were needed for release preparation. The release changes only the version/packaging/documentation relative to the verified local implementation; its live evidence is reused with that scope.
+- Marko's local app remains the verified `1.3.3-latency.20260916` build installed earlier; this publication did not run another installer or claim a new local installation.

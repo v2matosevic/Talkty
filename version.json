@@ -1,5 +1,5 @@
 {
-  "version": "1.3.3",
+  "version": "1.3.4",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "MAI-Transcribe 2 is the new recommended cloud model: the cheapest cloud option, fast, and it leaves out filler words (it does not support Croatian or Serbian). Cloud transcription is much faster because recordings now upload as compressed MP3, and your vocabulary now reaches MAI-Transcribe 2 as spelling hints. Upgrading keeps your settings, history, models, and existing CUDA pack."
+  "release_notes": "MAI-Transcribe 2 now sends smaller audio uploads using native Opus compression, while keeping your vocabulary hints and clean transcription. The cloud connection and encoder warm up together and start earlier. Requests were 56–57% smaller in testing; network and provider response times can still vary. Upgrading keeps your settings, history, models, and existing CUDA pack."
 }

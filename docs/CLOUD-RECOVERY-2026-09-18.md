@@ -53,4 +53,4 @@ Installed at `B:/Talkty`, version `1.3.4-recovery.20260918`, from `Talkty.App/bi
 
 The old process was idle (last overlay-hide at 18:49:58) before replacement. Its DLL briefly remained locked after process exit; replacement was retried after the lock cleared, all four hashes matched, and the new app launched as PID 49452. Startup log `talkty_2026-09-18_18-52-55.log` confirms Alt+Q registered, LargeTurbo loaded on CUDA at 18:53:01, and warm-up completed at 18:53:03. Marko had switched his primary to local LargeTurbo during the task; this choice was preserved. Cloud fallback becomes active when a cloud primary is selected.
 
-Public `version.txt` and `version.json` remain unchanged. Nothing was pushed or publicly released. The earlier lost audio cannot be recovered retroactively.
+At the initial local handoff, public `version.txt` and `version.json` remained unchanged and nothing had been pushed or publicly released. Marko subsequently authorized the stable release and installation. This implementation is now published and installed as **1.3.5**; see [release and installation evidence](RELEASE-1.3.5.md). The earlier lost audio cannot be recovered retroactively.

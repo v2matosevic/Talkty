@@ -3,8 +3,8 @@
 Implemented 19 September 2026. Tracking issue **Athena-kukk**. Brief:
 `B:/Coding/Athena/docs/jev/handoffs/TALKTY.md`, playbook section 6C.
 
-**State: implemented and locally verified on Windows. Not released, not installed.** The public
-1.3.5 installer does not contain it. The separate `talkty-mac` app does not have this feature and
+**State: implemented and locally verified on Windows. Not released, not installed.** Source commit
+`74f974d`. The public 1.3.5 installer does not contain it. The separate `talkty-mac` app does not have this feature and
 nothing here should be read as Mac parity.
 
 ---

@@ -353,8 +353,34 @@
                     <Grid Grid.Row="5">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
+
+                        <Border Grid.Row="1" Background="{StaticResource Zinc900Brush}" CornerRadius="8" Padding="10" Margin="0,0,0,10"
+                                Visibility="{Binding RecoverableRecordings.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="Saved recordings to retry" Foreground="{StaticResource Zinc200Brush}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <ScrollViewer MaxHeight="110" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding RecoverableRecordings}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,4,0,8">
+                                                    <TextBlock Text="{Binding Label}" Foreground="{StaticResource Zinc300Brush}"/>
+                                                    <TextBlock Text="{Binding Error}" TextWrapping="Wrap" Foreground="{StaticResource Zinc400Brush}" FontSize="11"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                        <Button Content="Retry" Style="{StaticResource SmallButton}" MinHeight="28" Margin="0,0,8,0"
+                                                                Command="{Binding DataContext.RetryRecordingCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                        <Button Content="Discard" Style="{StaticResource SmallButton}" MinHeight="28"
+                                                                Command="{Binding DataContext.DiscardRecordingCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
 
                         <Grid Grid.Row="0" Margin="0,0,0,10">
                             <TextBlock Text="{Binding History.Count, StringFormat='Recent · {0}'}"
@@ -393,7 +419,7 @@
                             </Button>
                         </Grid>
 
-                            <ListBox Grid.Row="1" x:Name="HistoryList" ItemsSource="{Binding History}"
+                            <ListBox Grid.Row="2" x:Name="HistoryList" ItemsSource="{Binding History}"
                                      Background="Transparent" BorderThickness="0" Padding="0"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -533,10 +559,23 @@
                             </ListBox>
 
                         <!-- Empty State -->
-                        <StackPanel Grid.Row="1"
+                        <StackPanel Grid.Row="2"
                                     VerticalAlignment="Center"
-                                    HorizontalAlignment="Center"
-                                    Visibility="{Binding History.Count, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=inverse}">
+                                    HorizontalAlignment="Center">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding History.Count}" Value="0"/>
+                                                <Condition Binding="{Binding RecoverableRecordings.Count}" Value="0"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
                             <TextBlock Text="No transcriptions yet"
                                        FontSize="12"
                                        Foreground="{StaticResource Zinc400Brush}"

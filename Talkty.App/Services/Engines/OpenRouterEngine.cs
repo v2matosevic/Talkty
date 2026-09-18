@@ -68,6 +68,14 @@ public class OpenRouterEngine : ITranscriptionEngine
     private static volatile bool _mp3Unavailable;
 
     private readonly object _lock = new();
+    private readonly HttpClient _http;
+    private readonly bool _skipPrewarm;
+    public OpenRouterEngine() : this(Http, false) { }
+    internal OpenRouterEngine(HttpClient http, bool skipPrewarm = true)
+    {
+        _http = http;
+        _skipPrewarm = skipPrewarm;
+    }
     private string? _apiKey;
     private Task? _prewarmTask;
 
@@ -104,6 +112,7 @@ public class OpenRouterEngine : ITranscriptionEngine
     /// </summary>
     public Task PrewarmAsync()
     {
+        if (_skipPrewarm) return Task.CompletedTask;
         lock (_lock)
         {
             // Callers awaiting warm-up must await the active work, not an already-completed task.
@@ -122,7 +131,7 @@ public class OpenRouterEngine : ITranscriptionEngine
             using var request = new HttpRequestMessage(HttpMethod.Get, KeyEndpoint);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
             using var cts = new CancellationTokenSource(5000);
-            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cts.Token);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cts.Token);
             Log.Debug($"Cloud prewarm done: HTTP {(int)response.StatusCode}");
             await encoderWarmup;
         }
@@ -203,8 +212,17 @@ public class OpenRouterEngine : ITranscriptionEngine
         try
         {
             // Off the UI thread: Media Foundation wants an MTA thread, and a long take encodes in ~0.3 s.
-            var (audio, format) = await Task.Run(() => EncodeForUpload(audioSamples, Constants.SampleRate,
-                profile == ModelProfile.CloudMaiTranscribe2, linkedCts.Token), linkedCts.Token);
+            // MAI preserves technical terms with 24 kbps Opus. Qwen Flash lost "C++"
+            // on the same fixture with Opus (2026-09-18); keep its 48 kbps MP3 path.
+            var preferOpus = profile == ModelProfile.CloudMaiTranscribe2;
+            (byte[] Audio, string Format) prepared;
+            if (options.CloudAudioCache == null || !options.CloudAudioCache.TryGetValue(preferOpus, out prepared))
+            {
+                prepared = await Task.Run(() => EncodeForUpload(audioSamples, Constants.SampleRate,
+                    preferOpus, linkedCts.Token), linkedCts.Token);
+                if (options.CloudAudioCache != null) options.CloudAudioCache[preferOpus] = prepared;
+            }
+            var (audio, format) = prepared;
             var encodeMs = clock.ElapsedMilliseconds;
             var hints = profile == ModelProfile.CloudMaiTranscribe2
                 ? Math.Min(options.VocabularyTerms?.Count ?? 0, Constants.CloudMaxVocabularyTerms)
@@ -229,7 +247,7 @@ public class OpenRouterEngine : ITranscriptionEngine
                 request.Content = content;
 
                 Log.Debug($"POST {Endpoint} ({audio.Length} bytes {format}, {json.Length} bytes body, attempt {attempt})");
-                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
                 var headersMs = requestClock.ElapsedMilliseconds;
                 body = await response.Content.ReadAsStringAsync(linkedCts.Token);
                 status = response.StatusCode;
@@ -239,15 +257,20 @@ public class OpenRouterEngine : ITranscriptionEngine
 
                 if (response.IsSuccessStatusCode) break;
 
-                bool transient = (int)status is 429 or 500 or 502 or 503;
-                if (transient && attempt == 1)
+                bool transient = (int)status is 408 or 429 || (int)status >= 500;
+                if (transient && attempt == 1 && options.RetryTransientCloudErrors)
                 {
                     Log.Warning($"OpenRouter HTTP {(int)status} — transient, retrying once after 1s");
-                    await Task.Delay(1000, linkedCts.Token);
+                    var retryAfter = response.Headers.RetryAfter;
+                    var delay = retryAfter?.Delta ?? (retryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.FromSeconds(1);
+                    // A long provider cooldown is better handled by the independent fallback.
+                    if (delay > TimeSpan.FromSeconds(5))
+                        return Fail(DescribeHttpError(status, body), startTime, true);
+                    await Task.Delay(delay > TimeSpan.Zero ? delay : TimeSpan.FromSeconds(1), linkedCts.Token);
                     continue;
                 }
 
-                return Fail(DescribeHttpError(status, body), startTime);
+                return Fail(DescribeHttpError(status, body), startTime, transient);
             }
 
             var text = ExtractText(body);
@@ -255,7 +278,7 @@ public class OpenRouterEngine : ITranscriptionEngine
 
             if (text is null)
             {
-                return Fail("Cloud transcription returned no text.", startTime);
+                return Fail("Cloud transcription returned no text.", startTime, true);
             }
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -283,7 +306,7 @@ public class OpenRouterEngine : ITranscriptionEngine
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
         {
             Log.Error($"Cloud transcription timed out after {Constants.CloudTranscriptionTimeoutMs / 1000}s");
-            return Fail($"Cloud transcription timed out after {Constants.CloudTranscriptionTimeoutMs / 1000}s.", startTime);
+            return Fail($"Cloud transcription timed out after {Constants.CloudTranscriptionTimeoutMs / 1000}s.", startTime, true);
         }
         catch (OperationCanceledException)
         {
@@ -293,7 +316,7 @@ public class OpenRouterEngine : ITranscriptionEngine
         catch (Exception ex)
         {
             Log.Error("OpenRouterEngine.TranscribeAsync exception", ex);
-            return Fail($"Cloud transcription failed: {ex.Message}", startTime);
+            return Fail($"Cloud transcription failed: {ex.Message}", startTime, ex is HttpRequestException or IOException);
         }
     }
 
@@ -397,8 +420,9 @@ public class OpenRouterEngine : ITranscriptionEngine
         };
     }
 
-    private static TranscriptionResult Fail(string message, DateTime? startTime = null) => new()
+    private static TranscriptionResult Fail(string message, DateTime? startTime = null, bool canUseFallback = false) => new()
     {
+        CanUseFallback = canUseFallback,
         Success = false,
         ErrorMessage = message,
         Timestamp = startTime ?? DateTime.Now,

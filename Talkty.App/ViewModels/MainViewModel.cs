@@ -14,6 +14,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private int _audioUpdatePending;
     private Task _historySaveTask = Task.CompletedTask;
     internal Task PendingHistorySave => _historySaveTask;
+    private bool _historySaveSucceeded;
+    private readonly RecordingRecoveryStore _recoveryStore;
+    public ObservableCollection<RecoverableRecording> RecoverableRecordings { get; } = [];
 
     private readonly ISettingsService _settingsService;
     private readonly IAudioCaptureService _audioCaptureService;
@@ -89,11 +92,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IUpdateService? updateService = null,
         IVolumeDuckingService? volumeDuckingService = null,
         IAutoPasteService? autoPasteService = null,
-        IPromptRefinementService? promptRefinementService = null)
+        IPromptRefinementService? promptRefinementService = null,
+        RecordingRecoveryStore? recoveryStore = null)
     {
         Log.Info("MainViewModel constructor starting");
 
         _settingsService = settingsService;
+        _recoveryStore = recoveryStore ?? new RecordingRecoveryStore();
+        foreach (var recording in _recoveryStore.Load()) RecoverableRecordings.Add(recording);
         _audioCaptureService = audioCaptureService;
         _transcriptionService = transcriptionService;
         _clipboardService = clipboardService;
@@ -120,6 +126,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Settings are already loaded — MainWindow calls Load() before constructing this
             // ViewModel. Re-loading here was a redundant disk read + deserialize at startup.
             var settings = _settingsService.Settings;
+            _transcriptionService.SetCloudFallback(settings.CloudFallbackModel);
             Log.Debug($"Settings loaded. ModelProfile: {settings.ModelProfile}, Mic: {settings.SelectedMicrophoneId ?? "default"}");
 
             ModelProfileDisplay = settings.ModelProfile.GetDisplayName();
@@ -226,8 +233,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }).ToList();
         _historySaveTask = _historySaveTask.ContinueWith(_ =>
         {
-            try { _settingsService.SaveHistory(entries); }
-            catch (Exception ex) { Log.Error("Failed to save history to disk", ex); }
+            try { _settingsService.SaveHistory(entries); _historySaveSucceeded = true; }
+            catch (Exception ex) { _historySaveSucceeded = false; Log.Error("Failed to save history to disk", ex); }
         }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
     }
 
@@ -521,15 +528,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    internal async Task StopListeningAndTranscribeAsync()
+    internal async Task StopListeningAndTranscribeAsync(RecoverableRecording? retry = null)
     {
         var cycle = _transcriptionCts;
         var cancellationToken = cycle?.Token ?? default;
+        RecoverableRecording? recovery = retry;
         try
         {
             // Capture the foreground window NOW (at stop time) — this is the app
             // the user is currently looking at and wants to paste into.
-            _autoPasteService.CaptureTargetWindow();
+            if (retry == null) _autoPasteService.CaptureTargetWindow();
 
             // Snapshot the clipboard BEFORE anything (incl. the streamed first segment)
             // overwrites it, so it can be restored after a successful auto-paste.
@@ -543,7 +551,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Windows only grants SetForegroundWindow permission to the thread
             // that last received user input (our hotkey). If we wait until after
             // transcription (~1s later), the privilege expires and paste fails.
-            _autoPasteService.ClaimForegroundPrivilege();
+            if (retry == null) _autoPasteService.ClaimForegroundPrivilege();
 
             // Restore system volume if ducking is enabled (always try, service handles "not ducked" case)
             if (_settingsService.Settings.DuckVolumeWhileRecording && _volumeDuckingService != null)
@@ -561,13 +569,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Without this flush, the last 200-400ms of speech is lost — exactly "the last
             // part of what I said" in the user's transcript.
             Log.Debug("Calling AudioCaptureService.StopRecordingAndFlushAsync()");
-            var flushed = await _audioCaptureService.StopRecordingAndFlushAsync(Constants.RecordingFlushTimeoutMs);
+            var flushed = retry != null || await _audioCaptureService.StopRecordingAndFlushAsync(Constants.RecordingFlushTimeoutMs);
             cancellationToken.ThrowIfCancellationRequested();
             if (!flushed)
                 ShowWarning("The microphone did not finish cleanly. The end of this recording may be missing.");
 
             Log.Debug("Getting recorded audio samples");
-            var audioSamples = _audioCaptureService.GetRecordedAudioAsFloat();
+            var audioSamples = retry?.Samples ?? _audioCaptureService.GetRecordedAudioAsFloat();
             Log.Info($"Audio samples: {audioSamples.Length} ({audioSamples.Length / (float)Constants.SampleRate:F1}s at 16kHz)");
 
             if (audioSamples.Length == 0)
@@ -591,9 +599,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Trim leading/trailing silence — reduces audio Whisper must process (10-25% faster)
             audioSamples = TrimSilence(audioSamples);
 
+            if (recovery == null && _settingsService.Settings.ModelProfile.IsCloud())
+            {
+                recovery = new RecoverableRecording
+                {
+                    Samples = audioSamples, PromptMode = PromptMode,
+                    Language = _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language
+                };
+                // Keep an in-memory copy even if disk is full; do not send unprotected audio.
+                RecoverableRecordings.Insert(0, recovery);
+            }
+            if (recovery != null)
+            {
+                await Task.Run(() => _recoveryStore.Save(recovery));
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
             Log.Info("Starting transcription...");
             var startTime = DateTime.Now;
-            var language = _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language;
+            var language = recovery?.Language ?? (_settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language);
 
             // Use the same bounded, saved vocabulary at startup and on each recording.
             var vocabularyPrompt = VocabularyPromptBuilder.Build(_settingsService.Settings);
@@ -751,7 +775,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     if (!clipboardSuccess)
                         ShowWarning("Could not copy the text. Your transcription is saved in History.");
 
-                    if (_settingsService.Settings.AutoPaste && clipboardSuccess)
+                    if (retry == null && _settingsService.Settings.AutoPaste && clipboardSuccess)
                     {
                         // Run paste on thread pool so Thread.Sleep calls don't block UI thread.
                         // Overlay stays visible during paste — hiding it would cause focus changes.
@@ -834,7 +858,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     {
                         Text = result.Text,
                         RawTranscription = rawTranscriptionForHistory,
-                        Timestamp = result.Timestamp,
+                        Timestamp = recovery?.Timestamp ?? result.Timestamp,
                         Duration = result.Duration
                     });
 
@@ -844,6 +868,24 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     }
                     QueueHistorySave();
                 });
+                await PendingHistorySave;
+                if (recovery != null && _historySaveSucceeded)
+                {
+                    _recoveryStore.Delete(recovery.Id);
+                    RecoverableRecordings.Remove(recovery);
+                    recovery = null;
+                }
+                else if (recovery != null)
+                {
+                    recovery.Error = "Text could not be saved to history. Recording kept for retry.";
+                    ShowWarning(recovery.Error);
+                }
+                if (result.UsedFallback is { } fallback)
+                    RequestShowToast?.Invoke(this, new ToastEventArgs
+                    {
+                        Message = $"Transcribed using backup: {fallback.GetDisplayName()}",
+                        Type = ToastType.Success, DurationMs = 5000
+                    });
             }
             else
             {
@@ -856,12 +898,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 else
                 {
                     Log.Warning($"Transcription failed or empty. Error: {result.ErrorMessage}");
+                    if (recovery != null)
+                    {
+                        recovery.Error = result.ErrorMessage ?? "Transcription failed.";
+                        await Task.Run(() => _recoveryStore.Save(recovery));
+                    }
                     StatusText = result.ErrorMessage ?? "Transcription failed";
                     // The app usually lives hidden in the tray — StatusText alone is invisible
                     // there. Toast so the user knows nothing reached the clipboard.
                     RequestShowToast?.Invoke(this, new ToastEventArgs
                     {
-                        Message = result.ErrorMessage ?? "Transcription failed — nothing was copied",
+                        Message = (result.ErrorMessage ?? "Transcription failed") +
+                            (recovery != null ? " Recording saved. Open Talkty to retry." : " Nothing was copied."),
                         Type = ToastType.Warning,
                         DurationMs = 5000
                     });
@@ -876,18 +924,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
             await Task.Delay(100);
             if (!IsListening && !IsTranscribing)
             {
-                StatusText = "Ready";
+                StatusText = RecoverableRecordings.Count > 0 ? "Recording saved. Retry in Talkty." : "Ready";
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             Log.Info("Transcription cancelled; output discarded");
+            if (recovery != null) recovery.Error = "Transcription cancelled. Recording kept for retry.";
             StatusText = "Cancelled";
         }
         catch (Exception ex)
         {
             Log.Error("StopListeningAndTranscribe failed", ex);
-            ShowWarning("Transcription could not finish. Please try again.");
+            if (recovery != null) recovery.Error = "Could not finish or save to disk. Retry before closing Talkty.";
+            ShowWarning(recovery != null ? recovery.Error : "Transcription could not finish. Please try again.");
             StatusText = $"Error: {ex.Message}";
             IsTranscribing = false;
             RequestHideOverlay?.Invoke(this, EventArgs.Empty);
@@ -922,6 +972,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Type = ToastType.Warning,
             DurationMs = 5000
         });
+
+    [RelayCommand]
+    private async Task RetryRecordingAsync(RecoverableRecording? recording)
+    {
+        if (recording == null || IsListening || IsTranscribing || IsModelLoading) return;
+        _transcriptionCts?.Dispose();
+        _transcriptionCts = new CancellationTokenSource();
+        PromptMode = recording.PromptMode;
+        await StopListeningAndTranscribeAsync(recording);
+    }
+
+    [RelayCommand]
+    private void DiscardRecording(RecoverableRecording? recording)
+    {
+        if (recording == null || IsListening || IsTranscribing) return;
+        try
+        {
+            _recoveryStore.Delete(recording.Id);
+            RecoverableRecordings.Remove(recording);
+        }
+        catch (Exception ex) { Log.Error("Could not discard recording", ex); ShowWarning("Could not remove the saved recording."); }
+    }
 
     /// <summary>
     /// Trims leading and trailing silence from audio samples.
@@ -1107,6 +1179,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Update settings
         _settingsService.Settings.ModelProfile = settings.ModelProfile;
+        _settingsService.Settings.CloudFallbackModel = settings.CloudFallbackModel;
+        _transcriptionService.SetCloudFallback(settings.CloudFallbackModel);
         _settingsService.Settings.SelectedMicrophoneId = settings.SelectedMicrophoneId;
         _settingsService.Settings.CopyToClipboard = settings.CopyToClipboard;
         _settingsService.Settings.AutoPaste = settings.AutoPaste;

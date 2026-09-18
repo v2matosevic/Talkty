@@ -577,6 +577,18 @@
                             </StackPanel>
                         </Border>
 
+                        <TextBlock Text="CLOUD BACKUP" Style="{StaticResource SectionHeader}"/>
+                        <Border Background="{StaticResource Zinc900Brush}" CornerRadius="10" Padding="14" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="Cloud transcription backup" FontSize="13" Foreground="{StaticResource Zinc200Brush}" Margin="0,0,0,8"/>
+                                <ComboBox ItemsSource="{Binding CloudFallbackOptions}" SelectedItem="{Binding SelectedCloudFallback}"
+                                          AutomationProperties.Name="Cloud transcription backup"/>
+                                <TextBlock FontSize="11" Foreground="{StaticResource Zinc400Brush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Text="Used automatically when your primary cloud model is busy or unavailable. Recommended: Qwen3 ASR Flash, about $0.126/hour, 11 languages including English (not Croatian or Serbian). Backup requests cost per use. Unsupported languages and the same model are skipped."/>
+                                <TextBlock FontSize="11" Foreground="{StaticResource Zinc400Brush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Text="Cloud recordings are kept encrypted on this PC until saved to history or discarded. If transcription fails, open Talkty to retry, even after a restart."/>
+                            </StackPanel>
+                        </Border>
                         <TextBlock Text="PROMPTING" Style="{StaticResource SectionHeader}"/>
                         <Border Background="{StaticResource Zinc900Brush}"
                                 CornerRadius="10"

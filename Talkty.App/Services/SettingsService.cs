@@ -143,6 +143,7 @@ public class SettingsService : ISettingsService
         catch (Exception ex)
         {
             Log.Error($"Failed to save history: {ex.Message}", ex);
+            throw;
         }
         finally
         {

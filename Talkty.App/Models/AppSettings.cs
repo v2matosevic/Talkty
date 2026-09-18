@@ -5,6 +5,7 @@ namespace Talkty.App.Models;
 public class AppSettings
 {
     public ModelProfile ModelProfile { get; set; } = ModelProfile.Tiny;
+    public ModelProfile? CloudFallbackModel { get; set; } = Models.ModelProfile.CloudQwen3Asr;
     public string? SelectedMicrophoneId { get; set; }
     public bool CopyToClipboard { get; set; } = true;
     public bool AutoPaste { get; set; } = false;

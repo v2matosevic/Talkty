@@ -46,6 +46,7 @@ public interface ITranscriptionService : IDisposable
     /// engine on creation, mirroring <see cref="SetVocabularyPrompt"/>. Pass null to clear.
     /// </summary>
     void SetCloudApiKey(string? apiKey);
+    void SetCloudFallback(ModelProfile? profile) { }
 
     /// <summary>
     /// Pre-sets the transcription language ("en", "de", "auto", …) so the processor is built

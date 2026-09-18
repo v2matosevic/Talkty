@@ -7,6 +7,12 @@ namespace Talkty.App.Services;
 /// </summary>
 public record TranscriptionOptions
 {
+    // When a compatible backup exists, fail over immediately instead of sleeping and
+    // repeating a request to the same busy provider. The final provider may retry once.
+    internal bool RetryTransientCloudErrors { get; init; } = true;
+    // Created only by TranscriptionService for one recording. Reusing public options
+    // on a later recording must never reuse the previous recording's audio.
+    internal Dictionary<bool, (byte[] Audio, string Format)>? CloudAudioCache { get; init; }
     /// <summary>
     /// Language code for transcription (e.g., "en", "es", "auto").
     /// Use "auto" for automatic language detection on supported models.

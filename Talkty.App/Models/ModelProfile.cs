@@ -33,7 +33,8 @@ public enum ModelProfile
     CloudWhisperLargeV3,        // openai/whisper-large-v3 — multilingual, accurate
     CloudWhisperLargeV3Turbo,   // openai/whisper-large-v3-turbo — multilingual, faster
     CloudQwen3Asr,              // qwen/qwen3-asr-flash-2026-02-10 — low cost, robust in noise
-    CloudMaiTranscribe2         // microsoft/mai-transcribe-2 — lowest cost ($0.10/h), 60 languages
+    CloudMaiTranscribe2,        // microsoft/mai-transcribe-2 — $0.10/h, 60 languages
+    CloudQwen3Asr17B            // Append only: existing settings store numeric enum values.
 }
 
 /// <summary>
@@ -59,6 +60,7 @@ public static class ModelProfileExtensions
             or ModelProfile.CloudWhisperLargeV3
             or ModelProfile.CloudWhisperLargeV3Turbo
             or ModelProfile.CloudQwen3Asr
+            or ModelProfile.CloudQwen3Asr17B
             or ModelProfile.CloudMaiTranscribe2 => TranscriptionEngine.OpenRouter,
         _ => TranscriptionEngine.Whisper
     };
@@ -81,6 +83,7 @@ public static class ModelProfileExtensions
         ModelProfile.CloudWhisperLargeV3Turbo => "openai/whisper-large-v3-turbo",
         ModelProfile.CloudQwen3Asr => "qwen/qwen3-asr-flash-2026-02-10",
         ModelProfile.CloudMaiTranscribe2 => "microsoft/mai-transcribe-2",
+        ModelProfile.CloudQwen3Asr17B => "qwen/qwen3-asr-1.7b",
         _ => ""
     };
 
@@ -124,7 +127,8 @@ public static class ModelProfileExtensions
         ModelProfile.CloudWhisperLargeV3 => "Whisper Large V3 (Cloud) - Multilingual",
         ModelProfile.CloudWhisperLargeV3Turbo => "Whisper Large V3 Turbo (Cloud) - Fast Multilingual",
         ModelProfile.CloudQwen3Asr => "Qwen3 ASR Flash (Cloud) - Low Cost",
-        ModelProfile.CloudMaiTranscribe2 => "MAI-Transcribe 2 (Cloud) - Cheapest, 60 Languages",
+        ModelProfile.CloudMaiTranscribe2 => "MAI-Transcribe 2 (Cloud) - Fast, 60 Languages",
+        ModelProfile.CloudQwen3Asr17B => "Qwen3 ASR 1.7B (Cloud) - Budget Backup",
         _ => "Unknown"
     };
 
@@ -149,7 +153,8 @@ public static class ModelProfileExtensions
         ModelProfile.CloudWhisperLargeV3 => "Cloud API. 99+ languages, high accuracy, no local compute. Needs OpenRouter key.",
         ModelProfile.CloudWhisperLargeV3Turbo => "Cloud API. 99+ languages, faster variant. Needs OpenRouter key.",
         ModelProfile.CloudQwen3Asr => "Cloud API. Low cost, robust in noise. Needs OpenRouter key.",
-        ModelProfile.CloudMaiTranscribe2 => "Cloud API. Lowest cost, fast, 60 languages (not Croatian or Serbian), filler words removed. Needs OpenRouter key.",
+        ModelProfile.CloudMaiTranscribe2 => "Cloud API. Fast, 60 languages (not Croatian or Serbian), filler words removed. Needs OpenRouter key.",
+        ModelProfile.CloudQwen3Asr17B => "Cloud API. About $0.029/hour, 30 languages (not Croatian or Serbian). Needs OpenRouter key.",
         _ => ""
     };
 
@@ -229,12 +234,13 @@ public static class ModelProfileExtensions
         ModelProfile.LargeTurboQ5 => GetWhisperMultilingualLanguages(),
         ModelProfile.SenseVoice => ["zh", "en", "ja", "ko", "yue", "auto"],
         ModelProfile.CloudMaiTranscribe2 => GetMaiTranscribe2Languages(),
+        ModelProfile.CloudQwen3Asr17B => ["zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs", "fil", "fa", "el", "hu", "mk", "ro", "auto"],
+        ModelProfile.CloudQwen3Asr => ["zh", "en", "ar", "fr", "de", "es", "it", "pt", "ru", "ja", "ko", "auto"],
         // Cloud transcription models are all multilingual.
         ModelProfile.CloudGpt4oTranscribe
             or ModelProfile.CloudGpt4oMiniTranscribe
             or ModelProfile.CloudWhisperLargeV3
-            or ModelProfile.CloudWhisperLargeV3Turbo
-            or ModelProfile.CloudQwen3Asr => GetWhisperMultilingualLanguages(),
+            or ModelProfile.CloudWhisperLargeV3Turbo => GetWhisperMultilingualLanguages(),
         _ => ["en"]
     };
 
@@ -252,6 +258,7 @@ public static class ModelProfileExtensions
     /// </summary>
     public static bool SupportsAutoDetect(this ModelProfile profile) => profile switch
     {
+        ModelProfile.CloudQwen3Asr17B => true,
         ModelProfile.Large => true,
         ModelProfile.LargeTurbo => true,
         ModelProfile.LargeTurboQ5 => true,

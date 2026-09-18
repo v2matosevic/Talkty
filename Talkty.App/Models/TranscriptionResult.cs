@@ -7,4 +7,6 @@ public class TranscriptionResult
     public TimeSpan Duration { get; init; }
     public bool Success { get; init; }
     public string? ErrorMessage { get; init; }
+    public bool CanUseFallback { get; init; }
+    public ModelProfile? UsedFallback { get; set; }
 }

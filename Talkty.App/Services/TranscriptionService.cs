@@ -16,6 +16,9 @@ namespace Talkty.App.Services;
 /// </summary>
 public class TranscriptionService : ITranscriptionService
 {
+    private readonly Func<Engines.OpenRouterEngine> _createCloud;
+    public TranscriptionService() : this(() => new Engines.OpenRouterEngine()) { }
+    internal TranscriptionService(Func<Engines.OpenRouterEngine> createCloud) => _createCloud = createCloud;
     private ITranscriptionEngine? _currentEngine;
     private readonly object _lock = new();
     private readonly SemaphoreSlim _loadSemaphore = new(1, 1);
@@ -28,6 +31,9 @@ public class TranscriptionService : ITranscriptionService
 
     private string? _pendingVocabularyPrompt;
     private string? _pendingApiKey;
+    private ModelProfile? _fallbackProfile;
+    public void SetCloudFallback(ModelProfile? profile) =>
+        _fallbackProfile = profile is { } p && p.IsCloud() ? p : null;
     private string? _pendingLanguage;
 
     // Last successful load — what EnsureModelLoadedAsync restores after an idle unload.
@@ -138,7 +144,8 @@ public class TranscriptionService : ITranscriptionService
                         _currentEngine?.Dispose();
 
                         // Create new engine
-                        _currentEngine = TranscriptionEngineFactory.CreateEngine(requiredEngine);
+                        _currentEngine = requiredEngine == TranscriptionEngine.OpenRouter
+                            ? _createCloud() : TranscriptionEngineFactory.CreateEngine(requiredEngine);
                         Log.Info($"Created new {_currentEngine.EngineName} engine");
 
                         // Forward pending vocabulary prompt + language to new engine
@@ -261,8 +268,13 @@ public class TranscriptionService : ITranscriptionService
                 }
             }
 
+            var fallback = _fallbackProfile;
+            var canFallback = CurrentProfile?.IsCloud() == true && fallback is { } backupProfile &&
+                backupProfile != CurrentProfile && backupProfile.GetSupportedLanguages().Contains(effectiveLanguage);
             var options = new TranscriptionOptions
             {
+                RetryTransientCloudErrors = !canFallback,
+                CloudAudioCache = new(),
                 Language = effectiveLanguage,
                 TimeoutMs = (int)ITranscriptionService.DefaultTimeout.TotalMilliseconds,
                 OnFirstSegment = onFirstSegment,
@@ -270,7 +282,19 @@ public class TranscriptionService : ITranscriptionService
                 VocabularyTerms = vocabularyTerms
             };
 
-            return await _currentEngine.TranscribeAsync(audioSamples, options, cancellationToken);
+            var result = await _currentEngine.TranscribeAsync(audioSamples, options, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (canFallback && result.CanUseFallback)
+            {
+                Log.Info($"Primary cloud transcription failed; trying {fallback!.Value.GetOpenRouterModelId()}");
+                using var backup = _createCloud();
+                backup.SetApiKey(_pendingApiKey);
+                await backup.LoadModelAsync(fallback.Value, "", cancellationToken: cancellationToken);
+                result = await backup.TranscribeAsync(audioSamples, options with { RetryTransientCloudErrors = true }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (result.Success) result.UsedFallback = fallback;
+            }
+            return result;
         }
         finally
         {

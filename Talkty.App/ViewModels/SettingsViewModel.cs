@@ -6,6 +6,10 @@ using Talkty.App.Models;
 using Talkty.App.Services;
 
 namespace Talkty.App.ViewModels;
+public record CloudFallbackOption(ModelProfile? Profile, string Name)
+{
+    public override string ToString() => Name;
+}
 
 /// <summary>
 /// Represents a language option for the language dropdown.
@@ -199,6 +203,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     // Data-driven model collections — local (offline, free) and cloud (online, needs key).
     public ObservableCollection<ModelProfileViewModel> LocalModels { get; } = [];
     public ObservableCollection<ModelProfileViewModel> CloudModels { get; } = [];
+    public IReadOnlyList<CloudFallbackOption> CloudFallbackOptions { get; } =
+        new[] { new CloudFallbackOption(null, "Off") }
+        .Concat(new[] { ModelProfile.CloudQwen3Asr, ModelProfile.CloudQwen3Asr17B, ModelProfile.CloudMaiTranscribe2,
+            ModelProfile.CloudWhisperLargeV3Turbo, ModelProfile.CloudWhisperLargeV3,
+            ModelProfile.CloudGpt4oMiniTranscribe, ModelProfile.CloudGpt4oTranscribe }
+            .Select(p => new CloudFallbackOption(p, p.GetDisplayName()))).ToList();
+    [ObservableProperty] private CloudFallbackOption? _selectedCloudFallback;
     private readonly List<ModelProfileViewModel> _allModels = [];
 
     // Prompting model picker — which OpenRouter model expands dictation into a coding-agent prompt.
@@ -278,7 +289,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         // CLOUD (OpenRouter API) — no download, runs online, needs an API key. Local stays the private,
         // offline default.
-        AddModel(CloudModels, ModelProfile.CloudMaiTranscribe2, "MAI-Transcribe 2", "Cheapest & fast, drops filler words; 60 languages, not Croatian/Serbian", "Recommended", "#8B5CF6");
+        AddModel(CloudModels, ModelProfile.CloudMaiTranscribe2, "MAI-Transcribe 2", "Fast, drops filler words; 60 languages, not Croatian/Serbian", "Recommended", "#8B5CF6");
+        AddModel(CloudModels, ModelProfile.CloudQwen3Asr17B, "Qwen3 ASR 1.7B", "About $0.029/hour; 30 languages, not Croatian/Serbian");
         AddModel(CloudModels, ModelProfile.CloudGpt4oTranscribe, "GPT-4o Transcribe", "Top accuracy, robust to accents & jargon", "Best Quality", "#8B5CF6");
         AddModel(CloudModels, ModelProfile.CloudGpt4oMiniTranscribe, "GPT-4o Mini Transcribe", "Fast & inexpensive, great everyday quality");
         AddModel(CloudModels, ModelProfile.CloudWhisperLargeV3, "Whisper Large V3", "99+ languages, high accuracy");
@@ -357,6 +369,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         var settings = _settingsService.Settings;
         SelectedProfile = RemapRetiredProfile(settings.ModelProfile);
+        SelectedCloudFallback = CloudFallbackOptions.FirstOrDefault(o => o.Profile == settings.CloudFallbackModel)
+            ?? CloudFallbackOptions[0];
 
         // Match the saved prompting model slug to an option; default to the first (best fidelity).
         SelectedPromptModel = AvailablePromptModels.FirstOrDefault(m => m.Slug == settings.PromptingModel)
@@ -651,6 +665,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var settings = new AppSettings
         {
             ModelProfile = SelectedProfile,
+            CloudFallbackModel = SelectedCloudFallback?.Profile,
             SelectedMicrophoneId = SelectedAudioDevice?.Id,
             CopyToClipboard = CopyToClipboard,
             AutoPaste = AutoPaste,

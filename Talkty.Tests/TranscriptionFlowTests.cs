@@ -267,6 +267,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public FakeClipboard Clipboard { get; } = new();
         public FakePaste Paste { get; } = new();
         public FakeRefiner Refiner { get; } = new();
+        public MemoryRecoveryStore Recovery { get; } = new();
         public MainViewModel ViewModel { get; }
         public List<string> Warnings { get; } = [];
         public List<string> Statuses { get; } = [];
@@ -275,7 +276,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         {
             configure?.Invoke(Settings.Settings);
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
-                new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner);
+                new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
             ViewModel.PropertyChanged += (_, e) =>
             {

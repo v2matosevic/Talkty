@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -71,6 +71,11 @@ public partial class MainWindow : Window
         var promptRefinementService = new PromptRefinementService();
         Log.Debug("PromptRefinementService created");
 
+        // Optional fidelity check on a generated prompt. Reuses the same OpenRouter key; the mode
+        // is applied from settings by the ViewModel.
+        var promptFidelityService = new PromptFidelityService();
+        Log.Debug("PromptFidelityService created");
+
         // Initialize ViewModel
         Log.Info("Creating MainViewModel...");
         _viewModel = new MainViewModel(
@@ -80,7 +85,8 @@ public partial class MainWindow : Window
             clipboardService,
             volumeDuckingService: volumeDuckingService,
             autoPasteService: autoPasteService,
-            promptRefinementService: promptRefinementService);
+            promptRefinementService: promptRefinementService,
+            promptFidelityService: promptFidelityService);
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;

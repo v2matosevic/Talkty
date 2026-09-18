@@ -1,4 +1,4 @@
-<Window x:Class="Talkty.App.Views.SettingsWindow"
+﻿<Window x:Class="Talkty.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:Talkty.App.Models"
@@ -610,6 +610,31 @@
                                            TextWrapping="Wrap"
                                            Margin="0,8,0,0"
                                            Text="With Prompting on (the sparkle on the recording pill), your dictation is rewritten into a structured prompt for a coding agent like Claude Code or Cursor. Uses your OpenRouter key above; falls back to the raw text if it fails."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="PROMPT CHECK" Style="{StaticResource SectionHeader}" Margin="0,20,0,0"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <TextBlock Text="Check the prompt against what you said"
+                                           FontSize="13"
+                                           Foreground="{StaticResource Zinc200Brush}"
+                                           Margin="0,0,0,8"/>
+                                <ComboBox ItemsSource="{Binding AvailableFidelityModes}"
+                                          SelectedItem="{Binding SelectedFidelityMode}"
+                                          AutomationProperties.Name="Prompt fidelity check"/>
+                                <TextBlock Text="{Binding SelectedFidelityMode.Note}"
+                                           FontSize="11"
+                                           Foreground="{StaticResource Zinc400Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+                                <TextBlock FontSize="10"
+                                           Foreground="{StaticResource Zinc500Brush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"
+                                           Text="Runs only after Prompting has produced a prompt, and only on that text — never on audio. Exact numbers, file and function names are compared on this PC; the rest is judged by a small decision model (TypeSafe Jev) over your OpenRouter key, about a hundredth of a cent per prompt. It never rewrites your prompt, never delays copy or paste, and stays quiet when it is unsure."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>

@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "createdUtc": "2026-09-19",
+  "purpose": "Labeled development/holdout corpus for the Talkty prompt-fidelity check (Athena-kukk).",
+  "labellingNote": "Every case was written and labeled BEFORE any live Jev call. Thresholds may be tuned on the development split only; the holdout split must never be used to choose a threshold.",
+  "fields": {
+    "expectConcern": "True when a correct system should report something to the speaker.",
+    "expectedKinds": "Concern kinds a correct system should produce.",
+    "expectedClause": "Clause id (as PromptFidelityAnalyzer.ExtractClauses numbers them) carrying the lost or changed content.",
+    "codeShouldCatch": "True when the exact, model-free layer alone must catch it."
+  },
+  "cases": [
+    {
+      "id": "dev-01",
+      "split": "development",
+      "language": "en",
+      "scenario": "omitted-prohibition",
+      "transcript": "Okay so I need you to refactor the payment webhook handler that lives in src/api/webhooks/stripe.ts. Right now the signature verification is inline in the handler and it is impossible to test, so pull it out into its own function that takes the raw body and the header. Keep the existing retry behaviour exactly as it is, we tuned that last month and it works. And do not deploy this to production, I only want it sitting on the staging branch until I have looked at it myself.",
+      "rewrite": "**Task**\nRefactor the payment webhook handler in src/api/webhooks/stripe.ts.\n\n**Context**\nThe Stripe signature verification is currently inline in the handler, which makes it untestable.\n\n**Requirements**\n- Extract the signature verification into its own function that takes the raw body and the header.\n- Preserve the existing retry behaviour exactly; it was tuned last month and works.\n\n**Verify**\nRun the webhook tests and confirm the retry behaviour is unchanged.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "DroppedProhibition"
+      ],
+      "expectedClause": "c4",
+      "codeShouldCatch": true,
+      "label": "Long fluent rewrite that keeps every other detail but silently drops 'do not deploy this to production'. The rewrite contains no prohibition at all, so the exact layer can see the loss."
+    },
+    {
+      "id": "dev-02",
+      "split": "development",
+      "language": "en",
+      "scenario": "omitted-prohibition-masked",
+      "transcript": "I want you to move the invoice PDF generation out of the request path and into a background job. Use the queue we already have in src/jobs, do not add a new dependency for this. The user should get an email when the PDF is ready. And whatever you do, do not touch the invoice numbering logic, that is audited and I do not want it moving.",
+      "rewrite": "**Task**\nMove invoice PDF generation out of the request path into a background job.\n\n**Context**\nUse the existing queue in src/jobs.\n\n**Requirements**\n- Generate the invoice PDF in a background job rather than during the request.\n- Email the user once the PDF is ready.\n\n**Constraints**\n- Do not add a new dependency for this; reuse the existing queue.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "OmittedClause"
+      ],
+      "expectedClause": "c4",
+      "codeShouldCatch": false,
+      "label": "The rewrite keeps ONE prohibition ('do not add a new dependency') and drops another ('do not touch the invoice numbering logic'). A prohibition-count check cannot see this; only a per-clause judgment can."
+    },
+    {
+      "id": "dev-03",
+      "split": "development",
+      "language": "en",
+      "scenario": "altered-identifier",
+      "transcript": "In src/lib/users.ts there is a function called getUserById and it currently returns null when the row is missing. I want it to throw a NotFoundError instead, and then update the two call sites on the profile page so they catch it and render the empty state.",
+      "rewrite": "**Task**\nMake user lookup fail loudly instead of returning null.\n\n**Context**\nsrc/lib/users.ts, and the two call sites on the profile page.\n\n**Requirements**\n- Change getUserByID so it throws a NotFoundError when the row is missing, instead of returning null.\n- Update the two call sites on the profile page to catch NotFoundError and render the empty state.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingIdentifier"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "label": "One-character identifier drift: getUserById became getUserByID. Length, structure and every other detail survive."
+    },
+    {
+      "id": "dev-04",
+      "split": "development",
+      "language": "en",
+      "scenario": "changed-value",
+      "transcript": "Bump the request timeout in the API client from 30 seconds to 45 and add a single retry on a 503.",
+      "rewrite": "**Task**\nAdjust the API client's timeout and retry behaviour.\n\n**Requirements**\n- Raise the request timeout from 30 seconds to 60 seconds.\n- Retry once on an HTTP 503 response.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "label": "The rewrite changed a stated value: 45 became 60. Short input, so the length guard is not even applicable."
+    },
+    {
+      "id": "dev-05",
+      "split": "development",
+      "language": "en",
+      "scenario": "self-correction",
+      "transcript": "Set the cache TTL to 300 seconds, no wait, actually make it 600. And log a warning whenever we evict an entry early.",
+      "rewrite": "**Task**\nAdjust the cache expiry and add eviction logging.\n\n**Requirements**\n- Set the cache TTL to 600 seconds.\n- Log a warning whenever an entry is evicted early.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "The speaker corrected themselves; 600 is the committed value and 300 was abandoned. Reporting the missing 300 would be a false alarm."
+    },
+    {
+      "id": "dev-06",
+      "split": "development",
+      "language": "en",
+      "scenario": "faithful-short",
+      "transcript": "Add a loading spinner to the export button while the download is in flight.",
+      "rewrite": "Add a loading spinner to the export button while the download is in flight.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Trivial ask, faithful one-line rewrite. Nothing should be reported."
+    },
+    {
+      "id": "dev-07",
+      "split": "development",
+      "language": "en",
+      "scenario": "filler-removal",
+      "transcript": "Um, so, yeah, basically I think, you know, we should, um, add pagination to the orders table, like, twenty per page, I mean twenty rows per page, and, uh, that is it really.",
+      "rewrite": "Add pagination to the orders table, 20 rows per page.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Only disfluencies and a restart were removed. Nothing should be reported."
+    },
+    {
+      "id": "dev-08",
+      "split": "development",
+      "language": "en",
+      "scenario": "multiple-requirements-kept",
+      "transcript": "Three things on the settings page. First, the save button should stay disabled until something actually changes. Second, show a toast when the save succeeds, and keep it up for about three seconds. Third, the API key field should be masked by default with an eye icon to reveal it. Oh and make sure the whole page still works on mobile, it is quite cramped at the moment.",
+      "rewrite": "**Task**\nImprove the settings page.\n\n**Requirements**\n- Keep the save button disabled until a field actually changes.\n- Show a success toast when the save succeeds, visible for about 3 seconds.\n- Mask the API key field by default, with an eye icon to reveal it.\n- Make sure the page still works on mobile; it is cramped today.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Four independent requirements, all carried through. A correct system reports nothing."
+    },
+    {
+      "id": "dev-09",
+      "split": "development",
+      "language": "en",
+      "scenario": "multiple-requirements-one-dropped",
+      "transcript": "Three things on the settings page. First, the save button should stay disabled until something actually changes. Second, show a toast when the save succeeds, and keep it up for about three seconds. Third, the API key field should be masked by default with an eye icon to reveal it. Oh and make sure the whole page still works on mobile, it is quite cramped at the moment.",
+      "rewrite": "**Task**\nImprove the settings page.\n\n**Requirements**\n- Keep the save button disabled until a field actually changes.\n- Show a success toast when the save succeeds, visible for about 3 seconds.\n- Mask the API key field by default, with an eye icon to reveal it.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "OmittedClause"
+      ],
+      "expectedClause": "c5",
+      "codeShouldCatch": false,
+      "label": "Same dictation as dev-08, but the throwaway mobile aside is gone. No identifier or number is involved, so only a per-clause judgment can catch it."
+    },
+    {
+      "id": "dev-10",
+      "split": "development",
+      "language": "hr",
+      "scenario": "faithful-croatian",
+      "transcript": "Trebam da dodaš gumb za izvoz u PDF na stranicu s računima. Neka bude vidljiv samo administratorima. Ime datoteke neka bude broj računa.",
+      "rewrite": "**Zadatak**\nDodaj gumb za izvoz u PDF na stranicu s računima.\n\n**Zahtjevi**\n- Gumb je vidljiv samo administratorima.\n- Ime izvezene datoteke je broj računa.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Croatian dictation, faithful Croatian rewrite. Nothing should be reported."
+    },
+    {
+      "id": "dev-11",
+      "split": "development",
+      "language": "hr",
+      "scenario": "omitted-prohibition-croatian",
+      "transcript": "Popravi grešku kod naplate na stranici s pretplatama, korisnici dobiju dvostruki račun kad brzo kliknu dvaput. Nemoj dirati postojeće migracije baze, one su već puštene u produkciju.",
+      "rewrite": "**Zadatak**\nPopravi grešku kod naplate na stranici s pretplatama.\n\n**Kontekst**\nKorisnici dobiju dvostruki račun kada brzo kliknu dvaput.\n\n**Zahtjevi**\n- Spriječi dvostruku naplatu kod uzastopnih klikova.\n- Napiši test koji reproducira grešku.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "DroppedProhibition"
+      ],
+      "expectedClause": "c2",
+      "codeShouldCatch": true,
+      "label": "Croatian prohibition ('nemoj dirati postojeće migracije') dropped entirely; the rewrite has no prohibition left."
+    },
+    {
+      "id": "dev-12",
+      "split": "development",
+      "language": "hr",
+      "scenario": "changed-value-croatian",
+      "transcript": "Postavi timeout na 15 sekundi i limit na 100 zapisa po stranici u pregledu narudžbi.",
+      "rewrite": "**Zadatak**\nPodesi pregled narudžbi.\n\n**Zahtjevi**\n- Postavi timeout na 20 sekundi.\n- Prikazuj 100 zapisa po stranici.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "label": "Croatian dictation with a changed numeric value: 15 became 20."
+    },
+    {
+      "id": "dev-13",
+      "split": "development",
+      "language": "hr",
+      "scenario": "mixed-language-faithful",
+      "transcript": "U fajlu src/components/OrderTable.tsx dodaj sortiranje po datumu. Koristi postojeći useSort hook, nemoj pisati novi.",
+      "rewrite": "**Task**\nAdd date sorting to src/components/OrderTable.tsx.\n\n**Requirements**\n- Sort the order table by date.\n- Reuse the existing useSort hook.\n\n**Constraints**\n- Do not write a new sorting hook.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Croatian dictation, English rewrite. Identifiers and the prohibition both survive. Nothing should be reported."
+    },
+    {
+      "id": "dev-14",
+      "split": "development",
+      "language": "en",
+      "scenario": "added-requirement",
+      "transcript": "Add a dark mode toggle to the settings page, it should follow the system theme by default.",
+      "rewrite": "**Task**\nAdd a dark mode toggle to the settings page.\n\n**Requirements**\n- Default the toggle to the system theme.\n- Persist the chosen theme in localStorage.\n- Add unit tests covering the toggle and migrate the existing colour constants into a theme provider.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "AddedRequirement"
+      ],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Everything the speaker said survives, but the rewrite invents persistence, tests and a refactor they never asked for."
+    },
+    {
+      "id": "hold-01",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "reworded-negation-control",
+      "transcript": "We need the new search index rebuilt nightly. Put it behind a feature flag so I can turn it off, and do not let it run on the primary database, point it at the read replica. Also do not change the existing search endpoint's response shape, the mobile app depends on it.",
+      "rewrite": "**Task**\nRebuild the search index nightly.\n\n**Requirements**\n- Run the nightly rebuild behind a feature flag so it can be switched off.\n- Point the rebuild at the read replica rather than the primary database.\n\n**Constraints**\n- Do not change the existing search endpoint's response shape; the mobile app depends on it.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Both prohibitions survive: 'not on the primary database' is carried as an explicit positive instruction, and the response-shape constraint is kept. A false-alarm control for a rewrite that rephrased a negation."
+    },
+    {
+      "id": "hold-02",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "faithful-long",
+      "transcript": "The onboarding flow needs work. After signup we should send them straight to the workspace picker instead of the empty dashboard. If they only have one workspace, skip the picker entirely and go into it. Put a small progress indicator at the top showing which of the three steps they are on. And the back button has to work properly, right now it dumps you back on the signup form and you lose everything.",
+      "rewrite": "**Task**\nRework the onboarding flow after signup.\n\n**Requirements**\n- Send the user to the workspace picker after signup instead of the empty dashboard.\n- Skip the picker and enter the workspace directly when the user has only one workspace.\n- Show a small progress indicator at the top marking which of the 3 steps the user is on.\n- Fix the back button: it currently returns to the signup form and loses entered data.\n\n**Verify**\nWalk the flow with one workspace and with several, and step backwards at each stage.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "A long, faithful expansion. A system that reports anything here is producing a false alarm."
+    },
+    {
+      "id": "hold-03",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "altered-identifier",
+      "transcript": "Rename the column in OrderTable.tsx from created to placedAt, and update the sort helper in src/lib/sorting.ts that references it.",
+      "rewrite": "**Task**\nRename the order date column.\n\n**Requirements**\n- In OrdersTable.tsx, rename the created column to placedAt.\n- Update the sort helper in src/lib/sorting.ts that references it.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingIdentifier"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "label": "The file name drifted from OrderTable.tsx to OrdersTable.tsx."
+    },
+    {
+      "id": "hold-04",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "changed-value",
+      "transcript": "The debounce on the search box is too aggressive. Take it down from 250 milliseconds to 120, and make sure an empty query does not fire a request at all.",
+      "rewrite": "**Task**\nMake the search box more responsive.\n\n**Requirements**\n- Reduce the search debounce from 250 ms to 500 ms.\n- Do not issue a request when the query is empty.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber"
+      ],
+      "expectedClause": "c2",
+      "codeShouldCatch": true,
+      "label": "The rewrite reversed the intent and changed 120 to 500."
+    },
+    {
+      "id": "hold-05",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "self-correction",
+      "transcript": "Limit the upload size to 10 megabytes, sorry, make that 25 megabytes, and reject anything that is not a PNG or a JPEG.",
+      "rewrite": "**Task**\nConstrain uploads.\n\n**Requirements**\n- Limit the upload size to 25 MB.\n- Reject files that are not PNG or JPEG.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "The 10 MB figure was withdrawn by the speaker. Reporting it missing would be a false alarm."
+    },
+    {
+      "id": "hold-06",
+      "split": "holdout",
+      "language": "hr",
+      "scenario": "faithful-croatian",
+      "transcript": "Na stranici s rezervacijama treba filter po datumu dolaska. Neka pamti zadnji odabir kad se korisnik vrati.",
+      "rewrite": "**Zadatak**\nDodaj filter po datumu dolaska na stranicu s rezervacijama.\n\n**Zahtjevi**\n- Filtriraj rezervacije po datumu dolaska.\n- Zapamti zadnji odabrani filter za sljedeći posjet korisnika.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Croatian dictation, faithful Croatian rewrite. Nothing should be reported."
+    },
+    {
+      "id": "hold-07",
+      "split": "holdout",
+      "language": "hr",
+      "scenario": "omitted-requirement-croatian",
+      "transcript": "Napravi izvještaj o prodaji po mjesecima. Treba imati graf i tablicu ispod grafa. Izvještaj mora raditi i kada nema podataka za neki mjesec, tada prikaži nulu umjesto praznog reda. I neka se može izvesti u CSV.",
+      "rewrite": "**Zadatak**\nNapravi mjesečni izvještaj o prodaji.\n\n**Zahtjevi**\n- Prikaži graf prodaje po mjesecima.\n- Ispod grafa prikaži tablicu s istim podacima.\n- Omogući izvoz izvještaja u CSV.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "OmittedClause"
+      ],
+      "expectedClause": "c3",
+      "codeShouldCatch": false,
+      "label": "The empty-month behaviour ('prikaži nulu umjesto praznog reda') is gone. No identifier or digit is involved."
+    },
+    {
+      "id": "hold-08",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "filler-removal",
+      "transcript": "So, um, I was thinking, like, maybe we could, you know, just, uh, make the sidebar collapsible? Like it, I mean, it takes up a lot of room on a laptop. Yeah. That is basically it.",
+      "rewrite": "Make the sidebar collapsible; it takes up too much room on a laptop screen.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "label": "Nothing but disfluency and a restart was removed."
+    },
+    {
+      "id": "hold-09",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "contradiction",
+      "transcript": "Add the new v2 pricing endpoint under api/v2/pricing, but keep the old one working, we still have customers on it and I do not want to break them.",
+      "rewrite": "**Task**\nIntroduce the v2 pricing endpoint.\n\n**Requirements**\n- Add the new pricing endpoint at api/v2/pricing.\n- Remove the old pricing endpoint once the new one is in place.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "ContradictedClause",
+        "DroppedProhibition"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "label": "The rewrite states the opposite of what the speaker asked for. Label corrected 2026-09-19 after the first corpus run: the CONTRADICTION itself is only reachable semantically, but the speaker's 'I do not want to break them' is the dictation's only prohibition and the rewrite has none, so the exact layer catches the case too. The label was wrong, not the code."
+    },
+    {
+      "id": "hold-10",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "contradiction-and-omission",
+      "transcript": "Change the session length from 7 days to 30 days, add a remember me checkbox on the login form, and make sure logging out on one device does not kill the sessions on the others.",
+      "rewrite": "**Task**\nAdjust session handling.\n\n**Requirements**\n- Change the session length from 7 days to 14 days.\n- Add a remember me checkbox to the login form.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber",
+        "OmittedClause"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "label": "Two losses at once: 30 days became 14, and the per-device logout requirement disappeared."
+    }
+  ]
+}

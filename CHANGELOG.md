@@ -2,6 +2,12 @@
 
 User-facing changes, newest first. Dates are when the work landed.
 
+## [Unreleased]
+
+- Optional prompt check for Prompting: after your dictation is rewritten into a coding-agent prompt, Talkty can compare the two and tell you when something you said is missing. Exact numbers, file names and function names are compared on your PC; the rest is judged by a small decision model over your existing OpenRouter key. It never rewrites your prompt and never delays copy or paste.
+- Settings > Cloud & Prompting > Prompt check: Record only (default, shows nothing), Show concerns, or Off.
+- Implemented and verified locally on Windows only. It is not in any installer or published release yet. Details and evidence: `docs/PROMPT-FIDELITY.md`.
+
 ## [1.3.4] - 2026-09-16
 
 - MAI-Transcribe 2 sends smaller audio uploads using native Opus compression. Requests were 56–57% smaller than 1.3.3 on two test recordings, with identical transcripts. This reduces the amount to upload, particularly helpful on slower connections; it is not a claim of 56–57% faster transcription.

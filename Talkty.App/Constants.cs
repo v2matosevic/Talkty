@@ -131,6 +131,79 @@ public static class Constants
     /// </summary>
     public const double PromptCompletenessMinOutputRatio = 0.6;
 
+    // ─── Prompt fidelity check (TypeSafe Jev via OpenRouter) ────────────
+    // Bounds for the optional check that runs AFTER Prompting has produced a prompt. See
+    // docs/PROMPT-FIDELITY.md. Every one of these is deliberately smaller than what the model or
+    // the route would allow — the check is an advisory extra, never a second budget centre.
+
+    /// <summary>
+    /// Per-attempt deadline for one decision request. Matched to ADE's measured 501-848 ms
+    /// evaluations with headroom; the check runs after delivery, so a slow answer costs nothing
+    /// but is still cut off rather than left hanging.
+    /// </summary>
+    public const int JevDecisionTimeoutMs = 4000;
+
+    /// <summary>Serialized request ceiling (the route's own documented state budget is larger).</summary>
+    public const int JevMaxRequestBytes = 32_000;
+
+    /// <summary>Response byte ceiling — a runaway body is refused rather than buffered.</summary>
+    public const int JevMaxResponseBytes = 128_000;
+
+    /// <summary>Upper bound on questions in one request.</summary>
+    public const int JevMaxQuestions = 64;
+
+    /// <summary>
+    /// Source clauses the dictation is split into. More clauses means finer attribution and a
+    /// bigger request; sentences beyond this are merged so the whole transcript stays covered.
+    /// </summary>
+    public const int JevMaxClauses = 12;
+
+    /// <summary>Dictation length above which the model layer is skipped (code checks still run).</summary>
+    public const int JevMaxTranscriptChars = 6_000;
+
+    /// <summary>Generated-prompt length above which the model layer is skipped.</summary>
+    public const int JevMaxRewriteChars = 12_000;
+
+    /// <summary>
+    /// Reserved before every outbound attempt, in millionths of a dollar. Replaced by the reported
+    /// cost afterwards; an unreported cost keeps the reservation rather than counting as free.
+    /// ADE's eight measured calls each cost about $0.0000245, so this is a conservative ceiling.
+    /// </summary>
+    public const long JevReservationMicroUsd = 2_000;
+
+    /// <summary>Local daily allocation cap, in millionths of a dollar ($0.25 per local calendar day).</summary>
+    public const long JevDailyBudgetMicroUsd = 250_000;
+
+    /// <summary>Attempts allowed per rolling minute.</summary>
+    public const int JevMaxAttemptsPerMinute = 20;
+
+    /// <summary>An identical dictation/prompt pair is not re-evaluated within this window.</summary>
+    public const int JevDuplicateSuppressionSeconds = 60;
+
+    /// <summary>Comparison records retained locally (hashes and labels only, no text).</summary>
+    public const int JevMaxRecords = 200;
+
+    /// <summary>Most concerns shown at once — a toast the user cannot read helps nobody.</summary>
+    public const int JevMaxSurfacedConcerns = 2;
+
+    /// <summary>
+    /// Minimum probability for the winning option before a clause concern is raised. PROVISIONAL:
+    /// tuned on the development corpus only, never on the holdout, and not a measured accuracy.
+    /// </summary>
+    public const double JevFidelityMinProbability = 0.80;
+
+    /// <summary>
+    /// Minimum Choice confidence before a clause concern is raised. Confidence is a distribution
+    /// statistic, not the probability that the answer is correct.
+    /// </summary>
+    public const double JevFidelityMinConfidence = 0.70;
+
+    /// <summary>
+    /// Minimum Noul yes-probability before reporting that the prompt added a requirement. Higher
+    /// than the clause gate because Noul reports no confidence statistic to corroborate it.
+    /// </summary>
+    public const double JevFidelityMinAddedProbability = 0.85;
+
     // ─── Auto-paste ─────────────────────────────────────────────────────
 
     /// <summary>

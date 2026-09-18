@@ -87,6 +87,15 @@ public class AppSettings
     /// </summary>
     public string PromptingModel { get; set; } = "google/gemini-3.1-flash-lite";
 
+    /// <summary>
+    /// Optional fidelity check on a generated prompt: does it still carry every instruction, value
+    /// and prohibition from the dictation? Runs only when Prompting produced a prompt, using the
+    /// OpenRouter key above. Record only (the default) changes nothing the user sees and keeps a
+    /// local comparison record; Review additionally shows a concern after the prompt is delivered.
+    /// Persisted BY NUMBER — never reorder <see cref="PromptFidelityMode"/>.
+    /// </summary>
+    public PromptFidelityMode PromptFidelity { get; set; } = PromptFidelityMode.RecordOnly;
+
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;
     public Key HotkeyKey { get; set; } = Key.Q;

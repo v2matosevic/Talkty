@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Threading;
 using Talkty.App.Models;
 using Talkty.App.Services;
@@ -267,6 +267,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public FakeClipboard Clipboard { get; } = new();
         public FakePaste Paste { get; } = new();
         public FakeRefiner Refiner { get; } = new();
+        public FakeFidelity Fidelity { get; } = new();
         public MemoryRecoveryStore Recovery { get; } = new();
         public MainViewModel ViewModel { get; }
         public List<string> Warnings { get; } = [];
@@ -276,7 +277,8 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         {
             configure?.Invoke(Settings.Settings);
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
-                new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery);
+                new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery,
+                promptFidelityService: Fidelity);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
             ViewModel.PropertyChanged += (_, e) =>
             {
@@ -406,6 +408,38 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         {
             Calls++;
             return Run(cancellationToken);
+        }
+    }
+
+    // Stands in for the Jev-backed fidelity check: records what it was handed, never touches a network.
+    internal sealed class FakeFidelity : IPromptFidelityService
+    {
+        private readonly TaskCompletionSource _called = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public PromptFidelityMode Mode { get; set; } = PromptFidelityMode.RecordOnly;
+        public int Calls { get; private set; }
+        public int Cancellations { get; private set; }
+        public string? LastTranscript { get; private set; }
+        public string? LastRewrite { get; private set; }
+        public List<FidelityConcern> RaiseOnEvaluate { get; } = [];
+
+        /// <summary>Completes once EvaluateAsync has been entered (the call is fire-and-forget).</summary>
+        public Task Called => _called.Task;
+
+        public event EventHandler<FidelityConcernEventArgs>? ConcernRaised;
+
+        public void SetApiKey(string? apiKey) { }
+        public void CancelPending() => Cancellations++;
+
+        public Task<PromptFidelityOutcome> EvaluateAsync(string transcript, string rewrite)
+        {
+            Calls++;
+            LastTranscript = transcript;
+            LastRewrite = rewrite;
+            if (RaiseOnEvaluate.Count > 0)
+                ConcernRaised?.Invoke(this, new FidelityConcernEventArgs { Concerns = RaiseOnEvaluate.ToList() });
+            _called.TrySetResult();
+            return Task.FromResult(PromptFidelityOutcome.None(PromptFidelityStatus.CodeOnly));
         }
     }
 

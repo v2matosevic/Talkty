@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -26,6 +26,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IVolumeDuckingService? _volumeDuckingService;
     private readonly IAutoPasteService _autoPasteService;
     private readonly IPromptRefinementService? _promptRefinementService;
+    private readonly IPromptFidelityService? _promptFidelityService;
 
     // Linked across a single recording -> transcription cycle. ESC cancels it mid-flight,
     // which aborts both the NAudio capture (if still recording) and the Whisper decode.
@@ -93,7 +94,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IVolumeDuckingService? volumeDuckingService = null,
         IAutoPasteService? autoPasteService = null,
         IPromptRefinementService? promptRefinementService = null,
-        RecordingRecoveryStore? recoveryStore = null)
+        RecordingRecoveryStore? recoveryStore = null,
+        IPromptFidelityService? promptFidelityService = null)
     {
         Log.Info("MainViewModel constructor starting");
 
@@ -107,6 +109,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _volumeDuckingService = volumeDuckingService;
         _autoPasteService = autoPasteService ?? throw new ArgumentNullException(nameof(autoPasteService));
         _promptRefinementService = promptRefinementService;
+        _promptFidelityService = promptFidelityService;
+        if (_promptFidelityService != null)
+            _promptFidelityService.ConcernRaised += OnFidelityConcernRaised;
 
         _audioCaptureService.AudioLevelChanged += OnAudioLevelChanged;
         Log.Debug("AudioLevelChanged event handler attached");
@@ -163,6 +168,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _transcriptionService.SetCloudApiKey(cloudKey);
             _promptRefinementService?.SetApiKey(cloudKey);
             _promptRefinementService?.SetModel(settings.PromptingModel);
+
+            // The fidelity check reuses the SAME OpenRouter connection — no second credential.
+            if (_promptFidelityService != null)
+            {
+                _promptFidelityService.SetApiKey(cloudKey);
+                _promptFidelityService.Mode = settings.PromptFidelity;
+            }
 
             _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);
 
@@ -438,6 +450,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             try { _transcriptionCts?.Cancel(); }
             catch (ObjectDisposedException) { /* already completed */ }
 
+            // A fidelity check runs after delivery on its own token; ESC stops that too.
+            _promptFidelityService?.CancelPending();
+
             // Stop recording without getting audio (no-op if already stopped)
             if (IsListening)
             {
@@ -497,6 +512,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Disposed by the transcription path or CancelRecording.
             _transcriptionCts?.Dispose();
             _transcriptionCts = new CancellationTokenSource();
+
+            // A concern about the previous prompt must not arrive over the next one.
+            _promptFidelityService?.CancelPending();
 
             Log.Debug("Calling AudioCaptureService.StartRecording()");
             _audioCaptureService.StartRecording();
@@ -727,6 +745,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
                             Log.Info($"Prompt mode: expanded into agent prompt ({result.Text.Length} → {refined.Length} chars)");
                             result.Text = refined;
                             rawTranscriptionForHistory = rawTranscription;
+
+                            // Fidelity check: did the rewrite keep every instruction, value and
+                            // prohibition? Deliberately NOT awaited — it must never sit between the
+                            // user and their clipboard. It owns its own deadline, budget and
+                            // cancellation, and in Record only it shows nothing at all.
+                            StartFidelityCheck(rawTranscription, refined);
                         }
                         else
                         {
@@ -973,6 +997,58 @@ public partial class MainViewModel : ObservableObject, IDisposable
             DurationMs = 5000
         });
 
+    /// <summary>
+    /// Starts the optional prompt-fidelity check. Fire-and-forget by design: the prompt is already
+    /// on its way to the clipboard, so the check adds zero latency to delivery and a failure of any
+    /// kind leaves the established flow untouched.
+    /// </summary>
+    private void StartFidelityCheck(string transcript, string rewrite)
+    {
+        var service = _promptFidelityService;
+        if (service == null || service.Mode == PromptFidelityMode.Off) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await service.EvaluateAsync(transcript, rewrite);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"Fidelity check threw: {ex.GetType().Name}: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Shows a fidelity concern. The text quoted back is the USER'S OWN dictation and the label is
+    /// a fixed string chosen by code — the check reports what may be missing, it never claims the
+    /// prompt is wrong and it never offers a replacement.
+    /// </summary>
+    private void OnFidelityConcernRaised(object? sender, FidelityConcernEventArgs e)
+    {
+        if (e.Concerns.Count == 0) return;
+
+        var lines = e.Concerns.Select(c =>
+            string.IsNullOrWhiteSpace(c.SourceText)
+                ? c.Label
+                : $"{c.Label}: “{Shorten(c.SourceText)}”");
+
+        var message = "Prompt check — " + string.Join("  •  ", lines);
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null) return;
+        dispatcher.InvokeAsync(() => RequestShowToast?.Invoke(this, new ToastEventArgs
+        {
+            Message = message,
+            Type = ToastType.Warning,
+            DurationMs = 8000
+        }));
+    }
+
+    private static string Shorten(string text, int max = 90) =>
+        text.Length <= max ? text : text[..max].TrimEnd() + "…";
+
     [RelayCommand]
     private async Task RetryRecordingAsync(RecoverableRecording? recording)
     {
@@ -1212,6 +1288,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // (SetModel below) but never written to disk, so it reset to the default on every restart.
         _settingsService.Settings.PromptingModel = settings.PromptingModel;
 
+        // Same lesson: a new AppSettings field that is not copied here is applied to the live
+        // services but never written to disk, so it resets on the next restart.
+        _settingsService.Settings.PromptFidelity = settings.PromptFidelity;
+
         _settingsService.Settings.UnloadModelWhenIdle = settings.UnloadModelWhenIdle;
         _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);
 
@@ -1232,6 +1312,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _transcriptionService.SetCloudApiKey(updatedKey);
         _promptRefinementService?.SetApiKey(updatedKey);
         _promptRefinementService?.SetModel(settings.PromptingModel);
+        if (_promptFidelityService != null)
+        {
+            _promptFidelityService.SetApiKey(updatedKey);
+            _promptFidelityService.Mode = settings.PromptFidelity;
+        }
 
         // Reload model if profile or GPU setting changed
         bool profileChanged = previousProfile != settings.ModelProfile;

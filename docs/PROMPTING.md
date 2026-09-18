@@ -22,6 +22,8 @@ hotkey ─▶ record ─▶ transcribe (local or cloud)
                        │       → structured coding-agent prompt
                        │
                        └─▶ clipboard / auto-paste
+                             │
+                             └─ optional: prompt fidelity check (after delivery, never delays it)
 ```
 
 - **Trigger:** a hover-revealed **sparkle icon** toggle on the recording pill (`OverlayWindow`) —
@@ -101,6 +103,17 @@ chars from a 578-char dictation** (ratio 0.34, caught and escalated); the Gemini
 > (fidelity over latency) — but real logs showed M3 going **0/2** (one 12s timeout, one 578→195-char
 > summarization), so once the completeness guard landed (v1.1.3) the default reverted to **flash-lite-first**
 > (v1.1.4): fast by default, quality on demand.
+
+### Beyond length: the prompt fidelity check
+
+The completeness guard measures **length**, so a fluent rewrite that keeps the word count while
+dropping one requirement passes it. The optional [prompt fidelity check](PROMPT-FIDELITY.md)
+(Settings ▸ Cloud & Prompting ▸ Prompt check) compares the dictation against the generated prompt
+after delivery: exact identifiers, numbers and prohibitions on this PC, then bounded
+preserved/omitted/contradicted/unclear judgments from a decision model. On a 24-case labeled corpus
+the length guard caught 0 of 13 deliberate losses and the two new layers caught 13, with no false
+alarm on the 11 faithful rewrites. It never rewrites the prompt and never delays the clipboard.
+Implemented and locally verified 2026-09-19; not released.
 
 ### Why these models (and not a "reasoning" model)
 
@@ -221,3 +234,4 @@ prompt-engineering practice for coding agents (2026).
 | Toggle → pipeline wiring | `Talkty.App/MainWindow.xaml.cs` (`OnOverlayPromptModeChanged`) |
 | Pipeline branch (refine before clipboard) | `Talkty.App/ViewModels/MainViewModel.cs` (`PromptMode`) |
 | Timeout constant | `Talkty.App/Constants.cs` (`PromptRefinementTimeoutMs`) |
+| Optional fidelity check on the result | `docs/PROMPT-FIDELITY.md`, `Talkty.App/Services/PromptFidelityService.cs` |

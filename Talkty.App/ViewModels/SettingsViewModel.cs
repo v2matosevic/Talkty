@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,6 +24,12 @@ public record LanguageOption(string Code, string Name)
 /// the refiner; <see cref="Name"/> is shown in the dropdown; <see cref="Note"/> is the one-line tradeoff.
 /// </summary>
 public record PromptModelOption(string Slug, string Name, string Note)
+{
+    public override string ToString() => Name;
+}
+
+/// <summary>One entry in the prompt-fidelity mode picker.</summary>
+public record PromptFidelityOption(PromptFidelityMode Mode, string Name, string Note)
 {
     public override string ToString() => Name;
 }
@@ -229,6 +235,23 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private PromptModelOption _selectedPromptModel = PromptModels[0];
 
+    // Prompt-fidelity check. Persisted by ENUM VALUE, so this list may be reordered freely, but
+    // PromptFidelityMode itself must not be.
+    private static readonly IReadOnlyList<PromptFidelityOption> FidelityModes =
+    [
+        new(PromptFidelityMode.RecordOnly, "Record only",
+            "Checks each generated prompt and keeps a local record, but shows you nothing and changes nothing."),
+        new(PromptFidelityMode.Review, "Show concerns",
+            "Also tells you when something you said looks missing from the prompt, after the prompt is already copied."),
+        new(PromptFidelityMode.Off, "Off",
+            "No check runs and nothing extra is sent."),
+    ];
+
+    public IReadOnlyList<PromptFidelityOption> AvailableFidelityModes => FidelityModes;
+
+    [ObservableProperty]
+    private PromptFidelityOption _selectedFidelityMode = FidelityModes[0];
+
     // Cloud (OpenRouter) API key — held in plaintext only in memory; persisted encrypted.
     [ObservableProperty]
     private string _openRouterApiKey = "";
@@ -375,6 +398,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         // Match the saved prompting model slug to an option; default to the first (best fidelity).
         SelectedPromptModel = AvailablePromptModels.FirstOrDefault(m => m.Slug == settings.PromptingModel)
                               ?? AvailablePromptModels[0];
+
+        SelectedFidelityMode = AvailableFidelityModes.FirstOrDefault(m => m.Mode == settings.PromptFidelity)
+                               ?? AvailableFidelityModes[0];
 
         CopyToClipboard = settings.CopyToClipboard;
         AutoPaste = settings.AutoPaste;
@@ -686,7 +712,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             // Encrypt the cloud API key before it leaves the dialog (DPAPI, CurrentUser).
             OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect(
                 string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim()),
-            PromptingModel = SelectedPromptModel?.Slug ?? PromptModels[0].Slug
+            PromptingModel = SelectedPromptModel?.Slug ?? PromptModels[0].Slug,
+            PromptFidelity = SelectedFidelityMode?.Mode ?? FidelityModes[0].Mode
         };
 
         SettingsSaved?.Invoke(this, settings);

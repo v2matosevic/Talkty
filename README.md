@@ -59,6 +59,9 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
 - **Cloud transcription** *(opt-in)*. Route a take through OpenRouter models
   (GPT-4o Transcribe, MAI-Transcribe 2, Whisper Large V3, Qwen3 ASR, and more) when you want extra
   accuracy. Local stays the default.
+- **Recover failed cloud recordings.** Failed takes stay encrypted on your PC with
+  Retry and Discard controls, even after restarting Talkty. Pick an automatic backup
+  model in Settings to handle temporary cloud failures.
 - **Prompting mode** *(opt-in)*. Hover the recording pill, tap the sparkle, and your
   dictation is expanded into a structured prompt for a coding AI agent before it hits
   the clipboard.
@@ -71,7 +74,8 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
 
 1. Download the latest `TalktySetup-*.exe` from the
    [Releases page](https://github.com/v2matosevic/Talkty/releases/latest).
-2. Run it. The installer is per-user and needs no admin rights. Windows
+2. Run it. New per-user installations need no admin rights; upgrading an existing
+   all-users installation may prompt for administrator approval. Windows
    SmartScreen may warn that the publisher is unknown (the app is not yet code
    signed). Choose **More info -> Run anyway**.
 3. Launch Talkty. Open **Settings**, pick a model, and let it download.
@@ -106,9 +110,17 @@ that is stored **encrypted on your device** (Windows DPAPI), never in plain text
 - **Cloud transcription** sends one recording to a hosted model when you select a
   cloud model in Settings. Useful for long or difficult audio. Local Whisper stays
   the offline default the rest of the time. The recommended cloud model is
-  Microsoft's MAI-Transcribe 2: the cheapest option, fast, and it leaves out filler
+  Microsoft's MAI-Transcribe 2: inexpensive, fast, and it leaves out filler
   words. Your vocabulary words are sent to it as spelling hints. It covers 60
   languages but not Croatian or Serbian.
+- **Cloud backup** automatically tries a second model if the primary is busy or
+  temporarily unavailable. Choose it under **Settings -> Cloud & Prompting**;
+  Qwen3 ASR Flash is the default, and **Off** disables it. Backup requests also cost
+  per use. An identical model or a model that does not support your selected language
+  is skipped. Failed recordings appear in Talkty with **Retry** and **Discard**.
+  Retry uses your current primary model and copies the result if enabled; it does
+  not auto-paste into an old target window. Qwen3 ASR 1.7B is also available as a
+  separate cloud model.
 - **Prompting** takes the words you just dictated and rewrites them into a clean,
   structured prompt for a coding agent (Claude Code, Cursor, Codex). It keeps every
   detail you said and drops the filler. If anything fails, it falls back to your raw
@@ -131,8 +143,13 @@ Local transcription is fully private:
 - No telemetry, no analytics, no account.
 
 If you turn on Cloud transcription or Prompting, the relevant audio or text is sent
-to OpenRouter for that one request. Your API key is encrypted on disk. Turn the
-features off to stay offline.
+to OpenRouter and its model providers. A cloud backup can send the same recording
+to another provider when the primary fails. Your API key is encrypted on disk.
+Cloud recordings are saved under `%AppData%\Talkty\Recovery`, encrypted with Windows
+DPAPI for your Windows account, before upload. The recovery copy is removed after
+the transcript is saved to history or when you choose Discard. Failed takes survive
+restarts; switching to a local model does not delete them. Turn cloud features off
+to keep new transcription requests offline.
 
 ---
 
@@ -151,6 +168,7 @@ Open Settings from the gear icon or by right-clicking the tray icon.
 | Volume ducking | Lower other audio while recording |
 | Vocabulary | Custom coding terms and text replacements |
 | API key | OpenRouter key for Cloud and Prompting (encrypted) |
+| Cloud backup | Automatic fallback model for temporary cloud failures, or Off |
 
 ---
 

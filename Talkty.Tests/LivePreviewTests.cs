@@ -122,6 +122,48 @@ public class LivePreviewTests
     }
 
     [Fact]
+    public async Task ASlowMachineMakesItPreviewLessOften()
+    {
+        // The pass takes 1.5s, so the next one waits 3s rather than piling on.
+        var clock = new DateTime(2026, 9, 20, 2, 0, 0, DateTimeKind.Utc);
+        var waits = new List<int>();
+        var rounds = 0;
+        var audio = Audio(2);
+        using var cts = new CancellationTokenSource();
+        var preview = new LivePreviewTranscriber(
+            () => audio,
+            (_, _) => { clock = clock.AddMilliseconds(1500); return Task.FromResult<string?>($"words {++rounds}"); },
+            _ => { },
+            (ms, _) => { waits.Add(ms); audio = Audio(2 + rounds + 1); if (rounds >= 2) cts.Cancel(); return Task.CompletedTask; },
+            () => clock);
+
+        await preview.RunAsync(cts.Token);
+
+        Assert.Equal(900, waits[0]);          // first pass waits the floor
+        Assert.Equal(3000, waits[1]);         // then twice what a pass costs
+        Assert.Equal(3000, preview.CurrentIntervalMs);
+    }
+
+    [Fact]
+    public async Task ItNeverBacksOffPastItsCeiling()
+    {
+        var clock = new DateTime(2026, 9, 20, 2, 0, 0, DateTimeKind.Utc);
+        var rounds = 0;
+        var audio = Audio(2);
+        using var cts = new CancellationTokenSource();
+        var preview = new LivePreviewTranscriber(
+            () => audio,
+            (_, _) => { clock = clock.AddSeconds(30); return Task.FromResult<string?>($"slow {++rounds}"); },
+            _ => { },
+            (_, _) => { audio = Audio(2 + rounds + 1); if (rounds >= 1) cts.Cancel(); return Task.CompletedTask; },
+            () => clock);
+
+        await preview.RunAsync(cts.Token);
+
+        Assert.Equal(4000, preview.CurrentIntervalMs);
+    }
+
+    [Fact]
     public async Task CancellationEndsItWithoutThrowing()
     {
         using var cts = new CancellationTokenSource();

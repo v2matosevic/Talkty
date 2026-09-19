@@ -30,22 +30,37 @@ public sealed class LivePreviewTranscriber
     /// <summary>Growth needed before another pass: about a third of a second of new speech.</summary>
     public const int MinimumGrowth = SampleRate / 3;
 
-    /// <summary>Long dictation stays cheap by previewing only the recent audio.</summary>
-    public const int WindowSamples = SampleRate * 25;
+    /// <summary>
+    /// Only the recent audio is previewed. A long recording would otherwise
+    /// re-transcribe the whole thing every second, which is what made the app
+    /// feel laggy: the preview is a glance at what is being said, not a record.
+    /// </summary>
+    public const int WindowSamples = SampleRate * 8;
 
+    /// <summary>The soonest another pass may start.</summary>
     public int IntervalMs { get; init; } = 900;
+
+    /// <summary>The latest, once the machine has shown it is busy.</summary>
+    public int MaxIntervalMs { get; init; } = 4_000;
+
+    private readonly Func<DateTime> _now;
 
     public LivePreviewTranscriber(
         Func<float[]> samples,
         Func<float[], CancellationToken, Task<string?>> transcribe,
         Action<string> onPreview,
-        Func<int, CancellationToken, Task>? delay = null)
+        Func<int, CancellationToken, Task>? delay = null,
+        Func<DateTime>? now = null)
     {
         _samples = samples;
         _transcribe = transcribe;
         _onPreview = onPreview;
         _delay = delay ?? Task.Delay;
+        _now = now ?? (() => DateTime.UtcNow);
     }
+
+    /// <summary>The gap it settled on, after watching how long a pass takes.</summary>
+    public int CurrentIntervalMs { get; private set; }
 
     /// <summary>How many passes ran. Useful for proving it does not spin.</summary>
     public int Passes { get; private set; }
@@ -58,11 +73,12 @@ public sealed class LivePreviewTranscriber
     {
         var previous = 0;
         var lastText = string.Empty;
+        CurrentIntervalMs = IntervalMs;
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await _delay(IntervalMs, cancellationToken);
+                await _delay(CurrentIntervalMs, cancellationToken);
                 if (cancellationToken.IsCancellationRequested) return;
 
                 var audio = _samples();
@@ -71,7 +87,12 @@ public sealed class LivePreviewTranscriber
 
                 var window = audio.Length > WindowSamples ? audio[^WindowSamples..] : audio;
                 Passes++;
+                var started = _now();
                 var text = await _transcribe(window, cancellationToken);
+                // A busy machine says so by being slow. Back off to twice what a
+                // pass costs, so previewing never crowds out the real work.
+                var took = (int)(_now() - started).TotalMilliseconds;
+                CurrentIntervalMs = Math.Clamp(took * 2, IntervalMs, MaxIntervalMs);
                 if (cancellationToken.IsCancellationRequested) return;
 
                 text = text?.Trim();

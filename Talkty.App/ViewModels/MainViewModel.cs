@@ -1158,7 +1158,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// only. A cloud model would mean paying for every second of speech twice.
     /// </summary>
     internal bool CanPreviewLive =>
-        _transcriptionService.IsModelLoaded
+        // Only Alt+W. Ordinary dictation is a person typing with their voice:
+        // it must cost exactly what it always did, and the engine holds one
+        // decode state, so a preview mid-recording delays the real pass.
+        _commandModeRecording
+        && _transcriptionService.IsModelLoaded
         && _transcriptionService.CurrentProfile is { } profile
         && !profile.IsCloud();
 

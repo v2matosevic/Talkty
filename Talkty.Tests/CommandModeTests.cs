@@ -164,6 +164,26 @@ public partial class TranscriptionFlowTests
     });
 
     [Fact]
+    public Task OrdinaryDictationIsNeverPreviewedWhileSpeaking() => ui.Run(async () =>
+    {
+        // Alt+Q must cost exactly what it always did: one pass, at the end.
+        using var context = new Context();
+        await context.ViewModel.StartListeningAsync();
+        Assert.False(context.ViewModel.CanPreviewLive);
+        await context.ViewModel.StopListeningAndTranscribeAsync();
+    });
+
+    [Fact]
+    public Task ACommandRecordingMayBePreviewedWhileSpeaking() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.ViewModel.StartListeningAsync();
+        Assert.True(context.ViewModel.CanPreviewLive);
+        await context.ViewModel.StopListeningAndTranscribeAsync();
+    });
+
+    [Fact]
     public Task AnOrdinaryDictationNeverReachesTheDaemon() => ui.Run(async () =>
     {
         using var context = new Context();

@@ -322,7 +322,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public void SaveHistory(List<TranscriptionHistoryEntry> history) => OnSaveHistory?.Invoke(history);
     }
 
-    private sealed class FakeAudio : IAudioCaptureService
+    internal sealed class FakeAudio : IAudioCaptureService
     {
         public event EventHandler<float>? AudioLevelChanged;
         public void EmitLevel(float level) => AudioLevelChanged?.Invoke(this, level);

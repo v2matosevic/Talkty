@@ -388,23 +388,29 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    // Command mode has no picker in this dialog yet. These carry the stored values
-    // through unchanged, because the dialog rebuilds AppSettings from scratch on save
-    // and anything missing here would silently revert to its default.
+    // Command mode. The hotkey itself has no picker yet and stays Alt+W, but it is
+    // still carried through here: the dialog rebuilds AppSettings from scratch on
+    // save, so anything missing would silently revert to its default.
+    [ObservableProperty]
     private bool _commandMode;
+
+    [ObservableProperty]
+    private string _commandEndpoint = Constants.VoiceCommandDefaultEndpoint;
+
+    [ObservableProperty]
+    private string _commandToken = "";
+
     private HotkeyModifiers _commandHotkeyModifier = HotkeyModifiers.Alt;
     private Key _commandHotkeyKey = Key.W;
-    private string _commandEndpoint = Constants.VoiceCommandDefaultEndpoint;
-    private string _commandToken = "";
 
     private void LoadSettings()
     {
         var settings = _settingsService.Settings;
-        _commandMode = settings.CommandMode;
+        CommandMode = settings.CommandMode;
         _commandHotkeyModifier = settings.CommandHotkeyModifier;
         _commandHotkeyKey = settings.CommandHotkeyKey;
-        _commandEndpoint = settings.CommandEndpoint;
-        _commandToken = settings.CommandToken;
+        CommandEndpoint = settings.CommandEndpoint;
+        CommandToken = settings.CommandToken;
         SelectedProfile = RemapRetiredProfile(settings.ModelProfile);
         SelectedCloudFallback = CloudFallbackOptions.FirstOrDefault(o => o.Profile == settings.CloudFallbackModel)
             ?? CloudFallbackOptions[0];
@@ -728,11 +734,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim()),
             PromptingModel = SelectedPromptModel?.Slug ?? PromptModels[0].Slug,
             PromptFidelity = SelectedFidelityMode?.Mode ?? FidelityModes[0].Mode,
-            CommandMode = _commandMode,
+            CommandMode = CommandMode,
             CommandHotkeyModifier = _commandHotkeyModifier,
             CommandHotkeyKey = _commandHotkeyKey,
-            CommandEndpoint = _commandEndpoint,
-            CommandToken = _commandToken
+            CommandEndpoint = (CommandEndpoint ?? "").Trim(),
+            CommandToken = (CommandToken ?? "").Trim()
         };
 
         SettingsSaved?.Invoke(this, settings);

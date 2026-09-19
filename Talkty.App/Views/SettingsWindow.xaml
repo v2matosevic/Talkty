@@ -872,6 +872,56 @@
                                 </TextBlock>
                             </StackPanel>
                         </Border>
+
+                        <TextBlock Text="COMMAND MODE" Style="{StaticResource SectionHeader}" Margin="0,20,0,10"/>
+                        <Border Background="{StaticResource Zinc900Brush}"
+                                CornerRadius="10"
+                                Padding="14">
+                            <StackPanel>
+                                <CheckBox Content="Second hotkey runs commands instead of typing"
+                                          IsChecked="{Binding CommandMode}"
+                                          ToolTip="Hold Alt+W and say what should happen. The words go to a local program on this machine instead of your clipboard."
+                                          Margin="0,0,0,10"/>
+
+                                <TextBlock FontSize="12" Foreground="{StaticResource Zinc400Brush}" TextWrapping="Wrap" Margin="0,0,0,12">
+                                    <Run Text="Hold"/>
+                                    <Run Text="Alt+W" FontFamily="{StaticResource FontMono}" Foreground="{StaticResource Zinc200Brush}"/>
+                                    <Run Text="and say what should happen: open a site, start an app, open a terminal. Alt+Q still dictates as usual. If nothing is listening the words go to your clipboard instead, so a sentence is never lost."/>
+                                </TextBlock>
+
+                                <StackPanel Visibility="{Binding CommandMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock Text="Endpoint"
+                                               FontSize="11"
+                                               Foreground="{StaticResource Zinc400Brush}"
+                                               Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding CommandEndpoint, UpdateSourceTrigger=PropertyChanged}"
+                                             FontFamily="{StaticResource FontMono}"
+                                             FontSize="11"
+                                             Padding="8,6"
+                                             Margin="0,0,0,10"/>
+
+                                    <TextBlock Text="Token"
+                                               FontSize="11"
+                                               Foreground="{StaticResource Zinc400Brush}"
+                                               Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding CommandToken, UpdateSourceTrigger=PropertyChanged}"
+                                             FontFamily="{StaticResource FontMono}"
+                                             FontSize="11"
+                                             Padding="8,6"
+                                             Margin="0,0,0,8"/>
+
+                                    <TextBlock FontSize="10"
+                                               Foreground="{StaticResource Zinc500Brush}"
+                                               TextWrapping="Wrap">
+                                        <Run Text="Run"/>
+                                        <Run Text="hermes voice serve" FontFamily="{StaticResource FontMono}" Foreground="{StaticResource Zinc300Brush}"/>
+                                        <Run Text="to start the listener and"/>
+                                        <Run Text="hermes voice token" FontFamily="{StaticResource FontMono}" Foreground="{StaticResource Zinc300Brush}"/>
+                                        <Run Text="for the token. The address must be on this machine; anything else is refused."/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

@@ -57,3 +57,9 @@ taltky_icon.ico
 plan_project.md
 *.tmp.*
 CLAUDE.md
+
+# Clipboard images pasted into terminals
+.clipboard-images/
+
+# Scratch publish/build output from agent sessions
+.tmp/

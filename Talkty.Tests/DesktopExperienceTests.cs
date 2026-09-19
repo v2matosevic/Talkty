@@ -187,6 +187,59 @@ public partial class TranscriptionFlowTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task OverlayCarriesTheSpokenCommandAndTheAnswerToIt() => ui.Run(() =>
+    {
+        var surface = LoadPreview("Talkty.App/Views/OverlayWindow.xaml");
+        var vm = new OverlayViewModel
+        {
+            IsListening = false,
+            IsTranscribing = false,
+            StatusText = "Sending command...",
+            CommandText = "Search this page for Kenshi Yonezu.",
+            CommandDetail = "Sending…",
+            CommandStage = CommandStage.Sending,
+        };
+        surface.DataContext = vm;
+        Layout(surface, 520, 80);
+
+        // His words are on the pill, and the one-word status has stepped aside.
+        Assert.Contains(Descendants<TextBlock>(surface), t => t.Text == "Search this page for Kenshi Yonezu." && t.Visibility == Visibility.Visible);
+        Assert.DoesNotContain(Descendants<TextBlock>(surface), t => t.Text == "Sending command..." && t.Visibility == Visibility.Visible);
+        SavePreview(surface, 520, 80, "overlay-command-sending.png");
+
+        vm.CommandStage = CommandStage.Working;
+        vm.CommandDetail = "Working… 2 steps";
+        Layout(surface, 520, 80);
+        Assert.Contains(Descendants<TextBlock>(surface), t => t.Text == "Working… 2 steps" && t.Visibility == Visibility.Visible);
+        SavePreview(surface, 520, 80, "overlay-command-working.png");
+
+        var green = Application.Current.Resources["StatusGreenBrush"];
+        vm.CommandStage = CommandStage.Succeeded;
+        vm.CommandDetail = "Searched youtube.com for Kenshi Yonezu in the tab you had open.";
+        Layout(surface, 520, 80);
+        var done = Descendants<TextBlock>(surface).Single(t => t.Text == vm.CommandDetail);
+        Assert.Equal(Visibility.Visible, done.Visibility);
+        Assert.Same(green, done.Foreground);
+        SavePreview(surface, 520, 80, "overlay-command-done.png");
+
+        var red = Application.Current.Resources["StatusRedBrush"];
+        vm.CommandStage = CommandStage.Failed;
+        vm.CommandDetail = "The window you were using is not open any more.";
+        Layout(surface, 520, 80);
+        var failed = Descendants<TextBlock>(surface).Single(t => t.Text == vm.CommandDetail);
+        Assert.Same(red, failed.Foreground);
+        SavePreview(surface, 520, 80, "overlay-command-failed.png");
+
+        // An ordinary dictation is untouched by any of this.
+        vm.ClearCommand();
+        vm.StatusText = "Transcribing...";
+        vm.IsTranscribing = true;
+        Layout(surface, 380, 64);
+        Assert.Contains(Descendants<TextBlock>(surface), t => t.Text == "Transcribing..." && t.Visibility == Visibility.Visible);
+        return Task.CompletedTask;
+    });
+
     // Render the production XAML without opening a window, tray icon, or real services.
     // Event handlers are compiled by the app build; these tests exercise layout/bindings.
     private static FrameworkElement LoadPreview(string relativePath)

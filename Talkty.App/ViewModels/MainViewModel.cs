@@ -88,6 +88,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public event EventHandler? RequestShowOverlay;
     public event EventHandler? RequestHideOverlay;
+
+    /// <summary>
+    /// Progress of a spoken command, for the pill. Raised with his own words
+    /// first, then with whatever the daemon says happened, so the overlay can
+    /// show the whole thing instead of vanishing into a toast.
+    /// </summary>
+    public event EventHandler<CommandProgressEventArgs>? CommandProgress;
     public event EventHandler? RequestShowSettings;
     public event EventHandler<ToastEventArgs>? RequestShowToast;
     public event EventHandler? RecordingStarted;
@@ -780,21 +787,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 // ordinary dictation, so a sentence is never lost to a stopped daemon.
                 if (commandMode)
                 {
+                    // His words go on the pill before the daemon has said
+                    // anything, so the wait is visibly about his sentence.
+                    ReportCommand(result.Text, CommandStage.Sending, "Sending…");
                     var dispatch = await DispatchCommandAsync(result.Text, cancellationToken, commandTarget);
                     if (dispatch.Outcome != VoiceCommandOutcome.NotReached)
                     {
                         RecordCommandInHistory(result, recovery);
                         StatusText = dispatch.Message;
-                        RequestShowToast?.Invoke(this, new ToastEventArgs
+
+                        if (dispatch.IsWorking)
                         {
-                            Message = dispatch.Message,
-                            Type = dispatch.Delivered ? ToastType.Info : ToastType.Warning,
-                            DurationMs = dispatch.Delivered ? 3000 : 5000
-                        });
+                            // Accepted, not finished. Keep the pill on it and
+                            // replace this line when the goal actually ends.
+                            ReportCommand(result.Text, CommandStage.Working, dispatch.Message);
+                            FollowCommandGoal(dispatch.GoalId!, result.Text);
+                            return;
+                        }
+
+                        var stage = dispatch.Outcome == VoiceCommandOutcome.Uncertain || !dispatch.Ok
+                            ? CommandStage.Failed
+                            : CommandStage.Succeeded;
+                        ReportCommand(result.Text, stage, dispatch.Message);
                         return;
                     }
 
                     Log.Info($"Command not delivered ({dispatch.Message}) — falling back to dictation");
+                    ReportCommand(result.Text, CommandStage.None, null);
                     ShowWarning($"{dispatch.Message}. Copied the text instead.");
                 }
 
@@ -1118,6 +1137,62 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Hand one command to the local daemon. Never throws; the service turns every
     /// failure into an outcome the caller can act on.
     /// </summary>
+    /// <summary>Tell the pill what this command is doing. Never throws into the pipeline.</summary>
+    private void ReportCommand(string text, CommandStage stage, string? detail)
+    {
+        try
+        {
+            CommandProgress?.Invoke(this, new CommandProgressEventArgs
+            {
+                Text = text,
+                Stage = stage,
+                Detail = detail ?? string.Empty,
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Warning($"Command progress could not be shown: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Watch a goal the daemon is still working on and keep the pill honest
+    /// about it. Deliberately detached from the recording cycle: the next Alt+W
+    /// must not wait for a goal, and a goal must not end because he spoke again.
+    /// </summary>
+    private void FollowCommandGoal(string goalId, string spoken)
+    {
+        if (_voiceCommandService is null) return;
+        var service = _voiceCommandService;
+        _ = Task.Run(async () =>
+        {
+            var progress = new Progress<VoiceGoalUpdate>(update =>
+            {
+                if (!update.Finished)
+                {
+                    var step = update.Steps > 0 ? $"Working… {update.Steps} steps" : "Working…";
+                    ReportCommand(spoken, CommandStage.Working, update.Detail ?? step);
+                    return;
+                }
+
+                var detail = update.Detail ?? (update.Succeeded ? "Done." : $"Stopped: {update.Status}.");
+                ReportCommand(spoken, update.Succeeded ? CommandStage.Succeeded : CommandStage.Failed, detail);
+                if (!update.Succeeded)
+                {
+                    RequestShowToast?.Invoke(this, new ToastEventArgs
+                    {
+                        Message = detail,
+                        Type = ToastType.Warning,
+                        DurationMs = 6000,
+                    });
+                }
+            });
+
+            try { await service.FollowGoalAsync(goalId, progress, CancellationToken.None); }
+            catch (Exception ex) { Log.Info($"Goal {goalId} follow ended: {ex.Message}"); }
+        });
+    }
+
     private async Task<VoiceCommandResult> DispatchCommandAsync(string text, CancellationToken cancellationToken, CapturedWindowInfo? targetWindow)
     {
         if (_voiceCommandService == null || !_voiceCommandService.IsConfigured)

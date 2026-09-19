@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -240,6 +241,93 @@ public class VoiceCommandServiceTests
         var service = Build(handler, s => { s.CommandEndpoint = ""; s.CommandToken = ""; },
             () => new VoiceEndpointResolver.Endpoint("http://127.0.0.1:17765/command", "t", 1));
         Assert.True(service.IsConfigured);
+    }
+
+    [Fact]
+    public async Task AnAcceptedGoalCarriesItsIdSoThePillCanFollowIt()
+    {
+        var handler = new StubHandler(_ => Json(HttpStatusCode.OK,
+            """{"ok":true,"outcome":"working","detail":"Working on the goal.","goalId":"g-1"}"""));
+
+        var result = await Build(handler).DispatchAsync("open netflix and sign in", null, default);
+
+        Assert.True(result.IsWorking);
+        Assert.Equal("g-1", result.GoalId);
+        Assert.True(result.Ok);
+    }
+
+    [Fact]
+    public void AFinishedCommandIsTheOnlyOneThatReadsAsSuccess()
+    {
+        Assert.True(VoiceCommandService.Read("""{"ok":true,"outcome":"executed","detail":"Muted."}""").Ok);
+        Assert.False(VoiceCommandService.Read("""{"ok":false,"outcome":"error","detail":"That window is gone."}""").Ok);
+        Assert.False(VoiceCommandService.Read("""{"ok":true,"outcome":"working","goalId":"g"}""").IsWorking == false);
+    }
+
+    [Fact]
+    public void AGoalReadingSaysWhetherAnythingMoreWillHappen()
+    {
+        var running = VoiceCommandService.ReadGoal("""{"ok":true,"goal":{"status":"running","tools":3}}""");
+        Assert.False(running!.Finished);
+        Assert.Equal(3, running.Steps);
+
+        var done = VoiceCommandService.ReadGoal("""{"ok":true,"goal":{"status":"done","result":"Opened YouTube."}}""");
+        Assert.True(done!.Finished);
+        Assert.True(done.Succeeded);
+        Assert.Equal("Opened YouTube.", done.Detail);
+
+        var stopped = VoiceCommandService.ReadGoal("""{"ok":true,"goal":{"status":"unverified","result":"Could not verify."}}""");
+        Assert.True(stopped!.Finished);
+        Assert.False(stopped.Succeeded);
+
+        var asked = VoiceCommandService.ReadGoal("""{"ok":true,"goal":{"status":"needs-input","question":"Where should I search?"}}""");
+        Assert.True(asked!.Finished);
+        Assert.Equal("Where should I search?", asked.Detail);
+
+        Assert.Null(VoiceCommandService.ReadGoal("""{"ok":true}"""));
+        Assert.Null(VoiceCommandService.ReadGoal("not json"));
+    }
+
+    [Fact]
+    public async Task FollowingAGoalReportsEachChangeAndStopsWhenItEnds()
+    {
+        var bodies = new Queue<string>(new[]
+        {
+            """{"goal":{"status":"running","tools":1}}""",
+            """{"goal":{"status":"running","tools":2}}""",
+            """{"goal":{"status":"done","result":"Signed in on that page."}}""",
+        });
+        var asked = new List<string>();
+        var handler = new StubHandler(r =>
+        {
+            asked.Add(r.RequestUri!.AbsolutePath);
+            return Json(HttpStatusCode.OK, bodies.Count > 0 ? bodies.Dequeue() : """{"goal":{"status":"done"}}""");
+        });
+        var service = Build(handler, null, () => new VoiceEndpointResolver.Endpoint("http://127.0.0.1:17765/command", "t", 1));
+
+        var seen = new List<VoiceGoalUpdate>();
+        await service.FollowGoalAsync("g-1", new Progress<VoiceGoalUpdate>(u => seen.Add(u)), default);
+
+        // Progress<T> posts to the pool; give the callbacks a moment to land.
+        for (var i = 0; i < 40 && seen.Count < 3; i++) await Task.Delay(25);
+
+        Assert.All(asked, path => Assert.Equal("/goals/g-1", path));
+        Assert.Equal(3, asked.Count);
+        Assert.Equal("Signed in on that page.", seen.Last().Detail);
+        Assert.True(seen.Last().Succeeded);
+    }
+
+    [Fact]
+    public async Task AGoalThatCannotBeReadIsDroppedRatherThanGuessedAt()
+    {
+        var handler = new StubHandler(_ => Json(HttpStatusCode.NotFound, "{}"));
+        var service = Build(handler, null, () => new VoiceEndpointResolver.Endpoint("http://127.0.0.1:17765/command", "t", 1));
+        var seen = new List<VoiceGoalUpdate>();
+
+        await service.FollowGoalAsync("g-1", new Progress<VoiceGoalUpdate>(u => seen.Add(u)), default);
+
+        Assert.Empty(seen);
+        Assert.Equal(1, handler.Calls);
     }
 
     [Fact]

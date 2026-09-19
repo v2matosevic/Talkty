@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly ISettingsService _settingsService;
     private readonly IAudioCaptureService _audioCaptureService;
     private OverlayWindow? _overlayWindow;
+    private System.Windows.Threading.DispatcherTimer? _commandLinger;
     private SettingsWindow? _settingsWindow;
     private bool _isExiting;
     private DateTime _lastHotkeyTime = DateTime.MinValue;
@@ -99,6 +100,7 @@ public partial class MainWindow : Window
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;
+        _viewModel.CommandProgress += OnCommandProgress;
         _viewModel.RequestShowSettings += OnRequestShowSettings;
         _viewModel.RequestShowToast += OnRequestShowToast;
         _viewModel.RecordingStarted += OnRecordingStarted;
@@ -342,6 +344,8 @@ public partial class MainWindow : Window
                 _overlayWindow.PositionNearTextCursor = _settingsService.Settings.OverlayNearTextCursor;
 
                 // Reset overlay state for new recording session
+                _commandLinger?.Stop();
+                _overlayWindow.ViewModel.ClearCommand();
                 _overlayWindow.ViewModel.IsListening = true;
                 _overlayWindow.ViewModel.IsTranscribing = false;
                 _overlayWindow.ViewModel.StatusText = "Listening...";
@@ -430,6 +434,54 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Puts a spoken command on the pill and keeps it there: his words while it
+    /// is sent, the daemon's answer when it comes, then a pause long enough to
+    /// read it. A failure sits longer than a success, because it is the one
+    /// worth reading.
+    /// </summary>
+    private void OnCommandProgress(object? sender, CommandProgressEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (_overlayWindow == null || !_overlayWindow.IsLoaded) return;
+            _commandLinger?.Stop();
+
+            if (e.Stage == CommandStage.None)
+            {
+                _overlayWindow.ViewModel.ClearCommand();
+                return;
+            }
+
+            _overlayWindow.ViewModel.CommandText = e.Text;
+            _overlayWindow.ViewModel.CommandDetail = e.Detail;
+            _overlayWindow.ViewModel.CommandStage = e.Stage;
+            _overlayWindow.ViewModel.StopTimer();
+            if (!_overlayWindow.IsVisible) _overlayWindow.Show();
+
+            if (e.Stage is CommandStage.Sending or CommandStage.Working) return;
+
+            _commandLinger ??= new System.Windows.Threading.DispatcherTimer();
+            _commandLinger.Interval = TimeSpan.FromMilliseconds(
+                e.Stage == CommandStage.Failed
+                    ? Constants.VoiceCommandFailureLingerMs
+                    : Constants.VoiceCommandResultLingerMs);
+            _commandLinger.Tick -= OnCommandLingerElapsed;
+            _commandLinger.Tick += OnCommandLingerElapsed;
+            _commandLinger.Start();
+        });
+    }
+
+    private void OnCommandLingerElapsed(object? sender, EventArgs e)
+    {
+        _commandLinger?.Stop();
+        if (_overlayWindow?.ViewModel == null) return;
+        // A new recording owns the pill now; leave it alone.
+        if (_viewModel.IsListening || _viewModel.IsTranscribing) return;
+        _overlayWindow.ViewModel.ClearCommand();
+        _overlayWindow.Hide();
+    }
+
     private void OnRequestHideOverlay(object? sender, EventArgs e)
     {
         Log.Info("RequestHideOverlay received");
@@ -440,6 +492,14 @@ public partial class MainWindow : Window
             if (_viewModel.IsListening || _viewModel.IsTranscribing)
             {
                 Log.Debug($"Skipping overlay hide - session still active (IsListening={_viewModel.IsListening}, IsTranscribing={_viewModel.IsTranscribing})");
+                return;
+            }
+
+            // A command is still running, or its answer has only just appeared.
+            // Hiding now would take the one thing he is waiting to read.
+            if (_overlayWindow?.ViewModel.IsCommand == true)
+            {
+                Log.Debug($"Skipping overlay hide - command on the pill ({_overlayWindow.ViewModel.CommandStage})");
                 return;
             }
 
@@ -538,6 +598,8 @@ public partial class MainWindow : Window
 
         _viewModel.RequestShowOverlay -= OnRequestShowOverlay;
         _viewModel.RequestHideOverlay -= OnRequestHideOverlay;
+        _viewModel.CommandProgress -= OnCommandProgress;
+        _commandLinger?.Stop();
         _viewModel.RequestShowSettings -= OnRequestShowSettings;
         _viewModel.RequestShowToast -= OnRequestShowToast;
         _viewModel.RecordingStarted -= OnRecordingStarted;

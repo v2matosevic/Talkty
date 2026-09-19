@@ -1,5 +1,7 @@
+using System.Linq;
 using Talkty.App.Models;
 using Talkty.App.Services;
+using Talkty.App.ViewModels;
 using Xunit;
 
 namespace Talkty.Tests;
@@ -57,14 +59,52 @@ public partial class TranscriptionFlowTests
     });
 
     [Fact]
-    public Task TheDaemonsAnswerBecomesTheStatus() => ui.Run(async () =>
+    public Task TheSpokenWordsAndTheDaemonsAnswerBothReachThePill() => ui.Run(async () =>
     {
         using var context = new Context();
-        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.Delivered, "opened https://youtube.com");
+        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.Delivered, "opened https://youtube.com", Ok: true);
         context.ViewModel.MarkRecordingAsCommand();
         await context.Record();
 
-        Assert.Contains("opened https://youtube.com", context.Warnings);
+        // His words go up before the daemon answers, so the wait reads as his.
+        Assert.Equal(CommandStage.Sending, context.Pill[0].Stage);
+        Assert.StartsWith(context.Engine.Text, context.Pill[0].Text);
+
+        var final = context.Pill.Last();
+        Assert.Equal(CommandStage.Succeeded, final.Stage);
+        Assert.Equal("opened https://youtube.com", final.Detail);
+        Assert.StartsWith(context.Engine.Text, final.Text);
+    });
+
+    [Fact]
+    public Task AFailedCommandSaysSoOnThePillInsteadOfLookingDone() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.Delivered,
+            "The window you were using is not open any more.", Ok: false);
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+
+        var final = context.Pill.Last();
+        Assert.Equal(CommandStage.Failed, final.Stage);
+        Assert.Contains("not open any more", final.Detail);
+    });
+
+    [Fact]
+    public Task AnAcceptedGoalKeepsThePillWorkingRatherThanClaimingSuccess() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.Delivered,
+            "Working on the goal.", Ok: true, GoalId: "g-7");
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+
+        var final = context.Pill.Last();
+        Assert.Equal(CommandStage.Working, final.Stage);
+        // Following is deliberately detached, so the next Alt+W never waits on
+        // a goal; give that task a moment to pick it up.
+        for (var i = 0; i < 40 && context.Voice.Followed is null; i++) await Task.Delay(25);
+        Assert.Equal("g-7", context.Voice.Followed);
     });
 
     [Fact]
@@ -92,7 +132,8 @@ public partial class TranscriptionFlowTests
 
         Assert.Empty(context.Clipboard.Writes);
         Assert.Equal(0, context.Paste.Pasted);
-        Assert.Contains(context.Warnings, w => w.Contains("No answer"));
+        Assert.Equal(CommandStage.Failed, context.Pill.Last().Stage);
+        Assert.Contains("No answer", context.Pill.Last().Detail);
     });
 
     [Fact]

@@ -275,6 +275,8 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public MainViewModel ViewModel { get; }
         public List<string> Warnings { get; } = [];
         public List<string> Statuses { get; } = [];
+        /// <summary>What the pill was told to show about a spoken command.</summary>
+        public List<CommandProgressEventArgs> Pill { get; } = [];
 
         public Context(Action<AppSettings>? configure = null)
         {
@@ -286,6 +288,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
                 promptFidelityService: Fidelity, voiceCommandService: Voice,
                 promptClassifier: Classifier);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
+            ViewModel.CommandProgress += (_, e) => Pill.Add(e);
             ViewModel.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(ViewModel.StatusText)) Statuses.Add(ViewModel.StatusText);
@@ -316,6 +319,17 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         {
             Target = target;
             return DispatchAsync(text, foregroundApp, ct);
+        }
+
+        /// <summary>Which goal the pill went on to watch, if any.</summary>
+        public string? Followed { get; private set; }
+        public List<VoiceGoalUpdate> Updates { get; } = [];
+
+        public Task FollowGoalAsync(string goalId, IProgress<VoiceGoalUpdate> progress, CancellationToken ct)
+        {
+            Followed = goalId;
+            foreach (var update in Updates) progress.Report(update);
+            return Task.CompletedTask;
         }
     }
 

@@ -156,6 +156,76 @@ public class VoiceCommandService : IVoiceCommandService
     }
 
     /// <summary>
+    /// Watch one goal until it ends, so the pill can say what happened instead
+    /// of leaving "working on it" on screen. Polling, not streaming: the daemon
+    /// is a small local HTTP service and this costs nothing on loopback.
+    /// </summary>
+    public async Task FollowGoalAsync(
+        string goalId,
+        IProgress<VoiceGoalUpdate> progress,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(goalId)) return;
+        var settings = _settingsService.Settings;
+        var record = _resolve();
+        var token = record?.Token ?? settings.CommandToken;
+        var root = record is not null
+            ? new Uri(new Uri(record.Url), "/goals/")
+            : new Uri(new Uri(settings.CommandEndpoint), "/goals/");
+        if (!IsLoopback(root.ToString())) return;
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(Constants.VoiceGoalFollowMaxMs);
+        string? last = null;
+        while (!cancellationToken.IsCancellationRequested && DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                await Task.Delay(Constants.VoiceGoalPollMs, cancellationToken);
+                using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(root, Uri.EscapeDataString(goalId)));
+                request.Headers.TryAddWithoutValidation("x-voice-token", token);
+                using var response = await _http.SendAsync(request, cancellationToken);
+                if (!response.IsSuccessStatusCode) return;
+                var update = ReadGoal(await response.Content.ReadAsStringAsync(cancellationToken));
+                if (update is null) return;
+                if (update.Status != last || update.Detail is not null)
+                {
+                    last = update.Status;
+                    progress.Report(update);
+                }
+                if (update.Finished) return;
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                // The goal is the daemon's; losing sight of it changes nothing
+                // about whether it ran, so this never becomes an error here.
+                Log.Info($"Goal {goalId} could not be followed: {ex.Message}");
+                return;
+            }
+        }
+    }
+
+    /// <summary>The goal document is data: only the fields we expect are read.</summary>
+    internal static VoiceGoalUpdate? ReadGoal(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("goal", out var goal) || goal.ValueKind != JsonValueKind.Object) return null;
+            var status = goal.TryGetProperty("status", out var s) ? s.GetString() : null;
+            if (string.IsNullOrWhiteSpace(status)) return null;
+            var detail = goal.TryGetProperty("result", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+            if (string.IsNullOrWhiteSpace(detail) && goal.TryGetProperty("question", out var q) && q.ValueKind == JsonValueKind.String)
+                detail = q.GetString();
+            if (detail is not null && detail.Length > Constants.VoiceCommandMessageMaxChars)
+                detail = detail[..Constants.VoiceCommandMessageMaxChars].TrimEnd() + "…";
+            var steps = goal.TryGetProperty("tools", out var t) && t.TryGetInt32(out var count) ? count : 0;
+            return new VoiceGoalUpdate(status!, detail, steps);
+        }
+        catch (JsonException) { return null; }
+    }
+
+    /// <summary>
     /// Does whatever holds that port say it is the command daemon? Speech goes
     /// nowhere until something answers with the service's own name, because a
     /// configured port outlives the program that used to own it.
@@ -198,12 +268,16 @@ public class VoiceCommandService : IVoiceCommandService
                 ? c.GetString()
                 : null;
             var outcome = root.TryGetProperty("outcome", out var o) ? o.GetString() : null;
+            var ok = root.TryGetProperty("ok", out var k) && k.ValueKind == JsonValueKind.True;
+            var goalId = root.TryGetProperty("goalId", out var g) && g.ValueKind == JsonValueKind.String
+                ? g.GetString()
+                : null;
 
             var message = !string.IsNullOrWhiteSpace(detail) ? detail! : outcome ?? "Command sent";
             if (message.Length > Constants.VoiceCommandMessageMaxChars)
                 message = message[..Constants.VoiceCommandMessageMaxChars].TrimEnd() + "…";
 
-            return new VoiceCommandResult(VoiceCommandOutcome.Delivered, message, commandId);
+            return new VoiceCommandResult(VoiceCommandOutcome.Delivered, message, commandId, ok, goalId);
         }
         catch (JsonException)
         {

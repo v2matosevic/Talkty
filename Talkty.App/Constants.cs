@@ -154,6 +154,21 @@ public static class Constants
     /// <summary>How long the daemon has to identify itself before a command is abandoned.</summary>
     public const int VoiceCommandHealthTimeoutMs = 1_200;
 
+    /// <summary>How often a running goal is read back while the pill shows it.</summary>
+    public const int VoiceGoalPollMs = 700;
+
+    /// <summary>
+    /// How long the pill keeps following a goal. The daemon's own loop stops at
+    /// 180 s, so this only has to outlast that plus its final checks.
+    /// </summary>
+    public const int VoiceGoalFollowMaxMs = 240_000;
+
+    /// <summary>How long a finished command's answer stays on the pill.</summary>
+    public const int VoiceCommandResultLingerMs = 4_000;
+
+    /// <summary>A failure stays longer, because it is the one worth reading.</summary>
+    public const int VoiceCommandFailureLingerMs = 7_000;
+
     // ─── Prompt fidelity check (TypeSafe Jev via OpenRouter) ────────────
     // Bounds for the optional check that runs AFTER Prompting has produced a prompt. See
     // docs/PROMPT-FIDELITY.md. Every one of these is deliberately smaller than what the model or

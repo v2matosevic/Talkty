@@ -45,6 +45,15 @@
                                         <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
                                             <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
                                         </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandBusy}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusPurpleBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandDone}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -61,6 +70,15 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
                                             <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandBusy}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusPurpleBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandDone}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -79,6 +97,15 @@
                                         <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
                                             <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
                                         </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandBusy}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusPurpleBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandDone}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusGreenBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -86,7 +113,7 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- Timer / Status -->
+                <!-- Timer / Status. A command takes the pill over: see below. -->
                 <TextBlock VerticalAlignment="Center" MinWidth="40" MaxWidth="220"
                            TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusText}">
                     <TextBlock.Style>
@@ -109,10 +136,56 @@
                                     <Setter Property="Text" Value="Copied"/>
                                     <Setter Property="Foreground" Value="{StaticResource StatusGreenBrush}"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding IsCommand}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
+
+                <!-- Command mode: what he asked, then what happened to it. -->
+                <StackPanel VerticalAlignment="Center" MaxWidth="420" Margin="0,0,2,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCommand}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock Text="{Binding CommandText}"
+                               ToolTip="{Binding CommandText}"
+                               Foreground="#E4E4E7"
+                               FontSize="13"
+                               FontWeight="Medium"
+                               FontFamily="Segoe UI Variable Text, Segoe UI"
+                               TextTrimming="CharacterEllipsis"/>
+
+                    <TextBlock Text="{Binding CommandDetail}"
+                               ToolTip="{Binding CommandDetail}"
+                               FontSize="11.5"
+                               Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#A1A1AA"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCommandDone}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource StatusGreenBrush}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource StatusRedBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
 
                 <!-- "esc" cancel hint — revealed on hover, like the sparkle. Makes the (previously
                      invisible) ESC-to-cancel feature discoverable without cluttering the pill. -->
@@ -130,6 +203,9 @@
                                 </DataTrigger>
                                 <!-- Nothing to cancel once the result is on the clipboard -->
                                 <DataTrigger Binding="{Binding StatusText}" Value="Copied!">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsCommand}" Value="True">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
                             </Style.Triggers>

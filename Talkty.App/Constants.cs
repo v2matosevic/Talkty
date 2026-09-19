@@ -152,11 +152,34 @@ public static class Constants
     // the route would allow — the check is an advisory extra, never a second budget centre.
 
     /// <summary>
-    /// Per-attempt deadline for one decision request. Matched to ADE's measured 501-848 ms
-    /// evaluations with headroom; the check runs after delivery, so a slow answer costs nothing
-    /// but is still cut off rather than left hanging.
+    /// Per-attempt deadline for a decision that runs AFTER delivery. ADE measured 501-848 ms, but
+    /// our own runs reached 2,685 ms and a peer measured p95 1,653 ms / max 2,957 ms over 285 calls,
+    /// so 4s had less headroom than it looked. Nothing waits on this check, so the generous deadline
+    /// costs only a later toast; it is still cut off rather than left hanging.
     /// </summary>
-    public const int JevDecisionTimeoutMs = 4000;
+    public const int JevDecisionTimeoutMs = 6000;
+
+    /// <summary>
+    /// Deadline for a decision that sits IN the user's path, before refinement. Nothing may wait
+    /// long here: if the classifier misses this, the pipeline refines exactly as it does today, so
+    /// a slow answer costs the user nothing but a slow WAIT would cost them everything.
+    /// </summary>
+    public const int JevClassifierTimeoutMs = 1500;
+
+    /// <summary>
+    /// How far a probability distribution may miss 1.0 and still be used. This is a ROUNDING
+    /// allowance: per-option values rounded to two decimals make a several-option distribution miss
+    /// 1.0 routinely, and a peer measured 2.4% of 292 live calls rejected by a 0.005 window, skewed
+    /// toward Croatian. Values are never renormalized, so a short sum only understates the selected
+    /// probability and makes a minimum gate harder to pass. A peer's diagnosis is sharper than a flat
+    /// number: the gateway rounds each option to two decimals, so the worst case scales with the
+    /// OPTION COUNT. The allowance is max(this, options * JevPerOptionRoundingError), which matters
+    /// for the fidelity check's attention question, where one option per clause can reach thirteen.
+    /// </summary>
+    public const double JevDistributionTolerance = 0.05;
+
+    /// <summary>Worst-case rounding error contributed by one option rounded to two decimals.</summary>
+    public const double JevPerOptionRoundingError = 0.005;
 
     /// <summary>Serialized request ceiling (the route's own documented state budget is larger).</summary>
     public const int JevMaxRequestBytes = 32_000;
@@ -233,6 +256,41 @@ public static class Constants
     /// than the clause gate because Noul reports no confidence statistic to corroborate it.
     /// </summary>
     public const double JevFidelityMinAddedProbability = 0.85;
+
+    // ─── Prompt planning (classify before refining) ─────────────────────
+    // Thresholds for the decision that runs BEFORE the refinement model. Skipping refinement is the
+    // only one that changes what the user receives, so it is gated hardest. See
+    // docs/JEV-FINDINGS-2026-09-19.md.
+
+    /// <summary>
+    /// Highest "a structured prompt would help" probability that still allows skipping refinement.
+    /// Chosen from the DEVELOPMENT split of tools/jev-planning-corpus.json only, where the two
+    /// classes separated cleanly at 0.19 (already-a-prompt) against 0.64 (needs organising). Sitting
+    /// at 0.35 leaves margin on the safe side of that gap rather than splitting it. The blind 0.15
+    /// this replaced was so tight that only 2 of 8 genuinely trivial dictations ever skipped.
+    /// </summary>
+    public const double PromptSkipMaxNeedsStructure = 0.35;
+
+    /// <summary>
+    /// Highest complexity-rubric position that still allows skipping. Same development split: 0.80
+    /// was the worst already-a-prompt case and 0.97 the mildest that genuinely needed organising,
+    /// so the boundary sits just under level 1 with a little room. A condition attached to a single
+    /// change ("while the download is in flight") legitimately lifts a trivial ask toward 0.8.
+    /// </summary>
+    public const double PromptSkipMaxComplexity = 0.85;
+
+    /// <summary>Minimum winning probability before the request kind is used as a hint at all.</summary>
+    public const double PromptKindMinProbability = 0.70;
+
+    /// <summary>Minimum Choice confidence before the request kind is used as a hint.</summary>
+    public const double PromptKindMinConfidence = 0.60;
+
+    /// <summary>
+    /// Complexity at or above which refinement starts on the higher-quality model instead of the
+    /// fast one. Today every dictation starts on the fast model and only escalates after the
+    /// completeness guard trips, which means the hardest requests are the ones that pay twice.
+    /// </summary>
+    public const double PromptComplexityQualityModelFloor = 1.5;
 
     // ─── Auto-paste ─────────────────────────────────────────────────────
 

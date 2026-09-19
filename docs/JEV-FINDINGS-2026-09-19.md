@@ -109,6 +109,19 @@ is being held to.
 
 ---
 
+## 4b. What happened when it was built
+
+Section 4's proposal is now implemented and live-qualified: see
+[PROMPT-PLANNING.md](PROMPT-PLANNING.md). 18/18 on the labeled corpus including the holdout split,
+zero false skips, median 511 ms, $0.0008 for the whole corpus.
+
+The interesting part was a mistake it exposed. I gated the skip decision on the complexity rubric's
+confidence, copied from a sibling profile. Measured, that confidence does not discriminate in this
+workload at all (0.35-0.86 for already-a-prompt against 0.25-0.99 for needs-organising, fully
+overlapping) and cost five of eight correct skips while preventing none of the dangerous errors.
+The two question signals separate cleanly on their own. This is the playbook's "thresholds must be
+evaluated per question and workload" as a lived lesson rather than a quoted one.
+
 ## 5. Concrete changes to the shipped check
 
 In rough order of value, none of them yet made:

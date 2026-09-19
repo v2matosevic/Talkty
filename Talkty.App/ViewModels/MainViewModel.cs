@@ -27,6 +27,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IAutoPasteService _autoPasteService;
     private readonly IPromptRefinementService? _promptRefinementService;
     private readonly IPromptFidelityService? _promptFidelityService;
+    private readonly PromptClassifier? _promptClassifier;
     private readonly IVoiceCommandService? _voiceCommandService;
 
     /// <summary>Armed by the command hotkey for the NEXT recording only.</summary>
@@ -103,7 +104,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IPromptRefinementService? promptRefinementService = null,
         RecordingRecoveryStore? recoveryStore = null,
         IPromptFidelityService? promptFidelityService = null,
-        IVoiceCommandService? voiceCommandService = null)
+        IVoiceCommandService? voiceCommandService = null,
+        PromptClassifier? promptClassifier = null)
     {
         Log.Info("MainViewModel constructor starting");
 
@@ -119,6 +121,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _autoPasteService = autoPasteService ?? throw new ArgumentNullException(nameof(autoPasteService));
         _promptRefinementService = promptRefinementService;
         _promptFidelityService = promptFidelityService;
+        _promptClassifier = promptClassifier;
         if (_promptFidelityService != null)
             _promptFidelityService.ConcernRaised += OnFidelityConcernRaised;
 
@@ -184,6 +187,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _promptFidelityService.SetApiKey(cloudKey);
                 _promptFidelityService.Mode = settings.PromptFidelity;
             }
+            _promptClassifier?.SetApiKey(cloudKey);
 
             _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);
 
@@ -801,38 +805,57 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 {
                     if (_promptRefinementService?.IsConfigured == true)
                     {
-                        StatusText = "Refining prompt...";
                         var rawTranscription = result.Text;
-                        var refined = await _promptRefinementService.RefineAsync(result.Text, cancellationToken);
-                        // Refiners can return null on cancellation. Never treat that as
-                        // permission to paste the raw transcript.
-                        cancellationToken.ThrowIfCancellationRequested();
-                        if (!string.IsNullOrWhiteSpace(refined))
-                        {
-                            Log.Info($"Prompt mode: expanded into agent prompt ({result.Text.Length} → {refined.Length} chars)");
-                            result.Text = refined;
-                            rawTranscriptionForHistory = rawTranscription;
 
-                            // Fidelity check: did the rewrite keep every instruction, value and
-                            // prohibition? Deliberately NOT awaited — it must never sit between the
-                            // user and their clipboard. It owns its own deadline, budget and
-                            // cancellation, and in Record only it shows nothing at all.
-                            StartFidelityCheck(rawTranscription, refined);
+                        // Classify BEFORE spending a generation call. On a genuinely one-line ask
+                        // this can skip refinement entirely, which makes the common case faster
+                        // rather than slower. Every failure path returns today's behaviour.
+                        var plan = await PlanRefinementAsync(rawTranscription, cancellationToken);
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (plan.Decision == PromptPlanDecision.SkipRefinement)
+                        {
+                            Log.Info($"Prompt planning: dictation is already a prompt " +
+                                     $"(kind={plan.Kind}, complexity={plan.Complexity:F2}) — skipping refinement");
+                            StatusText = "Ready to paste";
                         }
+
                         else
                         {
-                            Log.Warning("Prompt refinement returned nothing — using raw transcription");
-                            // The user asked for a prompt and is silently getting raw dictation —
-                            // say so (unless they cancelled via ESC, where silence is expected).
-                            if (cancellationToken.IsCancellationRequested == false)
+                            StatusText = "Refining prompt...";
+                            var refined = await _promptRefinementService.RefineAsync(
+                                result.Text, cancellationToken,
+                                PromptClassifier.HintFor(plan), plan.WantsQualityModel);
+                            // Refiners can return null on cancellation. Never treat that as
+                            // permission to paste the raw transcript.
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (!string.IsNullOrWhiteSpace(refined))
                             {
-                                RequestShowToast?.Invoke(this, new ToastEventArgs
+                                Log.Info($"Prompt mode: expanded into agent prompt ({result.Text.Length} → {refined.Length} chars)");
+                                result.Text = refined;
+                                rawTranscriptionForHistory = rawTranscription;
+
+                                // Fidelity check: did the rewrite keep every instruction, value and
+                                // prohibition? Deliberately NOT awaited — it must never sit between the
+                                // user and their clipboard. It owns its own deadline, budget and
+                                // cancellation, and in Record only it shows nothing at all.
+                                StartFidelityCheck(rawTranscription, refined);
+                            }
+                            else
+                            {
+                                Log.Warning("Prompt refinement returned nothing — using raw transcription");
+                                // The user asked for a prompt and is silently getting raw dictation —
+                                // say so (unless they cancelled via ESC, where silence is expected).
+                                if (cancellationToken.IsCancellationRequested == false)
                                 {
-                                    Message = _promptRefinementService.LastError
-                                              ?? "Prompting failed — copied the raw transcription instead",
-                                    Type = ToastType.Warning,
-                                    DurationMs = 5000
-                                });
+                                    RequestShowToast?.Invoke(this, new ToastEventArgs
+                                    {
+                                        Message = _promptRefinementService.LastError
+                                                  ?? "Prompting failed — copied the raw transcription instead",
+                                        Type = ToastType.Warning,
+                                        DurationMs = 5000
+                                    });
+                                }
                             }
                         }
                     }
@@ -1063,6 +1086,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Type = ToastType.Warning,
             DurationMs = 5000
         });
+
+    /// <summary>
+    /// Decides what to do with a dictation before the refinement model sees it. Returns today's
+    /// behaviour unless planning is switched on AND the classifier answers confidently, so the
+    /// worst case is one extra sub-second call that changes nothing.
+    /// </summary>
+    private async Task<PromptPlan> PlanRefinementAsync(string transcript, CancellationToken cancellationToken)
+    {
+        var mode = _settingsService.Settings.PromptPlanning;
+        if (mode == PromptPlanning.Off || _promptClassifier?.IsConfigured != true)
+            return PromptPlan.Default("planning_off");
+
+        var plan = await _promptClassifier.ClassifyAsync(transcript, cancellationToken);
+
+        // Hints mode gets the kind and the model choice but never loses a refinement: only Full
+        // may hand back raw dictation instead of a generated prompt.
+        if (mode != PromptPlanning.Full && plan.Decision == PromptPlanDecision.SkipRefinement)
+            return plan with { Decision = PromptPlanDecision.Refine, Reason = "skip_not_enabled" };
+
+        return plan;
+    }
 
     /// <summary>
     /// Starts the optional prompt-fidelity check. Fire-and-forget by design: the prompt is already
@@ -1438,6 +1482,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Same lesson: a new AppSettings field that is not copied here is applied to the live
         // services but never written to disk, so it resets on the next restart.
         _settingsService.Settings.PromptFidelity = settings.PromptFidelity;
+        _settingsService.Settings.PromptPlanning = settings.PromptPlanning;
         _settingsService.Settings.CommandMode = settings.CommandMode;
         _settingsService.Settings.CommandHotkeyModifier = settings.CommandHotkeyModifier;
         _settingsService.Settings.CommandHotkeyKey = settings.CommandHotkeyKey;
@@ -1469,6 +1514,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _promptFidelityService.SetApiKey(updatedKey);
             _promptFidelityService.Mode = settings.PromptFidelity;
         }
+        _promptClassifier?.SetApiKey(updatedKey);
 
         // Reload model if profile or GPU setting changed
         bool profileChanged = previousProfile != settings.ModelProfile;

@@ -76,6 +76,10 @@ public partial class MainWindow : Window
         var promptFidelityService = new PromptFidelityService();
         Log.Debug("PromptFidelityService created");
 
+        // Classifies a dictation before refinement. Inert until PromptPlanning is switched on.
+        var promptClassifier = new PromptClassifier();
+        Log.Debug("PromptClassifier created");
+
         var voiceCommandService = new VoiceCommandService(_settingsService);
         Log.Debug("VoiceCommandService created");
 
@@ -90,7 +94,8 @@ public partial class MainWindow : Window
             autoPasteService: autoPasteService,
             promptRefinementService: promptRefinementService,
             promptFidelityService: promptFidelityService,
-            voiceCommandService: voiceCommandService);
+            voiceCommandService: voiceCommandService,
+            promptClassifier: promptClassifier);
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;

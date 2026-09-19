@@ -1,4 +1,4 @@
-using Talkty.App;
+﻿using Talkty.App;
 using Talkty.App.Services;
 using Xunit;
 
@@ -193,7 +193,7 @@ public class PromptFidelityPolicyTests
         // Jev is not a prompt-injection firewall, so every question states plainly that the
         // dictation and the prompt are data. This does not make the model immune; it is the
         // reason the answer space is restricted to fixed labels in the first place.
-        Assert.All(questions, q => Assert.Contains("untrusted data", q.Instructions));
+        Assert.All(questions, q => Assert.Contains("untrusted data", q.Instructions.ToJsonString()));
     }
 
     [Fact]

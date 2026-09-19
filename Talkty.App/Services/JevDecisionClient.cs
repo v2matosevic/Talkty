@@ -8,16 +8,18 @@ using System.Text.Json.Nodes;
 
 namespace Talkty.App.Services;
 
-/// <summary>
-/// Which decision primitive a question uses. Score is deliberately not implemented — nothing in
-/// Talkty needs a rubric position, and an unused primitive is untested surface.
-/// </summary>
+/// <summary>Which decision primitive a question uses.</summary>
 public enum JevQuestionKind
 {
     /// <summary>Select exactly one of the supplied options. Returns choice + probabilities + confidence.</summary>
     Choice,
     /// <summary>Is one specific proposition supported? Returns a yes probability and NO confidence field.</summary>
-    Noul
+    Noul,
+    /// <summary>
+    /// Rate against ORDERED levels. Returns a position on the scale (which may land between levels),
+    /// a probability per level and a confidence. It is a judgment along a rubric, never a measurement.
+    /// </summary>
+    Score
 }
 
 /// <summary>Outcome of one decision request, kept distinct so the record shows the real cause.</summary>
@@ -39,12 +41,46 @@ public enum JevStatus
     Cancelled
 }
 
-/// <summary>One bounded question. Criteria are the ONLY strings the model may answer with.</summary>
-public sealed record JevQuestion(
-    string Id,
-    JevQuestionKind Kind,
-    string Instructions,
-    IReadOnlyDictionary<string, string> Criteria);
+/// <summary>
+/// One bounded question. The criteria are the ONLY answers the model may give.
+///
+/// Instructions and criteria may be a plain string or structured JSON. Structured guidance
+/// (<c>what</c> / <c>not_for</c> / <c>examples</c> per option) sharpens the boundary between
+/// options, and the route accepts it — live-qualified 2026-09-19, correcting an earlier conclusion
+/// that the gateway allowed strings only.
+/// </summary>
+public sealed record JevQuestion
+{
+    public string Id { get; }
+    public JevQuestionKind Kind { get; }
+    public JsonNode Instructions { get; }
+
+    /// <summary>Choice options / Noul true-false. Null for a Score question.</summary>
+    public IReadOnlyDictionary<string, JsonNode?>? Criteria { get; }
+
+    /// <summary>Ordered Score levels, lowest first. Null for Choice and Noul.</summary>
+    public IReadOnlyList<JsonNode>? Levels { get; }
+
+    /// <summary>Plain-string question, the shape most callers want.</summary>
+    public JevQuestion(string id, JevQuestionKind kind, string instructions,
+        IReadOnlyDictionary<string, string> criteria)
+        : this(id, kind, JsonValue.Create(instructions)!,
+            criteria.ToDictionary(c => c.Key, c => (JsonNode?)JsonValue.Create(c.Value)))
+    { }
+
+    /// <summary>Structured Choice or Noul question.</summary>
+    public JevQuestion(string id, JevQuestionKind kind, JsonNode instructions,
+        IReadOnlyDictionary<string, JsonNode?> criteria)
+    {
+        Id = id; Kind = kind; Instructions = instructions; Criteria = criteria;
+    }
+
+    /// <summary>Score question: ordered levels rather than named options.</summary>
+    public JevQuestion(string id, JsonNode instructions, IReadOnlyList<JsonNode> levels)
+    {
+        Id = id; Kind = JevQuestionKind.Score; Instructions = instructions; Levels = levels;
+    }
+}
 
 /// <summary>
 /// One validated answer. <see cref="Choice"/>/<see cref="Confidence"/>/<see cref="Probabilities"/>
@@ -56,7 +92,9 @@ public sealed record JevAnswer(
     string? Choice,
     double? Confidence,
     IReadOnlyDictionary<string, double>? Probabilities,
-    double? Noul)
+    double? Noul,
+    /// <summary>Score questions only: a position on the rubric, possibly between two levels.</summary>
+    double? Score = null)
 {
     /// <summary>Probability of the selected option (Choice only). Not a measured accuracy.</summary>
     public double SelectedProbability =>
@@ -71,7 +109,17 @@ public sealed record JevEvaluation(
     long OutputTokens,
     /// <summary>Null when the provider reported no cost — never fabricated as zero.</summary>
     double? CostUsd,
-    long ElapsedMs);
+    long ElapsedMs,
+    /// <summary>
+    /// Questions whose individual answer failed validation, as <c>id:code</c>. A fan-out request
+    /// rides many independent questions; one malformed answer must cost that question only, not
+    /// the whole batch. Empty on a clean response.
+    /// </summary>
+    IReadOnlyList<string>? RejectedAnswers = null)
+{
+    /// <summary>True when at least one question's answer was discarded.</summary>
+    public bool IsPartial => RejectedAnswers is { Count: > 0 };
+}
 
 /// <summary>
 /// Result of an evaluation attempt. <see cref="FailureCode"/> is a short machine code
@@ -90,7 +138,7 @@ public interface IJevDecisionClient
 {
     Task<JevResult> EvaluateAsync(
         string apiKey, JsonNode state, IReadOnlyList<JevQuestion> questions,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default, int? timeoutMs = null);
 }
 
 /// <summary>
@@ -177,31 +225,51 @@ public sealed class JevDecisionClient : IJevDecisionClient
         {
             if (string.IsNullOrWhiteSpace(q.Id) || !seen.Add(q.Id))
                 return (null, "invalid_questions");
-            if (string.IsNullOrWhiteSpace(q.Instructions))
-                return (null, "invalid_questions");
 
             bool valid = q.Kind switch
             {
                 // Noul is a single proposition: exactly a true and a false criterion.
-                JevQuestionKind.Noul => q.Criteria.Count == 2
+                JevQuestionKind.Noul => q.Criteria is { Count: 2 }
                                         && q.Criteria.ContainsKey("true")
                                         && q.Criteria.ContainsKey("false"),
-                JevQuestionKind.Choice => q.Criteria.Count >= 2 && q.Criteria.Count <= 255,
+                JevQuestionKind.Choice => q.Criteria is { Count: >= 2 and <= 255 },
+                // An ordered rubric needs at least two rungs to be a scale.
+                JevQuestionKind.Score => q.Levels is { Count: >= 2 and <= 255 },
                 _ => false
             };
-            if (!valid || q.Criteria.Any(c => string.IsNullOrWhiteSpace(c.Key) || string.IsNullOrWhiteSpace(c.Value)))
+            if (!valid) return (null, "invalid_questions");
+            if (IsBlank(q.Instructions)) return (null, "invalid_questions");
+            if (q.Criteria != null && q.Criteria.Any(c => string.IsNullOrWhiteSpace(c.Key) || IsBlank(c.Value)))
+                return (null, "invalid_questions");
+            if (q.Levels != null && q.Levels.Any(IsBlank))
                 return (null, "invalid_questions");
 
-            var criteria = new JsonObject();
-            foreach (var (key, description) in q.Criteria)
-                criteria[key] = description;
-
-            questionNode[q.Id] = new JsonObject
+            var node = new JsonObject
             {
-                ["type"] = q.Kind == JevQuestionKind.Noul ? "noul" : "choice",
-                ["instructions"] = q.Instructions,
-                ["criteria"] = criteria
+                ["type"] = q.Kind switch
+                {
+                    JevQuestionKind.Noul => "noul",
+                    JevQuestionKind.Score => "score",
+                    _ => "choice"
+                },
+                ["instructions"] = q.Instructions.DeepClone()
             };
+
+            if (q.Levels != null)
+            {
+                var levels = new JsonArray();
+                foreach (var level in q.Levels) levels.Add(level.DeepClone());
+                node["criteria"] = levels;
+            }
+            else
+            {
+                var criteria = new JsonObject();
+                foreach (var (key, description) in q.Criteria!)
+                    criteria[key] = description?.DeepClone();
+                node["criteria"] = criteria;
+            }
+
+            questionNode[q.Id] = node;
         }
 
         var body = new JsonObject
@@ -255,61 +323,23 @@ public sealed class JevDecisionClient : IJevDecisionClient
                 return (null, "mismatched_answers");
 
             var answers = new Dictionary<string, JevAnswer>(StringComparer.Ordinal);
+            List<string>? rejected = null;
             foreach (var question in questions)
             {
-                if (!answersEl.TryGetProperty(question.Id, out var a) || a.ValueKind != JsonValueKind.Object)
-                    return (null, "missing_answer");
+                var (answer, answerFailure) = ParseAnswer(question, answersEl);
+                if (answer != null) { answers[question.Id] = answer; continue; }
 
-                var expectedType = question.Kind == JevQuestionKind.Noul ? "noul" : "choice";
-                if (!a.TryGetProperty("type", out var typeEl) ||
-                    typeEl.ValueKind != JsonValueKind.String ||
-                    !string.Equals(typeEl.GetString(), expectedType, StringComparison.Ordinal))
-                    return (null, "mismatched_type");
-
-                if (question.Kind == JevQuestionKind.Noul)
-                {
-                    // Noul reports a yes probability only. There is no confidence statistic here;
-                    // reading one in would invent a number the model never produced.
-                    if (!TryProbability(a, "noul", out var noul))
-                        return (null, "invalid_probability");
-                    answers[question.Id] = new JevAnswer(question.Id, null, null, null, noul);
-                    continue;
-                }
-
-                if (!a.TryGetProperty("choice", out var choiceEl) || choiceEl.ValueKind != JsonValueKind.String)
-                    return (null, "missing_choice");
-                var choice = choiceEl.GetString()!;
-                if (!question.Criteria.ContainsKey(choice))
-                    return (null, "unknown_choice");
-
-                if (!TryProbability(a, "confidence", out var confidence))
-                    return (null, "invalid_probability");
-
-                if (!a.TryGetProperty("probabilities", out var probsEl) || probsEl.ValueKind != JsonValueKind.Object)
-                    return (null, "missing_probabilities");
-
-                var probabilities = new Dictionary<string, double>(StringComparer.Ordinal);
-                double sum = 0;
-                foreach (var key in question.Criteria.Keys)
-                {
-                    if (!TryProbability(probsEl, key, out var p))
-                        return (null, "missing_probability");
-                    probabilities[key] = p;
-                    sum += p;
-                }
-                if (probsEl.EnumerateObject().Count() != question.Criteria.Count)
-                    return (null, "mismatched_probabilities");
-                if (Math.Abs(sum - 1.0) > 0.005)
-                    return (null, "invalid_distribution");
-
-                // The selected option must actually be the maximum, or the distribution and the
-                // choice disagree and neither can be trusted as a threshold input.
-                var selected = probabilities[choice];
-                if (probabilities.Values.Any(p => p > selected + 0.00001))
-                    return (null, "choice_not_maximum");
-
-                answers[question.Id] = new JevAnswer(question.Id, choice, confidence, probabilities, null);
+                // One malformed answer costs that question, not the batch. A fan-out request rides
+                // many independent questions on one call, and discarding eleven good clause verdicts
+                // because a twelfth distribution drifted is a far worse trade than proceeding with
+                // eleven. The caller sees exactly which were dropped.
+                (rejected ??= new List<string>()).Add($"{question.Id}:{answerFailure ?? "invalid_answer"}");
+                Log.Debug($"Jev answer '{question.Id}' rejected: {answerFailure}");
             }
+
+            // Nothing usable came back: that IS a response-level failure.
+            if (answers.Count == 0)
+                return (null, rejected is { Count: > 0 } ? rejected[0].Split(':')[^1] : "missing_answer");
 
             if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
                 return (null, "missing_usage");
@@ -329,9 +359,129 @@ public sealed class JevDecisionClient : IJevDecisionClient
                 cost = c;
             }
 
-            return (new JevEvaluation(model, answers, inputTokens, outputTokens, cost, elapsedMs), null);
+            return (new JevEvaluation(model, answers, inputTokens, outputTokens, cost, elapsedMs, rejected), null);
         }
     }
+
+    /// <summary>
+    /// Validates ONE answer against the question that asked for it. Returns the answer, or a short
+    /// code saying why it cannot be trusted. Failures here are per-question, not per-response.
+    /// </summary>
+    private static (JevAnswer? answer, string? failure) ParseAnswer(JevQuestion question, JsonElement answersEl)
+    {
+            if (!answersEl.TryGetProperty(question.Id, out var a) || a.ValueKind != JsonValueKind.Object)
+                return (null, "missing_answer");
+
+            var expectedType = question.Kind switch
+            {
+                JevQuestionKind.Noul => "noul",
+                JevQuestionKind.Score => "score",
+                _ => "choice"
+            };
+            if (!a.TryGetProperty("type", out var typeEl) ||
+                typeEl.ValueKind != JsonValueKind.String ||
+                !string.Equals(typeEl.GetString(), expectedType, StringComparison.Ordinal))
+                return (null, "mismatched_type");
+
+            if (question.Kind == JevQuestionKind.Noul)
+            {
+                // Noul reports a yes probability only. There is no confidence statistic here;
+                // reading one in would invent a number the model never produced.
+                if (!TryProbability(a, "noul", out var noul))
+                    return (null, "invalid_probability");
+                return (new JevAnswer(question.Id, null, null, null, noul), null);
+            }
+
+            if (question.Kind == JevQuestionKind.Score)
+            {
+                // A score may land BETWEEN levels (0.91 on a three-rung rubric is a real answer),
+                // so it is bounded by the rubric rather than snapped to a rung.
+                var topLevel = question.Levels!.Count - 1;
+                if (!a.TryGetProperty("score", out var scoreEl) || scoreEl.ValueKind != JsonValueKind.Number ||
+                    !scoreEl.TryGetDouble(out var scoreValue) || !double.IsFinite(scoreValue) ||
+                    scoreValue < 0 || scoreValue > topLevel)
+                    return (null, "invalid_score");
+
+                if (!TryProbability(a, "confidence", out var scoreConfidence))
+                    return (null, "invalid_probability");
+
+                if (!a.TryGetProperty("probabilities", out var levelProbs) || levelProbs.ValueKind != JsonValueKind.Object)
+                    return (null, "missing_probabilities");
+
+                var levels = new Dictionary<string, double>(StringComparer.Ordinal);
+                double levelSum = 0;
+                for (int i = 0; i < question.Levels.Count; i++)
+                {
+                    var key = i.ToString();
+                    if (!TryProbability(levelProbs, key, out var p))
+                        return (null, "missing_probability");
+                    levels[key] = p;
+                    levelSum += p;
+                }
+                if (levelProbs.EnumerateObject().Count() != question.Levels.Count)
+                    return (null, "mismatched_probabilities");
+                if (Math.Abs(levelSum - 1.0) > Constants.JevDistributionTolerance)
+                    return (null, "invalid_distribution");
+
+                return (new JevAnswer(question.Id, null, scoreConfidence, levels, null, scoreValue), null);
+            }
+
+            if (!a.TryGetProperty("choice", out var choiceEl) || choiceEl.ValueKind != JsonValueKind.String)
+                return (null, "missing_choice");
+            var choice = choiceEl.GetString()!;
+            if (!question.Criteria!.ContainsKey(choice))
+                return (null, "unknown_choice");
+
+            if (!TryProbability(a, "confidence", out var confidence))
+                return (null, "invalid_probability");
+
+            if (!a.TryGetProperty("probabilities", out var probsEl) || probsEl.ValueKind != JsonValueKind.Object)
+                return (null, "missing_probabilities");
+
+            var probabilities = new Dictionary<string, double>(StringComparer.Ordinal);
+            double sum = 0;
+            foreach (var key in question.Criteria.Keys)
+            {
+                if (!TryProbability(probsEl, key, out var p))
+                    return (null, "missing_probability");
+                probabilities[key] = p;
+                sum += p;
+            }
+            if (probsEl.EnumerateObject().Count() != question.Criteria.Count)
+                return (null, "mismatched_probabilities");
+
+            // Rounding allowance, NOT a correctness allowance. A peer measured 2.4% of 292 live
+            // calls rejected by a 0.005 window, skewed toward Croatian - per-option rounding to
+            // two decimals makes a several-option distribution miss 1.0 routinely. We widen the
+            // window and deliberately do NOT renormalize: a sum slightly under 1.0 leaves the
+            // selected probability slightly understated, so a minimum-probability gate gets
+            // harder to pass, never easier. Erring toward silence is the safe direction here.
+            var drift = Math.Abs(sum - 1.0);
+            if (drift > Constants.JevDistributionTolerance)
+                return (null, "invalid_distribution");
+            if (drift > 0.005)
+                Log.Debug($"Jev distribution off by {drift:F3} over {question.Criteria.Count} options (accepted, not renormalized)");
+
+            // The selected option must actually be the maximum, or the distribution and the
+            // choice disagree and neither can be trusted as a threshold input.
+            var selected = probabilities[choice];
+            if (probabilities.Values.Any(p => p > selected + 0.00001))
+                return (null, "choice_not_maximum");
+
+            return (new JevAnswer(question.Id, choice, confidence, probabilities, null), null);
+    }
+
+    /// <summary>
+    /// How far a distribution over <paramref name="options"/> options may miss 1.0. Each option is
+    /// rounded to two decimals by the gateway, so the worst case grows with the option count; a
+    /// flat window quietly rejects wide questions.
+    /// </summary>
+    internal static double DistributionTolerance(int options) =>
+        Math.Max(Constants.JevDistributionTolerance, options * Constants.JevPerOptionRoundingError);
+
+    /// <summary>A criterion may be an object or an array; only an empty/whitespace string is useless.</summary>
+    private static bool IsBlank(JsonNode? node) =>
+        node == null || (node is JsonValue v && v.TryGetValue<string>(out var text) && string.IsNullOrWhiteSpace(text));
 
     private static bool TryProbability(JsonElement parent, string name, out double value)
     {
@@ -370,7 +520,8 @@ public sealed class JevDecisionClient : IJevDecisionClient
         string apiKey,
         JsonNode state,
         IReadOnlyList<JevQuestion> questions,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? timeoutMs = null)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
             return JevResult.Fail(JevStatus.Disabled, "no_api_key");
@@ -381,7 +532,7 @@ public sealed class JevDecisionClient : IJevDecisionClient
                 buildFailure == "input_too_large" ? JevStatus.TooLarge : JevStatus.Invalid,
                 buildFailure ?? "invalid_request");
 
-        using var timeoutCts = new CancellationTokenSource(Constants.JevDecisionTimeoutMs);
+        using var timeoutCts = new CancellationTokenSource(timeoutMs ?? Constants.JevDecisionTimeoutMs);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -427,7 +578,7 @@ public sealed class JevDecisionClient : IJevDecisionClient
         }
         catch (OperationCanceledException)
         {
-            Log.Warning($"Jev decision timed out after {Constants.JevDecisionTimeoutMs}ms");
+            Log.Warning($"Jev decision timed out after {timeoutMs ?? Constants.JevDecisionTimeoutMs}ms");
             return JevResult.Fail(JevStatus.Unavailable, "timeout");
         }
         catch (Exception ex)

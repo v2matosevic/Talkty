@@ -268,8 +268,10 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public FakePaste Paste { get; } = new();
         public FakeRefiner Refiner { get; } = new();
         public FakeFidelity Fidelity { get; } = new();
+        public FakeDecisions Decisions { get; } = new();
         public FakeVoiceCommand Voice { get; } = new();
         public MemoryRecoveryStore Recovery { get; } = new();
+        public PromptClassifier Classifier { get; private set; } = null!;
         public MainViewModel ViewModel { get; }
         public List<string> Warnings { get; } = [];
         public List<string> Statuses { get; } = [];
@@ -277,9 +279,12 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public Context(Action<AppSettings>? configure = null)
         {
             configure?.Invoke(Settings.Settings);
+            Classifier = new PromptClassifier(Decisions);
+            Classifier.SetApiKey("test-key");
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
                 new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery,
-                promptFidelityService: Fidelity, voiceCommandService: Voice);
+                promptFidelityService: Fidelity, voiceCommandService: Voice,
+                promptClassifier: Classifier);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
             ViewModel.PropertyChanged += (_, e) =>
             {
@@ -310,7 +315,14 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
 
     internal sealed class FakeSettings : ISettingsService
     {
-        public AppSettings Settings { get; } = new() { AutoPaste = true, UseCustomVocabulary = false };
+        // A real encrypted key, because MainViewModel's startup forwards whatever settings hold to
+        // the cloud services — an out-of-band SetApiKey on the classifier would just be overwritten.
+        public AppSettings Settings { get; } = new()
+        {
+            AutoPaste = true,
+            UseCustomVocabulary = false,
+            OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect("test-key")
+        };
         public bool IsFirstRun => false;
         public void Load() { }
         public void Save() { }
@@ -419,9 +431,15 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public Func<CancellationToken, Task<string?>> Run { get; set; } = _ => Task.FromResult<string?>("A generated prompt");
         public void SetApiKey(string? apiKey) { }
         public void SetModel(string? modelSlug) { }
-        public Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default)
+        public string? LastHint { get; private set; }
+        public bool LastPreferredQualityModel { get; private set; }
+
+        public Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default,
+            string? hint = null, bool preferQualityModel = false)
         {
             Calls++;
+            LastHint = hint;
+            LastPreferredQualityModel = preferQualityModel;
             return Run(cancellationToken);
         }
     }
@@ -455,6 +473,48 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
                 ConcernRaised?.Invoke(this, new FidelityConcernEventArgs { Concerns = RaiseOnEvaluate.ToList() });
             _called.TrySetResult();
             return Task.FromResult(PromptFidelityOutcome.None(PromptFidelityStatus.CodeOnly));
+        }
+    }
+
+    /// <summary>Answers the pre-refinement classifier from a script, with no network.</summary>
+    internal sealed class FakeDecisions : IJevDecisionClient
+    {
+        public int Calls { get; private set; }
+        public JevResult Result { get; set; } = JevResult.Fail(JevStatus.Unavailable, "timeout");
+
+        public Task<JevResult> EvaluateAsync(string apiKey, System.Text.Json.Nodes.JsonNode state,
+            IReadOnlyList<JevQuestion> questions, CancellationToken cancellationToken = default,
+            int? timeoutMs = null)
+        {
+            Calls++;
+            return Task.FromResult(Result);
+        }
+
+        /// <summary>A confident "this is already a prompt" answer.</summary>
+        public void AnswerAlreadyAPrompt() => Result = Build(0.03, "chore", 0.95, 0.9, 0.1, 0.92);
+
+        /// <summary>A confident "this needs organising" answer for substantial work.</summary>
+        public void AnswerNeedsRefinement() => Result = Build(0.93, "feature", 0.9, 0.85, 1.9, 0.9);
+
+        private static JevResult Build(double needsStructure, string kind, double kindP,
+            double kindConfidence, double complexity, double complexityConfidence)
+        {
+            var kinds = new Dictionary<string, double>
+            {
+                ["bug"] = 0, ["feature"] = 0, ["refactor"] = 0, ["question"] = 0, ["chore"] = 0
+            };
+            kinds[kind] = kindP;
+            kinds[kind == "chore" ? "bug" : "chore"] = 1 - kindP;
+
+            var answers = new Dictionary<string, JevAnswer>
+            {
+                [PromptClassifier.NeedsStructureId] = new(PromptClassifier.NeedsStructureId, null, null, null, needsStructure),
+                [PromptClassifier.RequestKindId] = new(PromptClassifier.RequestKindId, kind, kindConfidence, kinds, null),
+                [PromptClassifier.ComplexityId] = new(PromptClassifier.ComplexityId, null, complexityConfidence,
+                    new Dictionary<string, double> { ["0"] = 0.34, ["1"] = 0.33, ["2"] = 0.33 }, null, complexity),
+            };
+            return new JevResult(JevStatus.Evaluated,
+                new JevEvaluation("typesafe/jev-1.13-20260917", answers, 420, 30, 0.00002, 480), null);
         }
     }
 

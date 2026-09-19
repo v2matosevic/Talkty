@@ -38,9 +38,13 @@ public class PromptFidelityServiceTests : IDisposable
         public Func<IReadOnlyList<JevQuestion>, JevResult> Answer { get; set; } =
             questions => JevResult.Fail(JevStatus.Unavailable, "timeout");
 
+        public int? LastTimeoutMs { get; private set; }
+
         public Task<JevResult> EvaluateAsync(string apiKey, JsonNode state,
-            IReadOnlyList<JevQuestion> questions, CancellationToken cancellationToken = default)
+            IReadOnlyList<JevQuestion> questions, CancellationToken cancellationToken = default,
+            int? timeoutMs = null)
         {
+            LastTimeoutMs = timeoutMs;
             Calls++;
             LastKey = apiKey;
             LastState = state;

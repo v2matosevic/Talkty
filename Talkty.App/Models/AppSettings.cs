@@ -1,4 +1,4 @@
-using System.Windows.Input;
+﻿using System.Windows.Input;
 using Talkty.App;
 
 namespace Talkty.App.Models;
@@ -96,6 +96,13 @@ public class AppSettings
     /// Persisted BY NUMBER — never reorder <see cref="PromptFidelityMode"/>.
     /// </summary>
     public PromptFidelityMode PromptFidelity { get; set; } = PromptFidelityMode.RecordOnly;
+
+    /// <summary>
+    /// Whether a fast decision runs BEFORE refinement to classify the dictation, and how much it
+    /// may change. Off by default because Full changes what gets delivered. Persisted BY NUMBER —
+    /// never reorder <see cref="Models.PromptPlanning"/>.
+    /// </summary>
+    public PromptPlanning PromptPlanning { get; set; } = PromptPlanning.Off;
 
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;

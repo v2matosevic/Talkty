@@ -4,6 +4,9 @@ User-facing changes, newest first. Dates are when the work landed.
 
 ## [Unreleased]
 
+- Prompting can now decide before it spends: a fast check classifies your dictation first, so a genuinely one-line ask can skip the rewrite entirely instead of waiting one to three seconds for a model to hand back roughly the same sentence. Substantial requests start on the better model instead of escalating to it. Off by default; Settings value `PromptPlanning` has Off, Hints and Full. Details and limits: `docs/PROMPT-PLANNING.md`.
+- Fixed: valid decision responses were being discarded. Probabilities are rounded by the provider, so a distribution over several options routinely misses 1.0 by more than the old window allowed; a peer measured 2.4% of 292 calls thrown away, skewed toward Croatian. The allowance now scales with the number of options, and one bad answer in a batch no longer discards the good ones alongside it.
+
 - Optional prompt check for Prompting: after your dictation is rewritten into a coding-agent prompt, Talkty can compare the two and tell you when something you said is missing. Exact numbers, file names and function names are compared on your PC; the rest is judged by a small decision model over your existing OpenRouter key. It never rewrites your prompt and never delays copy or paste.
 - Settings > Cloud & Prompting > Prompt check: Record only (default, shows nothing), Show concerns, or Off.
 - Fixed: a prompt-check notice could be cut off mid-sentence when Talkty was in the tray, which is when you are most likely to see it. Notices now fit the Windows notification limit and quotes end on a whole word.

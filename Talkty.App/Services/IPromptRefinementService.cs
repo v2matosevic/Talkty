@@ -1,4 +1,4 @@
-namespace Talkty.App.Services;
+﻿namespace Talkty.App.Services;
 
 /// <summary>
 /// Transforms a raw transcription into a polished, structured prompt for a coding AI agent.
@@ -24,7 +24,17 @@ public interface IPromptRefinementService
     /// Expands the given transcription into a full, structured coding-agent prompt.
     /// Returns null on failure (caller should fall back to the raw transcription).
     /// </summary>
-    Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default);
+    /// <param name="hint">
+    /// One short sentence about the kind of request, from the pre-refinement classifier. Appended
+    /// to the system prompt so the model does not have to infer it. Null means no hint, which is
+    /// the original behaviour.
+    /// </param>
+    /// <param name="preferQualityModel">
+    /// Start the chain on the higher-quality model instead of the fast one. Used when the request
+    /// was judged substantial, so the hardest dictations stop paying for an escalation.
+    /// </param>
+    Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default,
+        string? hint = null, bool preferQualityModel = false);
 
     /// <summary>
     /// User-facing description of why the last <see cref="RefineAsync"/> returned null

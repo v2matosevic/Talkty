@@ -1,0 +1,1719 @@
+{
+  "summary": {
+    "runUtc": "2026-09-19T09:43:43.9416337Z",
+    "corpusVersion": 1,
+    "split": "all",
+    "assembly": "B:\\Coding\\Talkty\\Talkty.App\\bin\\Release\\net8.0-windows\\win-x64\\Talkty.App.dll",
+    "assemblyWritten": "2026-09-19T11:43:19.2511974+02:00",
+    "endpoint": "https://openrouter.ai/api/alpha/decisions",
+    "requestedModel": "typesafe/jev-1.13",
+    "returnedModels": [
+      "typesafe/jev-1.13-20260917"
+    ],
+    "thresholds": {
+      "minProbability": 0.8,
+      "minConfidence": 0.7,
+      "minAddedProbability": 0.85,
+      "maxClauses": 12
+    },
+    "attempts": 24,
+    "evaluated": 24,
+    "transportFailures": 0,
+    "ceilingUsd": 0.05,
+    "allocatedUsd": 0.001352,
+    "reportedCostUsd": 0.001340766,
+    "attemptsWithUnknownCost": 0,
+    "inputTokens": 31923,
+    "medianEvaluationMs": 541,
+    "lossCases": 13,
+    "lossCaught": 13,
+    "lossCaughtByCodeOnly": 9,
+    "lossCaughtByModel": 11,
+    "lossCaughtByBaselineGuard": 0,
+    "attributionChecked": 12,
+    "attributionCorrect": 12,
+    "attributionWrong": 0,
+    "modelAttributionChecked": 10,
+    "modelAttributionCorrect": 10,
+    "misattributed": [
+      null
+    ],
+    "faithfulCases": 11,
+    "falseAlarms": 0,
+    "falseAlarmsFromCode": 0,
+    "falseAlarmsFromModel": 0,
+    "note": "Small labeled sample. These counts do not establish a production error rate, and a Jev confidence is a distribution statistic, not a measured probability of correctness. Holdout cases were never used to choose a threshold."
+  },
+  "results": [
+    {
+      "id": "dev-01",
+      "split": "development",
+      "language": "en",
+      "scenario": "omitted-prohibition",
+      "label": "Long fluent rewrite that keeps every other detail but silently drops 'do not deploy this to production'. The rewrite contains no prohibition at all, so the exact layer can see the loss.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "DroppedProhibition"
+      ],
+      "expectedClause": "c4",
+      "codeShouldCatch": true,
+      "clauseCount": 4,
+      "questionCount": 6,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "DroppedProhibition",
+          "clauseId": "c4",
+          "sourceText": "And do not deploy this to production, I only want it sitting on the staging branch until I have looked at it myself."
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1898,
+      "outputTokens": 280,
+      "costUsd": 7.9716E-05,
+      "costKnown": true,
+      "evaluationMs": 803,
+      "roundTripMs": 823,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.99,
+          "confidence": 0.98,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 0.97,
+          "confidence": 0.96,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "omitted",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.77
+        },
+        {
+          "id": "attention",
+          "choice": "c4",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "OmittedClause",
+          "clauseId": "c4",
+          "sourceText": "And do not deploy this to production, I only want it sitting on the staging branch until I have looked at it myself.",
+          "probability": 1.0,
+          "confidence": 1.0
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "dev-02",
+      "split": "development",
+      "language": "en",
+      "scenario": "omitted-prohibition-masked",
+      "label": "The rewrite keeps ONE prohibition ('do not add a new dependency') and drops another ('do not touch the invoice numbering logic'). A prohibition-count check cannot see this; only a per-clause judgment can.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "OmittedClause"
+      ],
+      "expectedClause": "c4",
+      "codeShouldCatch": false,
+      "clauseCount": 4,
+      "questionCount": 6,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1856,
+      "outputTokens": 280,
+      "costUsd": 7.7952E-05,
+      "costKnown": true,
+      "evaluationMs": 557,
+      "roundTripMs": 557,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 0.99,
+          "confidence": 0.98,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "omitted",
+          "selectedProbability": 1.0,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.13
+        },
+        {
+          "id": "attention",
+          "choice": "c4",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "OmittedClause",
+          "clauseId": "c4",
+          "sourceText": "And whatever you do, do not touch the invoice numbering logic, that is audited and I do not want it moving.",
+          "probability": 1.0,
+          "confidence": 0.99
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "dev-03",
+      "split": "development",
+      "language": "en",
+      "scenario": "altered-identifier",
+      "label": "One-character identifier drift: getUserById became getUserByID. Length, structure and every other detail survive.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingIdentifier"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "clauseCount": 2,
+      "questionCount": 4,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "MissingIdentifier",
+          "clauseId": "c1",
+          "sourceText": "getUserById"
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1243,
+      "outputTokens": 160,
+      "costUsd": 5.2206E-05,
+      "costKnown": true,
+      "evaluationMs": 506,
+      "roundTripMs": 506,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.39
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.48,
+          "confidence": 0.23,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-04",
+      "split": "development",
+      "language": "en",
+      "scenario": "changed-value",
+      "label": "The rewrite changed a stated value: 45 became 60. Short input, so the length guard is not even applicable.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "MissingNumber",
+          "clauseId": "c1",
+          "sourceText": "45"
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 873,
+      "outputTokens": 102,
+      "costUsd": 3.6666E-05,
+      "costKnown": true,
+      "evaluationMs": 657,
+      "roundTripMs": 658,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "contradicted",
+          "selectedProbability": 0.97,
+          "confidence": 0.96,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.83
+        },
+        {
+          "id": "attention",
+          "choice": "c1",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "ContradictedClause",
+          "clauseId": "c1",
+          "sourceText": "Bump the request timeout in the API client from 30 seconds to 45 and add a single retry on a 503.",
+          "probability": 0.97,
+          "confidence": 0.96
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "dev-05",
+      "split": "development",
+      "language": "en",
+      "scenario": "self-correction",
+      "label": "The speaker corrected themselves; 600 is the committed value and 300 was abandoned. Reporting the missing 300 would be a false alarm.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 2,
+      "questionCount": 4,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1174,
+      "outputTokens": 160,
+      "costUsd": 4.9308E-05,
+      "costKnown": true,
+      "evaluationMs": 528,
+      "roundTripMs": 528,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.14
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.5599999999999999,
+          "confidence": 0.35,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-06",
+      "split": "development",
+      "language": "en",
+      "scenario": "faithful-short",
+      "label": "Trivial ask, faithful one-line rewrite. Nothing should be reported.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 828,
+      "outputTokens": 100,
+      "costUsd": 3.4776E-05,
+      "costKnown": true,
+      "evaluationMs": 704,
+      "roundTripMs": 705,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.03
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-07",
+      "split": "development",
+      "language": "en",
+      "scenario": "filler-removal",
+      "label": "Only disfluencies and a restart were removed. Nothing should be reported.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 859,
+      "outputTokens": 100,
+      "costUsd": 3.6078E-05,
+      "costKnown": true,
+      "evaluationMs": 534,
+      "roundTripMs": 534,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.05
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.77,
+          "confidence": 0.53,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-08",
+      "split": "development",
+      "language": "en",
+      "scenario": "multiple-requirements-kept",
+      "label": "Four independent requirements, all carried through. A correct system reports nothing.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 5,
+      "questionCount": 7,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 2154,
+      "outputTokens": 340,
+      "costUsd": 9.0468E-05,
+      "costKnown": true,
+      "evaluationMs": 490,
+      "roundTripMs": 490,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.97,
+          "confidence": 0.95,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c5",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.09
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.47000000000000003,
+          "confidence": 0.36,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-09",
+      "split": "development",
+      "language": "en",
+      "scenario": "multiple-requirements-one-dropped",
+      "label": "Same dictation as dev-08, but the throwaway mobile aside is gone. No identifier or number is involved, so only a per-clause judgment can catch it.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "OmittedClause"
+      ],
+      "expectedClause": "c5",
+      "codeShouldCatch": false,
+      "clauseCount": 5,
+      "questionCount": 7,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 2139,
+      "outputTokens": 340,
+      "costUsd": 8.9838E-05,
+      "costKnown": true,
+      "evaluationMs": 638,
+      "roundTripMs": 638,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.94,
+          "confidence": 0.91,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c5",
+          "choice": "omitted",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.08
+        },
+        {
+          "id": "attention",
+          "choice": "c5",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "OmittedClause",
+          "clauseId": "c5",
+          "sourceText": "Oh and make sure the whole page still works on mobile, it is quite cramped at the moment.",
+          "probability": 1.0,
+          "confidence": 1.0
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "dev-10",
+      "split": "development",
+      "language": "hr",
+      "scenario": "faithful-croatian",
+      "label": "Croatian dictation, faithful Croatian rewrite. Nothing should be reported.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 3,
+      "questionCount": 5,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1508,
+      "outputTokens": 220,
+      "costUsd": 6.3336E-05,
+      "costKnown": true,
+      "evaluationMs": 488,
+      "roundTripMs": 488,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.09
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.85,
+          "confidence": 0.8,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-11",
+      "split": "development",
+      "language": "hr",
+      "scenario": "omitted-prohibition-croatian",
+      "label": "Croatian prohibition ('nemoj dirati postojeće migracije') dropped entirely; the rewrite has no prohibition left.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "DroppedProhibition"
+      ],
+      "expectedClause": "c2",
+      "codeShouldCatch": true,
+      "clauseCount": 2,
+      "questionCount": 4,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "DroppedProhibition",
+          "clauseId": "c2",
+          "sourceText": "Nemoj dirati postojeće migracije baze, one su već puštene u produkciju."
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1242,
+      "outputTokens": 160,
+      "costUsd": 5.2164E-05,
+      "costKnown": true,
+      "evaluationMs": 610,
+      "roundTripMs": 611,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.97,
+          "confidence": 0.96,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "omitted",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.94
+        },
+        {
+          "id": "attention",
+          "choice": "c2",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "OmittedClause",
+          "clauseId": "c2",
+          "sourceText": "Nemoj dirati postojeće migracije baze, one su već puštene u produkciju.",
+          "probability": 1.0,
+          "confidence": 1.0
+        },
+        {
+          "kind": "AddedRequirement",
+          "clauseId": null,
+          "sourceText": "",
+          "probability": 0.94,
+          "confidence": null
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "dev-12",
+      "split": "development",
+      "language": "hr",
+      "scenario": "changed-value-croatian",
+      "label": "Croatian dictation with a changed numeric value: 15 became 20.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "MissingNumber",
+          "clauseId": "c1",
+          "sourceText": "15"
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 876,
+      "outputTokens": 102,
+      "costUsd": 3.6792E-05,
+      "costKnown": true,
+      "evaluationMs": 504,
+      "roundTripMs": 505,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "contradicted",
+          "selectedProbability": 0.97,
+          "confidence": 0.96,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.8
+        },
+        {
+          "id": "attention",
+          "choice": "c1",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "ContradictedClause",
+          "clauseId": "c1",
+          "sourceText": "Postavi timeout na 15 sekundi i limit na 100 zapisa po stranici u pregledu narudžbi.",
+          "probability": 0.97,
+          "confidence": 0.96
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "dev-13",
+      "split": "development",
+      "language": "hr",
+      "scenario": "mixed-language-faithful",
+      "label": "Croatian dictation, English rewrite. Identifiers and the prohibition both survive. Nothing should be reported.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 2,
+      "questionCount": 4,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1186,
+      "outputTokens": 160,
+      "costUsd": 4.9812E-05,
+      "costKnown": true,
+      "evaluationMs": 599,
+      "roundTripMs": 599,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.17
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.75,
+          "confidence": 0.62,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "dev-14",
+      "split": "development",
+      "language": "en",
+      "scenario": "added-requirement",
+      "label": "Everything the speaker said survives, but the rewrite invents persistence, tests and a refactor they never asked for.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "AddedRequirement"
+      ],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 873,
+      "outputTokens": 100,
+      "costUsd": 3.6666E-05,
+      "costKnown": true,
+      "evaluationMs": 558,
+      "roundTripMs": 558,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.98
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.8,
+          "confidence": 0.6,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "AddedRequirement",
+          "clauseId": null,
+          "sourceText": "",
+          "probability": 0.98,
+          "confidence": null
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-01",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "reworded-negation-control",
+      "label": "Both prohibitions survive: 'not on the primary database' is carried as an explicit positive instruction, and the response-shape constraint is kept. A false-alarm control for a rewrite that rephrased a negation.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 3,
+      "questionCount": 5,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1527,
+      "outputTokens": 220,
+      "costUsd": 6.4134E-05,
+      "costKnown": true,
+      "evaluationMs": 508,
+      "roundTripMs": 508,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 0.98,
+          "confidence": 0.97,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.11
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.87,
+          "confidence": 0.82,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-02",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "faithful-long",
+      "label": "A long, faithful expansion. A system that reports anything here is producing a false alarm.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 5,
+      "questionCount": 7,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 2197,
+      "outputTokens": 340,
+      "costUsd": 9.2274E-05,
+      "costKnown": true,
+      "evaluationMs": 541,
+      "roundTripMs": 541,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.98,
+          "confidence": 0.97,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c5",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.57
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.47000000000000003,
+          "confidence": 0.36,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-03",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "altered-identifier",
+      "label": "The file name drifted from OrderTable.tsx to OrdersTable.tsx.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingIdentifier"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "MissingIdentifier",
+          "clauseId": "c1",
+          "sourceText": "OrderTable.tsx"
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 878,
+      "outputTokens": 101,
+      "costUsd": 3.6876E-05,
+      "costKnown": true,
+      "evaluationMs": 587,
+      "roundTripMs": 587,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.9,
+          "confidence": 0.87,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.48
+        },
+        {
+          "id": "attention",
+          "choice": "c1",
+          "selectedProbability": 0.74,
+          "confidence": 0.48,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-04",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "changed-value",
+      "label": "The rewrite reversed the intent and changed 120 to 500.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber"
+      ],
+      "expectedClause": "c2",
+      "codeShouldCatch": true,
+      "clauseCount": 2,
+      "questionCount": 4,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "MissingNumber",
+          "clauseId": "c2",
+          "sourceText": "120"
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1182,
+      "outputTokens": 162,
+      "costUsd": 4.9644E-05,
+      "costKnown": true,
+      "evaluationMs": 489,
+      "roundTripMs": 489,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.55,
+          "confidence": 0.4,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "contradicted",
+          "selectedProbability": 0.95,
+          "confidence": 0.94,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.73
+        },
+        {
+          "id": "attention",
+          "choice": "c2",
+          "selectedProbability": 0.95,
+          "confidence": 0.92,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "ContradictedClause",
+          "clauseId": "c2",
+          "sourceText": "Take it down from 250 milliseconds to 120, and make sure an empty query does not fire a request at all.",
+          "probability": 0.95,
+          "confidence": 0.94
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "hold-05",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "self-correction",
+      "label": "The 10 MB figure was withdrawn by the speaker. Reporting it missing would be a false alarm.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 866,
+      "outputTokens": 100,
+      "costUsd": 3.6372E-05,
+      "costKnown": true,
+      "evaluationMs": 579,
+      "roundTripMs": 579,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.06
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.58,
+          "confidence": 0.17,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-06",
+      "split": "holdout",
+      "language": "hr",
+      "scenario": "faithful-croatian",
+      "label": "Croatian dictation, faithful Croatian rewrite. Nothing should be reported.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 2,
+      "questionCount": 4,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1195,
+      "outputTokens": 160,
+      "costUsd": 5.019E-05,
+      "costKnown": true,
+      "evaluationMs": 500,
+      "roundTripMs": 501,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.19
+        },
+        {
+          "id": "attention",
+          "choice": "none",
+          "selectedProbability": 0.63,
+          "confidence": 0.44,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-07",
+      "split": "holdout",
+      "language": "hr",
+      "scenario": "omitted-requirement-croatian",
+      "label": "The empty-month behaviour ('prikaži nulu umjesto praznog reda') is gone. No identifier or digit is involved.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "OmittedClause"
+      ],
+      "expectedClause": "c3",
+      "codeShouldCatch": false,
+      "clauseCount": 4,
+      "questionCount": 6,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1845,
+      "outputTokens": 280,
+      "costUsd": 7.749E-05,
+      "costKnown": true,
+      "evaluationMs": 490,
+      "roundTripMs": 491,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "omitted",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.14
+        },
+        {
+          "id": "attention",
+          "choice": "c3",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "OmittedClause",
+          "clauseId": "c3",
+          "sourceText": "Izvještaj mora raditi i kada nema podataka za neki mjesec, tada prikaži nulu umjesto praznog reda.",
+          "probability": 1.0,
+          "confidence": 1.0
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "hold-08",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "filler-removal",
+      "label": "Nothing but disfluency and a restart was removed.",
+      "expectConcern": false,
+      "expectedKinds": [],
+      "expectedClause": null,
+      "codeShouldCatch": false,
+      "clauseCount": 4,
+      "questionCount": 6,
+      "baselineGuard": false,
+      "codeConcerns": [],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 1771,
+      "outputTokens": 281,
+      "costUsd": 7.4382E-05,
+      "costKnown": true,
+      "evaluationMs": 585,
+      "roundTripMs": 585,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c2",
+          "choice": "preserved",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        },
+        {
+          "id": "c3",
+          "choice": "preserved",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        },
+        {
+          "id": "c4",
+          "choice": "preserved",
+          "selectedProbability": 0.98,
+          "confidence": 0.98,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.12
+        },
+        {
+          "id": "attention",
+          "choice": "c3",
+          "selectedProbability": 0.3,
+          "confidence": 0.13,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [],
+      "anyConcern": false,
+      "correct": true,
+      "clauseAttribution": "not-applicable",
+      "modelClauseAttribution": "not-applicable"
+    },
+    {
+      "id": "hold-09",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "contradiction",
+      "label": "The rewrite states the opposite of what the speaker asked for. Label corrected 2026-09-19 after the first corpus run: the CONTRADICTION itself is only reachable semantically, but the speaker's 'I do not want to break them' is the dictation's only prohibition and the rewrite has none, so the exact layer catches the case too. The label was wrong, not the code.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "ContradictedClause",
+        "DroppedProhibition"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "DroppedProhibition",
+          "clauseId": "c1",
+          "sourceText": "Add the new v2 pricing endpoint under api/v2/pricing, but keep the old one working, we still have customers on it and I do not want to break them."
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 877,
+      "outputTokens": 102,
+      "costUsd": 3.6834E-05,
+      "costKnown": true,
+      "evaluationMs": 499,
+      "roundTripMs": 500,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "contradicted",
+          "selectedProbability": 0.99,
+          "confidence": 0.98,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.97
+        },
+        {
+          "id": "attention",
+          "choice": "c1",
+          "selectedProbability": 0.99,
+          "confidence": 0.99,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "ContradictedClause",
+          "clauseId": "c1",
+          "sourceText": "Add the new v2 pricing endpoint under api/v2/pricing, but keep the old one working, we still have customers on it and I do not want to break them.",
+          "probability": 0.99,
+          "confidence": 0.98
+        },
+        {
+          "kind": "AddedRequirement",
+          "clauseId": null,
+          "sourceText": "",
+          "probability": 0.97,
+          "confidence": null
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    },
+    {
+      "id": "hold-10",
+      "split": "holdout",
+      "language": "en",
+      "scenario": "contradiction-and-omission",
+      "label": "Two losses at once: 30 days became 14, and the per-device logout requirement disappeared.",
+      "expectConcern": true,
+      "expectedKinds": [
+        "MissingNumber",
+        "OmittedClause"
+      ],
+      "expectedClause": "c1",
+      "codeShouldCatch": true,
+      "clauseCount": 1,
+      "questionCount": 3,
+      "baselineGuard": false,
+      "codeConcerns": [
+        {
+          "kind": "MissingNumber",
+          "clauseId": "c1",
+          "sourceText": "30"
+        }
+      ],
+      "jevStatus": "Evaluated",
+      "failureCode": null,
+      "model": "typesafe/jev-1.13-20260917",
+      "inputTokens": 876,
+      "outputTokens": 102,
+      "costUsd": 3.6792E-05,
+      "costKnown": true,
+      "evaluationMs": 487,
+      "roundTripMs": 487,
+      "answers": [
+        {
+          "id": "c1",
+          "choice": "contradicted",
+          "selectedProbability": 0.82,
+          "confidence": 0.76,
+          "noul": null
+        },
+        {
+          "id": "added",
+          "choice": null,
+          "selectedProbability": 0.0,
+          "confidence": null,
+          "noul": 0.66
+        },
+        {
+          "id": "attention",
+          "choice": "c1",
+          "selectedProbability": 1.0,
+          "confidence": 1.0,
+          "noul": null
+        }
+      ],
+      "modelConcerns": [
+        {
+          "kind": "ContradictedClause",
+          "clauseId": "c1",
+          "sourceText": "Change the session length from 7 days to 30 days, add a remember me checkbox on the login form, and make sure logging out on one device does not kill the sessions on the others.",
+          "probability": 0.82,
+          "confidence": 0.76
+        }
+      ],
+      "anyConcern": true,
+      "correct": true,
+      "clauseAttribution": "correct",
+      "modelClauseAttribution": "correct"
+    }
+  ]
+}

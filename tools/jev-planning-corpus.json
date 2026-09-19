@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "createdUtc": "2026-09-19",
+  "purpose": "Labeled corpus for the pre-refinement prompt classifier (skip vs refine).",
+  "labellingNote": "Written and labeled BEFORE any live call. A false SKIP is the damaging error: the speaker asked for a prompt and would receive raw dictation. Thresholds may be tuned on the development split only.",
+  "fields": {
+    "expectSkip": "True when the dictation is already a usable prompt and refinement adds nothing.",
+    "expectedKind": "The request kind a correct classifier should report, when it is confident."
+  },
+  "cases": [
+    {
+      "id": "skip-01",
+      "split": "development",
+      "language": "en",
+      "transcript": "Add a loading spinner to the export button while the download is in flight.",
+      "expectSkip": true,
+      "expectedKind": "chore",
+      "label": "One clear instruction, already paste-ready."
+    },
+    {
+      "id": "skip-02",
+      "split": "development",
+      "language": "en",
+      "transcript": "Rename the variable total to orderTotal in the checkout component.",
+      "expectSkip": true,
+      "expectedKind": "chore",
+      "label": "A single mechanical rename."
+    },
+    {
+      "id": "skip-03",
+      "split": "development",
+      "language": "en",
+      "transcript": "Make the sidebar collapsible, it takes up too much room on a laptop.",
+      "expectSkip": true,
+      "expectedKind": "feature",
+      "label": "One ask plus a reason. Nothing to organise."
+    },
+    {
+      "id": "skip-04",
+      "split": "development",
+      "language": "hr",
+      "transcript": "Dodaj gumb za izvoz u PDF na stranicu s računima.",
+      "expectSkip": true,
+      "expectedKind": "feature",
+      "label": "Croatian, one instruction."
+    },
+    {
+      "id": "skip-05",
+      "split": "development",
+      "language": "en",
+      "transcript": "Bump the axios version in package.json to the latest patch release.",
+      "expectSkip": true,
+      "expectedKind": "chore",
+      "label": "A version bump."
+    },
+    {
+      "id": "skip-06",
+      "split": "holdout",
+      "language": "en",
+      "transcript": "Add a log line in the webhook handler showing the event type.",
+      "expectSkip": true,
+      "expectedKind": "chore",
+      "label": "One log line."
+    },
+    {
+      "id": "skip-07",
+      "split": "holdout",
+      "language": "hr",
+      "transcript": "Promijeni boju gumba za spremanje u zelenu.",
+      "expectSkip": true,
+      "expectedKind": "chore",
+      "label": "Croatian, a colour change."
+    },
+    {
+      "id": "skip-08",
+      "split": "holdout",
+      "language": "en",
+      "transcript": "Why is the orders page slow to load?",
+      "expectSkip": true,
+      "expectedKind": "question",
+      "label": "A question, not a change request. No scaffolding wanted."
+    },
+    {
+      "id": "refine-01",
+      "split": "development",
+      "language": "en",
+      "transcript": "Change the session length from 7 days to 30 days, add a remember me checkbox on the login form, and make sure logging out on one device does not kill the sessions on the others.",
+      "expectSkip": false,
+      "expectedKind": "feature",
+      "label": "One breath, three independent requirements. The case that defeats a length heuristic."
+    },
+    {
+      "id": "refine-02",
+      "split": "development",
+      "language": "en",
+      "transcript": "Okay so I need you to refactor the payment webhook handler that lives in src/api/webhooks/stripe.ts. Right now the signature verification is inline in the handler and it is impossible to test, so pull it out into its own function that takes the raw body and the header. Keep the existing retry behaviour exactly as it is. And do not deploy this to production.",
+      "expectSkip": false,
+      "expectedKind": "refactor",
+      "label": "Multi-part refactor with a constraint and a prohibition."
+    },
+    {
+      "id": "refine-03",
+      "split": "development",
+      "language": "en",
+      "transcript": "Three things on the settings page. First, the save button should stay disabled until something actually changes. Second, show a toast when the save succeeds, and keep it up for about three seconds. Third, the API key field should be masked by default with an eye icon to reveal it.",
+      "expectSkip": false,
+      "expectedKind": "feature",
+      "label": "Explicitly enumerated requirements."
+    },
+    {
+      "id": "refine-04",
+      "split": "development",
+      "language": "en",
+      "transcript": "The debounce on the search box is too aggressive, take it down from 250 milliseconds to 120, and make sure an empty query does not fire a request at all.",
+      "expectSkip": false,
+      "expectedKind": "bug",
+      "label": "Two changes, one of them conditional, with exact values."
+    },
+    {
+      "id": "refine-05",
+      "split": "development",
+      "language": "hr",
+      "transcript": "Popravi grešku kod naplate na stranici s pretplatama, korisnici dobiju dvostruki račun kad brzo kliknu dvaput. Nemoj dirati postojeće migracije baze, one su već puštene u produkciju.",
+      "expectSkip": false,
+      "expectedKind": "bug",
+      "label": "Croatian bug report with a symptom and a prohibition."
+    },
+    {
+      "id": "refine-06",
+      "split": "development",
+      "language": "en",
+      "transcript": "The onboarding flow needs work. After signup send them straight to the workspace picker instead of the empty dashboard. If they only have one workspace, skip the picker entirely and go into it. And the back button has to work properly, right now it dumps you back on the signup form and you lose everything.",
+      "expectSkip": false,
+      "expectedKind": "feature",
+      "label": "Conditional behaviour plus a bug, in one ramble."
+    },
+    {
+      "id": "refine-07",
+      "split": "holdout",
+      "language": "en",
+      "transcript": "We need the new search index rebuilt nightly. Put it behind a feature flag so I can turn it off, and do not let it run on the primary database, point it at the read replica.",
+      "expectSkip": false,
+      "expectedKind": "feature",
+      "label": "Several constraints that must survive."
+    },
+    {
+      "id": "refine-08",
+      "split": "holdout",
+      "language": "en",
+      "transcript": "Move the invoice PDF generation out of the request path and into a background job. Use the queue we already have in src/jobs, do not add a new dependency. The user should get an email when the PDF is ready.",
+      "expectSkip": false,
+      "expectedKind": "refactor",
+      "label": "A move plus a constraint plus a new behaviour."
+    },
+    {
+      "id": "refine-09",
+      "split": "holdout",
+      "language": "hr",
+      "transcript": "Napravi izvještaj o prodaji po mjesecima. Treba imati graf i tablicu ispod grafa. Izvještaj mora raditi i kada nema podataka za neki mjesec, tada prikaži nulu umjesto praznog reda. I neka se može izvesti u CSV.",
+      "expectSkip": false,
+      "expectedKind": "feature",
+      "label": "Croatian, four requirements including an edge case."
+    },
+    {
+      "id": "refine-10",
+      "split": "holdout",
+      "language": "en",
+      "transcript": "Um, so, yeah, basically I think we should, um, add pagination to the orders table, like, twenty rows per page, and also the sort should persist when you come back to the page, and if there are no orders at all show that empty state we designed rather than a blank table.",
+      "expectSkip": false,
+      "expectedKind": "feature",
+      "label": "Heavy filler hiding three real requirements. Filler must not read as simplicity."
+    }
+  ]
+}

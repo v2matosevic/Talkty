@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -50,6 +50,12 @@ public class PromptRefinementService : IPromptRefinementService
         "minimax/minimax-m3",           // fallback #2     — top instruction-following (AA 44) but slower / can summarize; provider-pinned for speed
         "deepseek/deepseek-v4-flash",   // fallback #3     — ultra-cheap last resort
     };
+
+    /// <summary>
+    /// The chain's quality tier: the most reliable expander in real logs. Used as the starting
+    /// model when the pre-refinement classifier judged the request substantial.
+    /// </summary>
+    private const string QualityModel = "google/gemini-3.5-flash";
 
     // The meta-prompt that defines the feature. Grounded in Anthropic's Claude Code best-practices
     // guidance plus current coding-agent prompting practice. The headline rule is COMPLETENESS:
@@ -163,10 +169,16 @@ public class PromptRefinementService : IPromptRefinementService
     /// Builds the effective model chain: the user-chosen primary first (if any), then the default
     /// models as fallbacks (de-duplicated). Falls back to the defaults when no override is set.
     /// </summary>
-    private string[] BuildChain()
+    private string[] BuildChain(bool preferQualityModel = false)
     {
         string? primary;
         lock (_lock) { primary = _primaryModel; }
+
+        // A dictation judged substantial starts on the proven expander instead of the fast model.
+        // The chain is otherwise unchanged, so this only moves which model answers first - it never
+        // removes a fallback. Only applied when the user has not pinned a model themselves.
+        if (preferQualityModel && string.IsNullOrWhiteSpace(primary))
+            primary = QualityModel;
 
         if (string.IsNullOrWhiteSpace(primary) ||
             string.Equals(primary, DefaultModels[0], StringComparison.OrdinalIgnoreCase))
@@ -176,7 +188,8 @@ public class PromptRefinementService : IPromptRefinementService
         return new[] { primary }.Concat(rest).ToArray();
     }
 
-    public async Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default)
+    public async Task<string?> RefineAsync(string transcription, CancellationToken cancellationToken = default,
+        string? hint = null, bool preferQualityModel = false)
     {
         LastError = null;
 
@@ -192,7 +205,7 @@ public class PromptRefinementService : IPromptRefinementService
         if (string.IsNullOrWhiteSpace(transcription))
             return null;
 
-        var chain = BuildChain();
+        var chain = BuildChain(preferQualityModel);
         for (int i = 0; i < chain.Length; i++)
         {
             // ESC cancels the whole chain (don't try the next model after a user cancel).
@@ -204,7 +217,7 @@ public class PromptRefinementService : IPromptRefinementService
 
             var model = chain[i];
             bool isLast = i == chain.Length - 1;
-            var (ok, content, fatalError) = await TryRefineWithModel(model, key!, transcription, cancellationToken);
+            var (ok, content, fatalError) = await TryRefineWithModel(model, key!, transcription, cancellationToken, hint);
 
             // Auth/credit failures affect every model identically — trying the rest of the
             // chain would just burn 3 more timeouts. Abort and tell the user what's wrong.
@@ -264,7 +277,8 @@ public class PromptRefinementService : IPromptRefinementService
     /// must abort and surface the message instead of retrying.
     /// </summary>
     private async Task<(bool ok, string? content, string? fatalError)> TryRefineWithModel(
-        string model, string apiKey, string transcription, CancellationToken cancellationToken)
+        string model, string apiKey, string transcription, CancellationToken cancellationToken,
+        string? hint = null)
     {
         using var timeoutCts = new CancellationTokenSource(Constants.PromptRefinementTimeoutMs);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -274,11 +288,7 @@ public class PromptRefinementService : IPromptRefinementService
             var payload = new
             {
                 model,
-                messages = new object[]
-                {
-                    new { role = "system", content = SystemPrompt },
-                    new { role = "user", content = transcription }
-                },
+                messages = BuildMessages(transcription, hint),
                 // Low temperature — faithful, near-deterministic rewrite, not creativity.
                 temperature = 0.2,
                 // Headroom so a long, detail-complete prompt is never truncated by a provider's
@@ -350,6 +360,21 @@ public class PromptRefinementService : IPromptRefinementService
             Log.Warning($"Refinement '{model}' failed: {ex.Message}");
             return (false, null, null);
         }
+    }
+
+    /// <summary>
+    /// The system prompt, an optional one-line classifier hint, then the dictation. The hint gets
+    /// its own system message so it cannot be mistaken for dictated content; with no hint the
+    /// payload is byte-for-byte what it was before the classifier existed. An empty message is
+    /// never sent, because some providers reject one.
+    /// </summary>
+    private static object[] BuildMessages(string transcription, string? hint)
+    {
+        var messages = new List<object>(3) { new { role = "system", content = SystemPrompt } };
+        if (!string.IsNullOrWhiteSpace(hint))
+            messages.Add(new { role = "system", content = hint!.Trim() });
+        messages.Add(new { role = "user", content = transcription });
+        return messages.ToArray();
     }
 
     /// <summary>

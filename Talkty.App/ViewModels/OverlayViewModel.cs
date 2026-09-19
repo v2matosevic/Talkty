@@ -28,6 +28,13 @@ public enum CommandStage
 
 public partial class OverlayViewModel : ObservableObject
 {
+    /// <summary>Words heard so far, while he is still speaking.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPreview))]
+    private string _previewText = string.Empty;
+
+    public bool HasPreview => PreviewText.Length > 0;
+
     /// <summary>The spoken command, shown so he can see what was heard.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsCommand))]
@@ -55,6 +62,7 @@ public partial class OverlayViewModel : ObservableObject
         CommandStage = CommandStage.None;
         CommandText = string.Empty;
         CommandDetail = string.Empty;
+        PreviewText = string.Empty;
     }
 
     [ObservableProperty]
@@ -74,7 +82,8 @@ public partial class OverlayViewModel : ObservableObject
 
     /// <summary>
     /// When true, this recording is treated as an AI-agent prompt: the transcription is expanded
-    /// into a structured prompt before output. Toggled via the "Prompting" button on the pill.
+    /// into a structured prompt before output. Set from Settings; the pill no longer carries a
+    /// toggle for it, because the pill is for watching what is happening, not for configuration.
     /// </summary>
     [ObservableProperty]
     private bool _isPromptMode;

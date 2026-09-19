@@ -95,6 +95,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// show the whole thing instead of vanishing into a toast.
     /// </summary>
     public event EventHandler<CommandProgressEventArgs>? CommandProgress;
+
+    /// <summary>
+    /// Words heard so far, while he is still speaking. A preview for the pill,
+    /// never the text that leaves this app.
+    /// </summary>
+    public event EventHandler<string>? LivePreview;
     public event EventHandler? RequestShowSettings;
     public event EventHandler<ToastEventArgs>? RequestShowToast;
     public event EventHandler? RecordingStarted;
@@ -495,6 +501,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
+            StopLivePreview();
+
             // Cancel the token — aborts in-flight Whisper decode if transcribing
             try { _transcriptionCts?.Cancel(); }
             catch (ObjectDisposedException) { /* already completed */ }
@@ -580,6 +588,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Log.Info("Recording started - raising RequestShowOverlay");
             RequestShowOverlay?.Invoke(this, EventArgs.Empty);
             RecordingStarted?.Invoke(this, EventArgs.Empty);
+            StartLivePreview();
         }
         catch (Exception ex)
         {
@@ -631,6 +640,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 Log.Debug("Restoring volume after recording");
                 _ = _volumeDuckingService.RestoreAsync(); // Fire-and-forget, don't block transcription
             }
+
+            // No more previews once he has finished speaking: the real pass owns
+            // the engine from here, and it must not queue behind a preview.
+            StopLivePreview();
 
             IsListening = false;
             IsTranscribing = true;
@@ -1137,6 +1150,56 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Hand one command to the local daemon. Never throws; the service turns every
     /// failure into an outcome the caller can act on.
     /// </summary>
+    private CancellationTokenSource? _previewCts;
+    private Task? _preview;
+
+    /// <summary>
+    /// Whether showing words during the recording is worth it: a local model
+    /// only. A cloud model would mean paying for every second of speech twice.
+    /// </summary>
+    internal bool CanPreviewLive =>
+        _transcriptionService.IsModelLoaded
+        && _transcriptionService.CurrentProfile is { } profile
+        && !profile.IsCloud();
+
+    private void StartLivePreview()
+    {
+        StopLivePreview();
+        if (!CanPreviewLive) return;
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+        var transcriber = new LivePreviewTranscriber(
+            () => _audioCaptureService.GetRecordedAudioAsFloat(),
+            async (audio, token) =>
+            {
+                var result = await _transcriptionService.TranscribeAsync(audio, PreviewLanguage, token);
+                return result.Success ? result.Text : null;
+            },
+            text => Application.Current?.Dispatcher.BeginInvoke(() => LivePreview?.Invoke(this, text)));
+        _preview = transcriber.RunAsync(cts.Token);
+    }
+
+    private string PreviewLanguage =>
+        _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language;
+
+    /// <summary>
+    /// Stop previewing and let any pass in flight finish. The engine holds one
+    /// native decode state, so cancelling mid-decode is what wedges it; waiting
+    /// the few hundred milliseconds is the safe trade.
+    /// </summary>
+    private void StopLivePreview()
+    {
+        var cts = _previewCts;
+        var running = _preview;
+        _previewCts = null;
+        _preview = null;
+        if (cts is null) return;
+        try { cts.Cancel(); } catch (ObjectDisposedException) { }
+        try { running?.Wait(TimeSpan.FromSeconds(3)); }
+        catch (Exception ex) { Log.Info($"Live preview did not stop cleanly: {ex.Message}"); }
+        cts.Dispose();
+    }
+
     /// <summary>Tell the pill what this command is doing. Never throws into the pipeline.</summary>
     private void ReportCommand(string text, CommandStage stage, string? detail)
     {
@@ -1619,6 +1682,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             Log.Info("MainViewModel disposing...");
 
+            StopLivePreview();
             _audioCaptureService.AudioLevelChanged -= OnAudioLevelChanged;
 
             if (_audioCaptureService is IDisposable audioDisposable)

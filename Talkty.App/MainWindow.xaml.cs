@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;
         _viewModel.CommandProgress += OnCommandProgress;
+        _viewModel.LivePreview += OnLivePreview;
         _viewModel.RequestShowSettings += OnRequestShowSettings;
         _viewModel.RequestShowToast += OnRequestShowToast;
         _viewModel.RecordingStarted += OnRecordingStarted;
@@ -351,11 +352,10 @@ public partial class MainWindow : Window
                 _overlayWindow.ViewModel.StatusText = "Listening...";
                 _overlayWindow.ViewModel.StartTimer();
 
-                // Reset & wire the "Prompting" toggle for this recording (detach first to avoid dupes)
-                _overlayWindow.ViewModel.PropertyChanged -= OnOverlayPromptModeChanged;
+                // Prompt mode is a setting now, not a button on the pill; each
+                // recording still starts from off, as it always did.
                 _overlayWindow.ViewModel.IsPromptMode = false;
                 _viewModel.PromptMode = false;
-                _overlayWindow.ViewModel.PropertyChanged += OnOverlayPromptModeChanged;
 
                 _overlayWindow.Show();
                 Log.Info("OverlayWindow shown");
@@ -390,6 +390,7 @@ public partial class MainWindow : Window
                 break;
             case nameof(MainViewModel.IsTranscribing):
                 Log.Debug($"IsTranscribing changed to: {_viewModel.IsTranscribing}");
+                if (_viewModel.IsTranscribing) _overlayWindow.ViewModel.PreviewText = string.Empty;
                 _overlayWindow.ViewModel.IsTranscribing = _viewModel.IsTranscribing;
                 if (_viewModel.IsTranscribing)
                 {
@@ -422,24 +423,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Mirrors the overlay's "Prompting" toggle into the MainViewModel so the transcription
-    /// pipeline knows to expand this recording into a structured agent prompt.
+    /// The words heard so far, while he is still speaking. Dropped the moment
+    /// the recording ends, because from then on the pill has the real thing.
     /// </summary>
-    private void OnOverlayPromptModeChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnLivePreview(object? sender, string text)
     {
-        if (e.PropertyName == nameof(OverlayViewModel.IsPromptMode) && _overlayWindow?.ViewModel != null)
+        Dispatcher.Invoke(() =>
         {
-            _viewModel.PromptMode = _overlayWindow.ViewModel.IsPromptMode;
-            Log.Info($"Prompt mode toggled: {_viewModel.PromptMode}");
-        }
+            if (_overlayWindow?.ViewModel == null || !_viewModel.IsListening) return;
+            _overlayWindow.ViewModel.PreviewText = text;
+        });
     }
 
-    /// <summary>
-    /// Puts a spoken command on the pill and keeps it there: his words while it
-    /// is sent, the daemon's answer when it comes, then a pause long enough to
-    /// read it. A failure sits longer than a success, because it is the one
-    /// worth reading.
-    /// </summary>
     private void OnCommandProgress(object? sender, CommandProgressEventArgs e)
     {
         Dispatcher.Invoke(() =>
@@ -599,6 +594,7 @@ public partial class MainWindow : Window
         _viewModel.RequestShowOverlay -= OnRequestShowOverlay;
         _viewModel.RequestHideOverlay -= OnRequestHideOverlay;
         _viewModel.CommandProgress -= OnCommandProgress;
+        _viewModel.LivePreview -= OnLivePreview;
         _commandLinger?.Stop();
         _viewModel.RequestShowSettings -= OnRequestShowSettings;
         _viewModel.RequestShowToast -= OnRequestShowToast;

@@ -240,6 +240,34 @@ public partial class TranscriptionFlowTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task OverlayShowsTheWordsWhileHeIsStillSpeaking() => ui.Run(() =>
+    {
+        var surface = LoadPreview("Talkty.App/Views/OverlayWindow.xaml");
+        var vm = new OverlayViewModel { IsListening = true, ElapsedTime = "00:03" };
+        surface.DataContext = vm;
+        Layout(surface, 520, 64);
+        Assert.DoesNotContain(Descendants<TextBlock>(surface), t => t.Text == "" && t.Visibility == Visibility.Visible && t.ActualWidth > 0);
+
+        vm.PreviewText = "search this page for kenshi";
+        Layout(surface, 520, 64);
+        var preview = Descendants<TextBlock>(surface).Single(t => t.Text == "search this page for kenshi");
+        Assert.Equal(Visibility.Visible, preview.Visibility);
+        // The timer stays: it is how he knows it is still listening.
+        Assert.Contains(Descendants<TextBlock>(surface), t => t.Text == "00:03" && t.Visibility == Visibility.Visible);
+        SavePreview(surface, 520, 64, "overlay-live-words.png");
+
+        // Nothing on the pill configures anything any more.
+        Assert.Empty(Descendants<System.Windows.Controls.Primitives.ToggleButton>(surface));
+
+        // Once a command owns the pill, the live words step aside for it.
+        vm.CommandText = "Search this page for Kenshi.";
+        vm.CommandStage = CommandStage.Sending;
+        Layout(surface, 520, 80);
+        Assert.Equal(Visibility.Collapsed, preview.Visibility);
+        return Task.CompletedTask;
+    });
+
     // Render the production XAML without opening a window, tray icon, or real services.
     // Event handlers are compiled by the app build; these tests exercise layout/bindings.
     private static FrameworkElement LoadPreview(string relativePath)

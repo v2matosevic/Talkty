@@ -83,6 +83,17 @@ public sealed record JevResult(JevStatus Status, JevEvaluation? Evaluation, stri
 }
 
 /// <summary>
+/// The decision transport, behind an interface so callers can be tested without a network and
+/// without pretending a stub is the real validator.
+/// </summary>
+public interface IJevDecisionClient
+{
+    Task<JevResult> EvaluateAsync(
+        string apiKey, JsonNode state, IReadOnlyList<JevQuestion> questions,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Transport and strict response validation for TypeSafe Jev decisions over OpenRouter.
 ///
 /// This client cannot generate text. It sends a state object plus caller-defined questions and
@@ -98,7 +109,7 @@ public sealed record JevResult(JevStatus Status, JevEvaluation? Evaluation, stri
 /// the dated build <c>typesafe/jev-1.13-20260917</c>; both are allow-listed explicitly and an
 /// arbitrary future alias is refused.
 /// </summary>
-public sealed class JevDecisionClient
+public sealed class JevDecisionClient : IJevDecisionClient
 {
     /// <summary>Live-qualified decisions route. NOT the chat-completions endpoint.</summary>
     public const string Endpoint = "https://openrouter.ai/api/alpha/decisions";
@@ -119,6 +130,13 @@ public sealed class JevDecisionClient
         "jev-1.13",
         "jev-1.13.0",
     };
+
+    private readonly string _endpoint;
+
+    public JevDecisionClient() : this(Endpoint) { }
+
+    /// <summary>Test seam: point the transport at a local server. Production uses <see cref="Endpoint"/>.</summary>
+    internal JevDecisionClient(string endpoint) => _endpoint = endpoint;
 
     private static readonly HttpClient Http = CreateClient();
 
@@ -369,7 +387,7 @@ public sealed class JevDecisionClient
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
+            using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             request.Headers.TryAddWithoutValidation("X-Title", "Talkty prompt fidelity");
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");

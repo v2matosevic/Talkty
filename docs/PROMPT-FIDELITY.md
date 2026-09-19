@@ -182,38 +182,85 @@ exact layer catches it too. The label was wrong, not the code.
 
 | Check | Result |
 |---|---|
-| `dotnet build Talkty.App` | 0 warnings, 0 errors |
-| `dotnet test Talkty.Tests` | **211 passed**, 0 failed (was 143 before this work) |
+| `dotnet build` (Release) | 0 warnings, 0 errors |
+| `dotnet test` (Release) | **249 passed**, 0 failed (was 143 before this work) |
 | Settings UI, off-screen render | Prompt check panel renders in the dark theme; picker defaults to Record only |
+
+Coverage by area, because "tests pass" says nothing about what they touch:
+
+| Area | Where | What it pins down |
+|---|---|---|
+| Request contract and response validation | `JevDecisionClientTests` | The pinned route, model and privacy block; every rejection - unknown option, bad distribution, non-maximum winner, missing confidence, wrong model, both token spellings, conflicting spellings, missing cost |
+| **Transport failure paths** | `JevTransportTests` | Against a real local socket: 401/402/429/500/503, oversized body, a provider that hangs past the deadline, a dropped connection, garbled JSON, an unreachable host, and caller cancellation as distinct from a timeout. Also asserts what goes out **on the wire** - bearer header, pinned provider block, key never in the body |
+| **Orchestration** | `PromptFidelityServiceTests` | Mode and key gating, size bounds, duplicate suppression, reservation vs reported cost, status mapping for every failure kind, what lands in the record, and that Record only finds concerns but never raises one |
+| Exact layer | `PromptFidelityAnalyzerTests` | Clause numbering and merging, token extraction, self-correction, unit tolerance, prohibition counting, silence on faithful rewrites |
+| Thresholds | `PromptFidelityPolicyTests` | Every gate, ordering, the cap, and that the attention question alone never creates a concern |
+| Budget ledger | `JevFidelityLedgerTests` | Cap boundary on both sides, outstanding reservations counting toward it, day rollover, duplicate expiry, corrupt file, retention trim |
+| Pipeline wiring | `PromptFidelityFlowTests` | Through the real view model: what the check is handed, that delivery is untouched, that plain dictation and failed refinement are never checked, the concern toast, settings persistence, ESC and new-recording cancellation |
 
 The corpus test prints the baseline comparison table on every run
 (`PromptFidelityCorpusTests.ExactLayer_BeatsTheLengthGuardWithoutAddingFalseAlarms`), so the claim
 below is a test result rather than a sentence in this file.
 
+### A bug the second pass found
+
+Writing the ledger tests properly turned up a real defect. `Settle` did not roll the local day, so a
+reservation taken at 23:59:59 and settled at 00:00:01 wrote its charge onto a day that the next read
+immediately zeroed - the charge vanished. Fixed by rolling the day before settling, which attributes
+the charge to the live day instead. It now over-counts by one reservation across that boundary
+rather than losing a charge.
+
+The test that should have caught this earlier could not. The original daily-cap test asserted
+`refusals > 0 || JevMaxAttemptsPerMinute < possible`, and the right-hand side is always true
+(20 < 125), so it passed no matter what the ledger did. The cap is unreachable through `TryReserve`
+alone because the per-minute limit bites first, so the replacement seeds the ledger file directly
+and checks both sides of the boundary.
+
 ### Live qualification (paid)
 
 `pwsh tools/jev-fidelity-check.ps1 -Run` — announced up to $0.048 against a **$0.05 ceiling**, using
 the OpenRouter key already saved in `settings.json` (decrypted through the app's own
-`ApiKeyProtector`, never printed or written). Synthetic corpus text only. Run twice; both runs
-produced **identical verdicts on all 24 cases**.
+`ApiKeyProtector`, never printed or written). Synthetic corpus text only. **Run three times**; all
+three produced identical verdicts on all 24 cases.
 
 | | Result |
 |---|---|
-| Attempts / evaluated | 24 / 24, **0 transport failures** |
+| Attempts / evaluated | 24 / 24 per run, **0 transport failures** across 72 requests |
 | Returned model | `typesafe/jev-1.13-20260917` |
-| Fidelity-loss cases caught | **13 of 13** — exact layer 9, model layer 11, union 13 |
+| Fidelity-loss cases caught | **13 of 13** in every run — exact layer 9, model layer 10–11 |
 | Existing length guard, same cases | **0 of 13** |
-| False alarms on 11 faithful cases | **0** — from either layer |
-| Evaluation time | 449–838 ms, median **484 ms** |
-| Input tokens | 31,923 total; 828 / 1,195 / 2,197 min / median / max |
+| False alarms on 11 faithful cases | **0** in every run, from either layer |
+| Clause attribution (run 03, asserted by the script) | **12 of 12** correct; model layer **9 of 9** |
+| Evaluation time | run 01 median 493 ms, run 02 median **484 ms**, run 03 median 928 ms (max 2,685 ms) |
+| Input tokens | 31,923 per run; 828 / 1,195 / 2,197 min / median / max |
 | Reported cost | **$0.001340766** per run; $0.001352 allocated of the $0.05 ceiling |
 | Attempts with unknown cost | 0 |
 
+Total spend across all three runs: about **$0.004** of the $0.05 ceiling.
+
 Per-case evidence: [run 01](evidence/jev-fidelity-2026-09-19/results.json),
-[run 02](evidence/jev-fidelity-2026-09-19/run-02/results.json). Both are retained. Run 01's
+[run 02](evidence/jev-fidelity-2026-09-19/run-02/results.json),
+[run 03](evidence/jev-fidelity-2026-09-19/run-03/results.json). All three are retained. Run 01's
 per-case data is correct but its **summary block** under-reports token and cost totals — a
 PowerShell aggregation bug (`Measure-Object` cannot read keys off an `OrderedDictionary`) fixed
 before run 02. Keeping it is the point: the failure is part of the record.
+
+### The model layer is not deterministic, and the redundancy earns its keep
+
+Run 03 added an automatic attribution check, because until then I had confirmed "the concern points
+at the right sentence" by reading the evidence file myself, which is not verification. The script
+now asserts it and prints the count.
+
+Re-running also exposed something a single run hid. Between run 02 and run 03 the **model layer
+changed its mind on two cases**: `dev-04` went from 2 model concerns to 1, and `hold-10` from 1 to
+**0**. Every per-case verdict stayed correct, but on `hold-10` that was only because the exact layer
+caught it anyway — the model layer alone would have missed a real loss in run 03. Treat "model layer
+10–11 of 13" as the honest range rather than 11, and treat the two layers as genuinely
+complementary rather than one being a superset of the other.
+
+Latency is likewise not a fixed property: the same 24 requests ran at a 484 ms median one minute and
+a 928 ms median another. That costs the user nothing here because the check runs after delivery, but
+it would matter immediately to any future design that put it in front of the clipboard.
 
 UI evidence: [prompt check panel](evidence/jev-fidelity-2026-09-19/ui/settings-prompt-check.png),
 [page in context](evidence/jev-fidelity-2026-09-19/ui/settings-cloud-prompting.png), and the
@@ -222,11 +269,16 @@ harness that produced them.
 ### What these numbers do not establish
 
 Twenty-four agent-authored cases cannot establish a production error rate, calibrated confidence, or
-broad Croatian accuracy — two runs agreeing with each other is consistency, not correctness. The
-four Croatian cases passed; that is four cases. Nothing here has been measured against real
-dictation, and no user has yet seen a concern. The timings are the HTTP evaluation only and exclude
-transcription, refinement and clipboard work — which is also why they cost the user nothing: the
-check runs after delivery.
+broad Croatian accuracy — three runs agreeing with each other is consistency, not correctness, and
+run 03 showed the model layer is not even fully consistent with itself. The four Croatian cases
+passed; that is four cases. Nothing here has been measured against real dictation, and no user has
+yet seen a concern. The timings are the HTTP evaluation only and exclude transcription, refinement
+and clipboard work — which is also why they cost the user nothing: the check runs after delivery.
+
+Still untested: the concern toast has been asserted for content through the view model but never
+rendered and looked at, and nothing has run end to end through the installed app with a microphone.
+The ledger's locking is in-process only, which is sound today because Talkty is single-instance, but
+would need revisiting if that ever changed.
 
 On three loss cases the model reported more than one kind (for example a changed value read as both
 `ContradictedClause` and `AddedRequirement`). Each is defensible on the text, and none occurred on a

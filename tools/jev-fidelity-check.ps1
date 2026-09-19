@@ -148,6 +148,21 @@ foreach ($c in $cases) {
 
     $anyConcern = ($codeConcerns.Count + $modelConcerns.Count) -gt 0
 
+    # Catching the right case is not enough: a concern pointed at the wrong sentence would send the
+    # user looking in the wrong place. Check attribution rather than eyeballing the evidence file.
+    $clauseIds = @(@($codeConcerns) + @($modelConcerns) | ForEach-Object { $_.clauseId } | Where-Object { $_ })
+    $attribution = 'not-applicable'
+    if ($c.expectConcern -and $c.expectedClause) {
+        if (-not $clauseIds.Count) { $attribution = 'no-clause' }
+        elseif ($clauseIds -contains $c.expectedClause) { $attribution = 'correct' }
+        else { $attribution = 'wrong-clause' }
+    }
+    $modelClauseIds = @(@($modelConcerns) | ForEach-Object { $_.clauseId } | Where-Object { $_ })
+    $modelAttribution = 'not-applicable'
+    if ($c.expectConcern -and $c.expectedClause -and $modelClauseIds.Count) {
+        $modelAttribution = if ($modelClauseIds -contains $c.expectedClause) { 'correct' } else { 'wrong-clause' }
+    }
+
     $results += [ordered]@{
         id                 = $c.id
         split              = $c.split
@@ -175,6 +190,8 @@ foreach ($c in $cases) {
         modelConcerns      = $modelConcerns
         anyConcern         = $anyConcern
         correct            = ($anyConcern -eq [bool]$c.expectConcern)
+        clauseAttribution  = $attribution
+        modelClauseAttribution = $modelAttribution
     }
 
     $verdict = if ($anyConcern) { 'concern' } else { 'clean  ' }
@@ -217,6 +234,12 @@ $summary = [ordered]@{
     lossCaughtByCodeOnly = @($lossCases | Where-Object { $_.codeConcerns.Count -gt 0 }).Count
     lossCaughtByModel   = @($lossCases | Where-Object { $_.modelConcerns.Count -gt 0 }).Count
     lossCaughtByBaselineGuard = @($lossCases | Where-Object baselineGuard).Count
+    attributionChecked  = @($results | Where-Object { $_.clauseAttribution -ne 'not-applicable' }).Count
+    attributionCorrect  = @($results | Where-Object { $_.clauseAttribution -eq 'correct' }).Count
+    attributionWrong    = @($results | Where-Object { $_.clauseAttribution -eq 'wrong-clause' }).Count
+    modelAttributionChecked = @($results | Where-Object { $_.modelClauseAttribution -ne 'not-applicable' }).Count
+    modelAttributionCorrect = @($results | Where-Object { $_.modelClauseAttribution -eq 'correct' }).Count
+    misattributed       = @(@($results | Where-Object { $_.clauseAttribution -eq 'wrong-clause' }).id)
     faithfulCases       = $faithful.Count
     falseAlarms         = @($faithful | Where-Object anyConcern).Count
     falseAlarmsFromCode = @($faithful | Where-Object { $_.codeConcerns.Count -gt 0 }).Count
@@ -231,6 +254,7 @@ $payload | ConvertTo-Json -Depth 12 | Set-Content "$Out\results.json" -Encoding 
 "attempts $($summary.attempts) | evaluated $($summary.evaluated) | transport failures $($summary.transportFailures)"
 "fidelity-loss cases $($summary.lossCases): caught $($summary.lossCaught) (code $($summary.lossCaughtByCodeOnly), model $($summary.lossCaughtByModel), length guard $($summary.lossCaughtByBaselineGuard))"
 "faithful cases $($summary.faithfulCases): false alarms $($summary.falseAlarms) (code $($summary.falseAlarmsFromCode), model $($summary.falseAlarmsFromModel))"
+"clause attribution: $($summary.attributionCorrect)/$($summary.attributionChecked) correct (model layer $($summary.modelAttributionCorrect)/$($summary.modelAttributionChecked))$(if ($summary.misattributed.Count) { " | misattributed: $($summary.misattributed -join ', ')" })"
 "input tokens $($summary.inputTokens) | reported cost `$$($summary.reportedCostUsd) | allocated `$$($summary.allocatedUsd) of `$$Ceiling | unknown-cost attempts $($summary.attemptsWithUnknownCost)"
 "median evaluation $($summary.medianEvaluationMs)ms | returned model(s) $($summary.returnedModels -join ', ')"
 "evidence:  $Out\results.json"

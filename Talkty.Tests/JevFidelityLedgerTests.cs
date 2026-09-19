@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Talkty.App;
 using Talkty.App.Services;
 using Xunit;
@@ -70,27 +70,99 @@ public class JevFidelityLedgerTests : IDisposable
         Assert.Equal(Constants.JevReservationMicroUsd / 1_000_000d, ledger.AllocatedTodayUsd, 9);
     }
 
+    /// <summary>
+    /// Seeds the ledger file directly. The cap is unreachable through TryReserve alone — the
+    /// per-minute limit (20) bites long before 125 reservations — so the earlier version of this
+    /// test could never fail. Seeding state is the only way to exercise the branch for real.
+    /// </summary>
+    private void Seed(string day, long reserved, long spent,
+        string[]? hashes = null, long[]? hashTimes = null)
+    {
+        var state = new
+        {
+            Day = day,
+            ReservedMicroUsd = reserved,
+            SpentMicroUsd = spent,
+            Attempts = Array.Empty<long>(),
+            RecentHashes = hashes ?? Array.Empty<string>(),
+            RecentHashTimes = hashTimes ?? Array.Empty<long>(),
+            Records = Array.Empty<object>()
+        };
+        File.WriteAllText(_path, System.Text.Json.JsonSerializer.Serialize(state));
+    }
+
+    private static string Today => DateTime.Now.ToString("yyyy-MM-dd");
+
     [Fact]
-    public void DailyCapEventuallyRefusesAnAttempt()
+    public void TheDailyCapRefusesTheAttemptThatWouldBreachIt()
+    {
+        // One reservation short of the cap: the next attempt must be refused outright.
+        Seed(Today, reserved: 0, spent: Constants.JevDailyBudgetMicroUsd - Constants.JevReservationMicroUsd + 1);
+
+        Assert.Equal(JevBudgetDecision.DailyBudgetExhausted, New().TryReserve("over-the-line"));
+    }
+
+    [Fact]
+    public void TheLastAffordableAttemptIsStillAllowed()
+    {
+        // Exactly enough room for one more reservation — the boundary must not be off by one.
+        Seed(Today, reserved: 0, spent: Constants.JevDailyBudgetMicroUsd - Constants.JevReservationMicroUsd);
+
+        var ledger = New();
+        Assert.Equal(JevBudgetDecision.Allowed, ledger.TryReserve("the-last-one"));
+        Assert.Equal(Constants.JevDailyBudgetMicroUsd / 1_000_000d, ledger.AllocatedTodayUsd, 9);
+        // And nothing beyond it.
+        Assert.Equal(JevBudgetDecision.DailyBudgetExhausted, ledger.TryReserve("one-too-many"));
+    }
+
+    [Fact]
+    public void OutstandingReservationsCountTowardTheCapAsWellAsSettledSpend()
+    {
+        // A crash that left reservations standing must not hand the next day's budget back early.
+        Seed(Today, reserved: Constants.JevDailyBudgetMicroUsd, spent: 0);
+
+        Assert.Equal(JevBudgetDecision.DailyBudgetExhausted, New().TryReserve("after-a-crash"));
+    }
+
+    [Fact]
+    public void ANewDayResetsTheAllocation()
+    {
+        Seed(DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd"),
+            reserved: Constants.JevDailyBudgetMicroUsd, spent: Constants.JevDailyBudgetMicroUsd);
+
+        var ledger = New();
+        Assert.Equal(JevBudgetDecision.Allowed, ledger.TryReserve("fresh-day"));
+        Assert.Equal(Constants.JevReservationMicroUsd / 1_000_000d, ledger.AllocatedTodayUsd, 9);
+    }
+
+    [Fact]
+    public void DuplicateSuppressionExpires()
+    {
+        var stale = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - Constants.JevDuplicateSuppressionSeconds - 5;
+        Seed(Today, 0, 0, hashes: new[] { "same" }, hashTimes: new[] { stale });
+
+        // The same work is fair to re-evaluate once the window has passed.
+        Assert.Equal(JevBudgetDecision.Allowed, New().TryReserve("same"));
+    }
+
+    [Fact]
+    public void SettlingWithoutAnOutstandingReservationCannotDriveTheLedgerNegative()
     {
         var ledger = New();
-        var possible = (int)(Constants.JevDailyBudgetMicroUsd / Constants.JevReservationMicroUsd);
+        ledger.Settle(0.00005);
 
-        // Settle each attempt at an unknown cost so reservations accumulate; a rate-limit-free run
-        // is not the point here, so allow the minute window to be the limiting factor first.
-        var refusals = 0;
-        for (int i = 0; i < possible + 5; i++)
-        {
-            var decision = ledger.TryReserve($"h{i}");
-            if (decision == JevBudgetDecision.DailyBudgetExhausted) { refusals++; break; }
-            if (decision != JevBudgetDecision.Allowed) break; // rate limit reached first
-            ledger.Settle(null);
-        }
+        Assert.True(ledger.AllocatedTodayUsd >= 0);
+        Assert.Equal(0.00005, ledger.AllocatedTodayUsd, 9);
+    }
 
-        Assert.True(ledger.AllocatedTodayUsd <= Constants.JevDailyBudgetMicroUsd / 1_000_000d,
-            "allocated spend must never exceed the daily cap");
-        Assert.True(refusals > 0 || Constants.JevMaxAttemptsPerMinute < possible,
-            "either the cap refused an attempt, or the per-minute limit bound first");
+    [Fact]
+    public void ACorruptLedgerDoesNotBlockDictation()
+    {
+        File.WriteAllText(_path, "{ this is not json");
+
+        // Losing the accounting is bad; losing the user's ability to dictate would be worse.
+        var ledger = New();
+        Assert.Equal(JevBudgetDecision.Allowed, ledger.TryReserve("after-corruption"));
     }
 
     [Fact]

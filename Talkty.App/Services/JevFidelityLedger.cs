@@ -148,6 +148,12 @@ public sealed class JevFidelityLedger
         lock (_lock)
         {
             Load();
+            // Roll first. A reservation taken at 23:59:59 and settled at 00:00:01 would otherwise
+            // land its charge on a day that the next read immediately zeroes, losing the spend.
+            // Attributing it to the live day slightly over-counts instead, which is the safe way
+            // to be wrong about money.
+            RollDay();
+
             if (costUsd is not { } cost)
                 return; // Unknown charge: the conservative reservation stays allocated.
 

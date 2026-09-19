@@ -58,7 +58,7 @@ public sealed record PromptFidelityOutcome(
 /// </summary>
 public sealed class PromptFidelityService : IPromptFidelityService
 {
-    private readonly JevDecisionClient _client;
+    private readonly IJevDecisionClient _client;
     private readonly JevFidelityLedger _ledger;
     private readonly object _lock = new();
     private string? _apiKey;
@@ -68,7 +68,7 @@ public sealed class PromptFidelityService : IPromptFidelityService
 
     public event EventHandler<FidelityConcernEventArgs>? ConcernRaised;
 
-    public PromptFidelityService(JevDecisionClient? client = null, JevFidelityLedger? ledger = null)
+    public PromptFidelityService(IJevDecisionClient? client = null, JevFidelityLedger? ledger = null)
     {
         _client = client ?? new JevDecisionClient();
         _ledger = ledger ?? new JevFidelityLedger();

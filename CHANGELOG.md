@@ -6,6 +6,7 @@ User-facing changes, newest first. Dates are when the work landed.
 
 - Optional prompt check for Prompting: after your dictation is rewritten into a coding-agent prompt, Talkty can compare the two and tell you when something you said is missing. Exact numbers, file names and function names are compared on your PC; the rest is judged by a small decision model over your existing OpenRouter key. It never rewrites your prompt and never delays copy or paste.
 - Settings > Cloud & Prompting > Prompt check: Record only (default, shows nothing), Show concerns, or Off.
+- Fixed: a prompt-check charge settled just after midnight was dropped from the local daily spend record instead of counting against it.
 - Implemented and verified locally on Windows only. It is not in any installer or published release yet. Details and evidence: `docs/PROMPT-FIDELITY.md`.
 
 ## [1.3.4] - 2026-09-16

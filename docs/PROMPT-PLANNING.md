@@ -100,6 +100,13 @@ real speech will contain ones I did not. A false skip is quiet — you get your 
 looks like Prompting simply did little — so it will not announce itself. That is the argument for
 running in Hints before Full.
 
+**The thresholds are tied to this corpus's composition, not just its labels.** A peer hit exactly
+this on the same day: they set a gate where their two classes separated cleanly with an empty band,
+then fixed the retrieval feeding it, and the classes overlapped — the separation had been an
+artefact of a worse input distribution, not a property of the question. My 0.35 and 0.85 were
+measured on eighteen cases I wrote. If the refinement pipeline, the transcription quality or the
+kind of thing you dictate changes, they need re-measuring rather than trusting.
+
 Unmeasured: whether the request-kind hint actually improves the generated prompt. It removes
 inference work from the model, which is a reason to expect improvement, not evidence of it. Same for
 starting substantial work on the quality model: it avoids a known escalation, but no prompt-quality

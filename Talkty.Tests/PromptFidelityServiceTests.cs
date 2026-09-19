@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json.Nodes;
 using Talkty.App;
 using Talkty.App.Models;
@@ -196,7 +196,6 @@ public class PromptFidelityServiceTests : IDisposable
     public async Task AnUnknownChargeKeepsItsReservationRatherThanCountingAsFree()
     {
         var (service, client, ledger) = Build(PromptFidelityMode.RecordOnly);
-        client.Answer = q => ConfidentOmission(q, cost: 0);
 
         // A transport failure reports no cost at all, so the conservative reservation must stand.
         client.Answer = _ => JevResult.Fail(JevStatus.Unavailable, "timeout");

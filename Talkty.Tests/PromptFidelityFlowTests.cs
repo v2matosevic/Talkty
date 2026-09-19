@@ -1,5 +1,7 @@
-﻿using Talkty.App.Models;
+﻿using Talkty.App;
+using Talkty.App.Models;
 using Talkty.App.Services;
+using Talkty.App.ViewModels;
 using Xunit;
 
 namespace Talkty.Tests;
@@ -105,6 +107,79 @@ public partial class TranscriptionFlowTests
         Assert.Equal("A generated prompt", context.Clipboard.Text);
         Assert.Equal(1, context.Paste.Pasted);
     });
+
+    /// <summary>
+    /// While Talkty sits in the tray — the normal case, because you are dictating into another app
+    /// — MainWindow routes a Warning toast to a Windows tray balloon, and the shell truncates
+    /// balloon text at 256 characters without saying so. The worst realistic two-concern message
+    /// measured 326 characters before this was bounded.
+    /// </summary>
+    [Fact]
+    public void AConcernMessageAlwaysFitsInATrayBalloon()
+    {
+        var longestLabel = PromptFidelityAnalyzer.LabelDroppedProhibition;
+        var longSentence = new string('x', 400);
+
+        foreach (var count in new[] { 1, Constants.JevMaxSurfacedConcerns })
+        {
+            var concerns = Enumerable.Range(0, count)
+                .Select(_ => new FidelityConcern(
+                    FidelityConcernKind.DroppedProhibition, longestLabel, longSentence, "c1", 0.99, 0.99))
+                .ToList();
+
+            var message = MainViewModel.BuildConcernMessage(concerns);
+
+            Assert.True(message.Length <= Constants.FidelityToastMaxChars,
+                $"{count} concern(s) produced {message.Length} chars, over the {Constants.FidelityToastMaxChars} ceiling");
+            // 256 is the shell's hard limit; the ceiling exists to stay clear of it.
+            Assert.True(message.Length < 256);
+            Assert.StartsWith("Prompt check", message);
+            Assert.Contains(longestLabel, message);
+        }
+    }
+
+    [Fact]
+    public void ALongQuoteIsCutAtAWordBoundaryNotMidWord()
+    {
+        var concern = new FidelityConcern(
+            FidelityConcernKind.OmittedClause, PromptFidelityAnalyzer.LabelOmittedClause,
+            "Oh and make sure the whole page still works on mobile, it is quite cramped at the moment and I keep forgetting to check it.",
+            "c5", 0.97, 0.93);
+
+        var message = MainViewModel.BuildConcernMessage(new[] { concern });
+
+        var quote = message[(message.IndexOf('“') + 1)..message.LastIndexOf('”')];
+        Assert.EndsWith("…", quote);
+        // Cutting mid-word ("at the moment a...") reads like a bug in the quote, not a shortening.
+        var lastWord = quote.TrimEnd('…').Split(' ')[^1];
+        Assert.Contains(lastWord, concern.SourceText.Split(' '));
+    }
+
+    [Fact]
+    public void AQuoteThatEndsExactlyOnAWordKeepsThatWord()
+    {
+        // The budget landing on a word boundary must not cost the user the last whole word.
+        var text = new string('a', Constants.FidelityQuoteCharsSingle) + " tail";
+        var concern = new FidelityConcern(
+            FidelityConcernKind.OmittedClause, PromptFidelityAnalyzer.LabelOmittedClause, text, "c1", 0.9, 0.9);
+
+        var message = MainViewModel.BuildConcernMessage(new[] { concern });
+
+        Assert.Contains(new string('a', Constants.FidelityQuoteCharsSingle), message);
+    }
+
+    [Fact]
+    public void AShortConcernIsQuotedInFullNotPaddedOrCut()
+    {
+        var concern = new FidelityConcern(
+            FidelityConcernKind.OmittedClause, PromptFidelityAnalyzer.LabelOmittedClause,
+            "Do not deploy this to production.", "c2", 0.97, 0.93);
+
+        var message = MainViewModel.BuildConcernMessage(new[] { concern });
+
+        Assert.Contains("Do not deploy this to production.", message);
+        Assert.DoesNotContain("…", message);
+    }
 
     [Fact]
     public Task SavingSettingsPersistsTheModeAndForwardsItLive() => ui.Run(() =>

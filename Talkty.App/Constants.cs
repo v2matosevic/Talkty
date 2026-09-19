@@ -1,4 +1,4 @@
-namespace Talkty.App;
+﻿namespace Talkty.App;
 
 /// <summary>
 /// Application-wide constants. Centralizes magic numbers to make tuning
@@ -185,6 +185,21 @@ public static class Constants
 
     /// <summary>Most concerns shown at once — a toast the user cannot read helps nobody.</summary>
     public const int JevMaxSurfacedConcerns = 2;
+
+    /// <summary>
+    /// Hard ceiling on the assembled concern message. While Talkty sits in the tray — the normal
+    /// case, because you are dictating into another app — a Warning toast is delivered as a Windows
+    /// tray balloon, and the shell truncates NOTIFYICONDATA.szInfo at 256 characters WITHOUT
+    /// telling anyone. A two-concern message with full-length quotes measured 326 characters, so it
+    /// would have been cut off mid-sentence. Stay clear of the limit rather than discover it again.
+    /// </summary>
+    public const int FidelityToastMaxChars = 240;
+
+    /// <summary>Quote budget per concern when only one is shown.</summary>
+    public const int FidelityQuoteCharsSingle = 90;
+
+    /// <summary>Quote budget per concern when several share the message.</summary>
+    public const int FidelityQuoteCharsShared = 45;
 
     /// <summary>
     /// Minimum probability for the winning option before a clause concern is raised. PROVISIONAL:

@@ -1029,12 +1029,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (e.Concerns.Count == 0) return;
 
-        var lines = e.Concerns.Select(c =>
-            string.IsNullOrWhiteSpace(c.SourceText)
-                ? c.Label
-                : $"{c.Label}: “{Shorten(c.SourceText)}”");
-
-        var message = "Prompt check — " + string.Join("  •  ", lines);
+        var message = BuildConcernMessage(e.Concerns);
 
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher == null) return;
@@ -1046,8 +1041,55 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }));
     }
 
-    private static string Shorten(string text, int max = 90) =>
-        text.Length <= max ? text : text[..max].TrimEnd() + "…";
+    /// <summary>
+    /// Assembles the concern message, bounded so it survives delivery as a Windows tray balloon.
+    /// That is the normal delivery path — Talkty is in the tray while you dictate into another app
+    /// — and the shell truncates balloon text at 256 characters silently, so a message that reads
+    /// fine in the in-app toast would arrive cut in half where it actually matters.
+    /// </summary>
+    internal static string BuildConcernMessage(IReadOnlyList<FidelityConcern> concerns)
+    {
+        var quoteBudget = concerns.Count <= 1
+            ? Constants.FidelityQuoteCharsSingle
+            : Constants.FidelityQuoteCharsShared;
+
+        var lines = concerns.Select(c =>
+            string.IsNullOrWhiteSpace(c.SourceText)
+                ? c.Label
+                : $"{c.Label}: “{Shorten(c.SourceText, quoteBudget)}”");
+
+        var message = "Prompt check — " + string.Join("  •  ", lines);
+
+        // Belt as well as braces: the per-concern budget makes this rare, but the ceiling is what
+        // actually guarantees nothing is silently cut by the shell.
+        return message.Length <= Constants.FidelityToastMaxChars
+            ? message
+            : message[..(Constants.FidelityToastMaxChars - 1)].TrimEnd() + "…";
+    }
+
+    /// <summary>
+    /// Trims a quoted clause to fit, breaking on a word boundary. Cutting mid-word ("at the moment
+    /// a…") reads like a bug in the quote rather than a deliberate shortening of the user's own
+    /// sentence.
+    /// </summary>
+    private static string Shorten(string text, int max)
+    {
+        if (text.Length <= max) return text;
+
+        var cut = text[..max];
+
+        // Only back off to a word boundary when the cut actually splits a word. If the budget
+        // happens to end exactly on one, dropping the last whole word would waste it.
+        var splitsAWord = !char.IsWhiteSpace(text[max]) && !char.IsWhiteSpace(cut[^1]);
+        if (splitsAWord)
+        {
+            var lastSpace = cut.LastIndexOf(' ');
+            // And only if the boundary does not throw away most of the budget.
+            if (lastSpace >= max * 2 / 3) cut = cut[..lastSpace];
+        }
+
+        return cut.TrimEnd(' ', ',', ';', ':', '.', '-') + "…";
+    }
 
     [RelayCommand]
     private async Task RetryRecordingAsync(RecoverableRecording? recording)

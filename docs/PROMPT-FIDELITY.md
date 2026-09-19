@@ -183,7 +183,7 @@ exact layer catches it too. The label was wrong, not the code.
 | Check | Result |
 |---|---|
 | `dotnet build` (Release) | 0 warnings, 0 errors |
-| `dotnet test` (Release) | **249 passed**, 0 failed (was 143 before this work) |
+| `dotnet test` (Release) | **253 passed**, 0 failed (was 143 before this work) |
 | Settings UI, off-screen render | Prompt check panel renders in the dark theme; picker defaults to Record only |
 
 Coverage by area, because "tests pass" says nothing about what they touch:
@@ -201,6 +201,18 @@ Coverage by area, because "tests pass" says nothing about what they touch:
 The corpus test prints the baseline comparison table on every run
 (`PromptFidelityCorpusTests.ExactLayer_BeatsTheLengthGuardWithoutAddingFalseAlarms`), so the claim
 below is a test result rather than a sentence in this file.
+
+### Two defects the later passes found
+
+**The concern would have been cut in half where it matters most.** While Talkty sits in the tray —
+the normal case, because you are dictating into another app — `MainWindow.OnRequestShowToast`
+routes a Warning toast to a Windows tray balloon, and the shell truncates `NOTIFYICONDATA.szInfo`
+at 256 characters without telling anyone. The worst realistic two-concern message measured **326
+characters**. It had been asserted for content through the view model and never looked at. The
+message is now bounded (`Constants.FidelityToastMaxChars` = 240, with a per-concern quote budget),
+quotes break on a word boundary rather than mid-word, and three tests pin it. Rendered evidence:
+[one concern](evidence/jev-fidelity-2026-09-19/ui/toast-one-concern.png),
+[two concerns](evidence/jev-fidelity-2026-09-19/ui/toast-two-concerns.png).
 
 ### A bug the second pass found
 
@@ -263,8 +275,10 @@ a 928 ms median another. That costs the user nothing here because the check runs
 it would matter immediately to any future design that put it in front of the clipboard.
 
 UI evidence: [prompt check panel](evidence/jev-fidelity-2026-09-19/ui/settings-prompt-check.png),
-[page in context](evidence/jev-fidelity-2026-09-19/ui/settings-cloud-prompting.png), and the
-harness that produced them.
+[page in context](evidence/jev-fidelity-2026-09-19/ui/settings-cloud-prompting.png),
+[one concern](evidence/jev-fidelity-2026-09-19/ui/toast-one-concern.png),
+[two concerns](evidence/jev-fidelity-2026-09-19/ui/toast-two-concerns.png), and the harnesses that
+produced them.
 
 ### What these numbers do not establish
 
@@ -275,10 +289,11 @@ passed; that is four cases. Nothing here has been measured against real dictatio
 yet seen a concern. The timings are the HTTP evaluation only and exclude transcription, refinement
 and clipboard work — which is also why they cost the user nothing: the check runs after delivery.
 
-Still untested: the concern toast has been asserted for content through the view model but never
-rendered and looked at, and nothing has run end to end through the installed app with a microphone.
-The ledger's locking is in-process only, which is sound today because Talkty is single-instance, but
-would need revisiting if that ever changed.
+Still untested: nothing has run end to end through the installed app with a microphone, so no
+concern has ever been raised by a real dictation. The ledger's locking is in-process only, which is
+sound today because Talkty is single-instance, but would need revisiting if that ever changed. The
+tray-balloon path itself is reasoned from the Windows limit and the bounded message, not observed —
+the rendered evidence is the in-app toast.
 
 On three loss cases the model reported more than one kind (for example a changed value read as both
 `ContradictedClause` and `AddedRequirement`). Each is defensible on the text, and none occurred on a

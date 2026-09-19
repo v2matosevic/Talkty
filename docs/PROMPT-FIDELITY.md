@@ -340,6 +340,16 @@ dotnet test Talkty.Tests --filter PromptFidelity
 | Labeled corpus | `tools/jev-fidelity-corpus.json` |
 | Paid live qualification | `tools/jev-fidelity-check.ps1` |
 
+## A closer look at the model changed some of this
+
+A day after this landed, a deeper read of the Jev documentation and a live capability probe turned
+up things that affect the design above: the OpenRouter route does accept structured JSON criteria
+and the Score primitive after all, the run-to-run variation reported here is threshold-boundary
+sensitivity rather than an unstable model, and the most valuable place for a decision model in
+Talkty is probably in front of refinement rather than behind it. See
+[JEV-FINDINGS-2026-09-19.md](JEV-FINDINGS-2026-09-19.md). Nothing in that document has been
+implemented.
+
 ## Next, if it is worth continuing
 
 1. Run in Record only through real dictation for a while and read

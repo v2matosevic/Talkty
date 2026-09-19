@@ -13,6 +13,23 @@ namespace Talkty.Tests;
 public partial class TranscriptionFlowTests
 {
     [Fact]
+    public Task ACommandKeepsTheWindowCapturedBeforeTranscription() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        var original = new CapturedWindowInfo("101", 1, "brave", "Original page", "fixture");
+        context.Paste.CapturedWindow = original;
+        context.Engine.Run = (_, _) =>
+        {
+            context.Paste.CapturedWindow = new CapturedWindowInfo("202", 2, "Code", "Later editor", "fixture");
+            return Task.FromResult(new TranscriptionResult { Success = true, Text = "search this" });
+        };
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+        Assert.Same(original, context.Voice.Target);
+        Assert.Empty(context.Clipboard.Writes);
+    });
+
+    [Fact]
     public Task CommandModeSendsTheTranscriptAndNeverTouchesTheClipboard() => ui.Run(async () =>
     {
         using var context = new Context();

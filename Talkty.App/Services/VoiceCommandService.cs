@@ -46,10 +46,17 @@ public class VoiceCommandService : IVoiceCommandService
         return IPAddress.TryParse(uri.Host, out var ip) && IPAddress.IsLoopback(ip);
     }
 
-    public async Task<VoiceCommandResult> DispatchAsync(
+    public Task<VoiceCommandResult> DispatchAsync(
         string text,
         string? foregroundApp,
         CancellationToken cancellationToken)
+        => DispatchAsync(text, foregroundApp, cancellationToken, null);
+
+    public async Task<VoiceCommandResult> DispatchAsync(
+        string text,
+        string? foregroundApp,
+        CancellationToken cancellationToken,
+        CapturedWindowInfo? targetWindow)
     {
         var settings = _settingsService.Settings;
 
@@ -65,6 +72,14 @@ public class VoiceCommandService : IVoiceCommandService
             text,
             hotkey = "command",
             foregroundApp,
+            targetWindow = targetWindow == null ? null : new
+            {
+                handle = targetWindow.Handle,
+                pid = targetWindow.ProcessId,
+                processName = targetWindow.ProcessName,
+                title = targetWindow.Title,
+                startedAt = targetWindow.ProcessStartedAt,
+            },
             sentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         });
 

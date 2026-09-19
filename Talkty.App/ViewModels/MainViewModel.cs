@@ -602,6 +602,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Capture the foreground window NOW (at stop time) — this is the app
             // the user is currently looking at and wants to paste into.
             if (retry == null) _autoPasteService.CaptureTargetWindow();
+            var commandTarget = commandMode ? _autoPasteService.CapturedWindow : null;
 
             // Snapshot the clipboard BEFORE anything (incl. the streamed first segment)
             // overwrites it, so it can be restored after a successful auto-paste.
@@ -779,7 +780,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 // ordinary dictation, so a sentence is never lost to a stopped daemon.
                 if (commandMode)
                 {
-                    var dispatch = await DispatchCommandAsync(result.Text, cancellationToken);
+                    var dispatch = await DispatchCommandAsync(result.Text, cancellationToken, commandTarget);
                     if (dispatch.Outcome != VoiceCommandOutcome.NotReached)
                     {
                         RecordCommandInHistory(result, recovery);
@@ -1117,7 +1118,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Hand one command to the local daemon. Never throws; the service turns every
     /// failure into an outcome the caller can act on.
     /// </summary>
-    private async Task<VoiceCommandResult> DispatchCommandAsync(string text, CancellationToken cancellationToken)
+    private async Task<VoiceCommandResult> DispatchCommandAsync(string text, CancellationToken cancellationToken, CapturedWindowInfo? targetWindow)
     {
         if (_voiceCommandService == null || !_voiceCommandService.IsConfigured)
         {
@@ -1126,10 +1127,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         StatusText = "Sending command...";
-        // foregroundApp stays null for now. The daemon accepts it and no command uses
-        // it yet, and IAutoPasteService captures the target window without exposing
-        // its title. Adding that is a change to the paste service, not to this path.
-        return await _voiceCommandService.DispatchAsync(text, null, cancellationToken);
+        return await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow);
     }
 
     /// <summary>

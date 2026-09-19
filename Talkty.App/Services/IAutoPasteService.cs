@@ -33,6 +33,9 @@ public enum PasteOutcome
 /// </summary>
 public interface IAutoPasteService
 {
+    /// <summary>Metadata for the last captured window, or null when unavailable.</summary>
+    CapturedWindowInfo? CapturedWindow => null;
+
     /// <summary>
     /// Captures the currently focused window so it can be restored later.
     /// Call this before showing any overlay or recording UI.

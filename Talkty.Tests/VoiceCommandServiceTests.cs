@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using Talkty.App;
 using Talkty.App.Models;
 using Talkty.App.Services;
@@ -15,6 +16,26 @@ namespace Talkty.Tests;
 /// </summary>
 public class VoiceCommandServiceTests
 {
+    [Fact]
+    public async Task CapturedWindowMetadataTravelsWithTheOriginalCommand()
+    {
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return Json(HttpStatusCode.OK, """{"outcome":"working","detail":"Working"}""");
+        });
+        var target = new CapturedWindowInfo("1234", 55, "brave", "Original page", "2026-09-19T10:00:00.0000000Z");
+        await Build(handler).DispatchAsync("search this", target.ProcessName, default, target);
+        using var json = JsonDocument.Parse(body!);
+        var snapshot = json.RootElement.GetProperty("targetWindow");
+        Assert.Equal("1234", snapshot.GetProperty("handle").GetString());
+        Assert.Equal(55, snapshot.GetProperty("pid").GetInt32());
+        Assert.Equal("Original page", snapshot.GetProperty("title").GetString());
+        Assert.Equal(target.ProcessStartedAt, snapshot.GetProperty("startedAt").GetString());
+        Assert.Equal("search this", json.RootElement.GetProperty("text").GetString());
+    }
+
     [Theory]
     [InlineData("http://127.0.0.1:8765/command", true)]
     [InlineData("http://localhost:8765/command", true)]

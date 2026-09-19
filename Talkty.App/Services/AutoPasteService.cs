@@ -22,6 +22,9 @@ public class AutoPasteService : IAutoPasteService
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -156,6 +159,8 @@ public class AutoPasteService : IAutoPasteService
     // Access via Volatile.Read/Write so the CLR memory model guarantees visibility — atomic
     // IntPtr access on x64 is incidental, not guaranteed by the spec.
     private IntPtr _targetWindowHandle = IntPtr.Zero;
+    private CapturedWindowInfo? _capturedWindow;
+    public CapturedWindowInfo? CapturedWindow => Volatile.Read(ref _capturedWindow);
 
     public AutoPasteService()
     {
@@ -166,6 +171,22 @@ public class AutoPasteService : IAutoPasteService
     {
         var handle = GetForegroundWindow();
         Volatile.Write(ref _targetWindowHandle, handle);
+        Volatile.Write(ref _capturedWindow, null);
+        try
+        {
+            GetWindowThreadProcessId(handle, out uint processId);
+            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
+            var title = new StringBuilder(1024);
+            GetWindowText(handle, title, title.Capacity);
+            Volatile.Write(ref _capturedWindow, new CapturedWindowInfo(
+                handle.ToInt64().ToString(), process.Id, process.ProcessName, title.ToString(),
+                process.StartTime.ToUniversalTime().ToString("o")));
+        }
+        catch
+        {
+            // A disappearing/protected window must not break ordinary dictation.
+            // Null is explicit uncertainty, never a stale prior capture.
+        }
 
         // Log full diagnostics about the target window for debugging paste issues
         var targetInfo = GetWindowDiagnostics(handle);

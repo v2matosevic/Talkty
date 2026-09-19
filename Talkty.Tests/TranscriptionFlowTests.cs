@@ -303,6 +303,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
     {
         public bool IsConfigured { get; set; } = true;
         public List<string> Sent { get; } = [];
+        public CapturedWindowInfo? Target { get; private set; }
         public VoiceCommandResult Result { get; set; } =
             new(VoiceCommandOutcome.Delivered, "recorded os.launch");
 
@@ -310,6 +311,11 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         {
             Sent.Add(text);
             return Task.FromResult(Result);
+        }
+        public Task<VoiceCommandResult> DispatchAsync(string text, string? foregroundApp, CancellationToken ct, CapturedWindowInfo? target)
+        {
+            Target = target;
+            return DispatchAsync(text, foregroundApp, ct);
         }
     }
 
@@ -406,6 +412,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
 
     private sealed class FakePaste : IAutoPasteService
     {
+        public CapturedWindowInfo? CapturedWindow { get; set; }
         public int Pasted { get; private set; }
         public void CaptureTargetWindow() { }
         public void ClaimForegroundPrivilege() { }

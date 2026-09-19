@@ -36,4 +36,11 @@ public interface IVoiceCommandService
         string text,
         string? foregroundApp,
         CancellationToken cancellationToken);
+
+    Task<VoiceCommandResult> DispatchAsync(
+        string text,
+        string? foregroundApp,
+        CancellationToken cancellationToken,
+        CapturedWindowInfo? targetWindow)
+        => DispatchAsync(text, foregroundApp, cancellationToken);
 }

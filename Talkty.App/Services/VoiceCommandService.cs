@@ -18,18 +18,24 @@ public class VoiceCommandService : IVoiceCommandService
 {
     private readonly ISettingsService _settingsService;
     private readonly HttpClient _http;
+    private readonly Func<VoiceEndpointResolver.Endpoint?> _resolve;
 
-    public VoiceCommandService(ISettingsService settingsService, HttpClient? http = null)
+    public VoiceCommandService(
+        ISettingsService settingsService,
+        HttpClient? http = null,
+        Func<VoiceEndpointResolver.Endpoint?>? resolve = null)
     {
         _settingsService = settingsService;
         _http = http ?? new HttpClient();
         _http.Timeout = TimeSpan.FromMilliseconds(Constants.VoiceCommandTimeoutMs);
+        _resolve = resolve ?? (() => VoiceEndpointResolver.Read());
     }
 
     public bool IsConfigured
     {
         get
         {
+            if (_resolve() is not null) return true;
             var s = _settingsService.Settings;
             return !string.IsNullOrWhiteSpace(s.CommandEndpoint)
                    && !string.IsNullOrWhiteSpace(s.CommandToken)
@@ -60,11 +66,25 @@ public class VoiceCommandService : IVoiceCommandService
     {
         var settings = _settingsService.Settings;
 
-        if (!IsLoopback(settings.CommandEndpoint))
+        // The daemon's own record wins: it is written by the daemon that is
+        // running now, so a moved port costs nothing and a squatted one is not
+        // dialled. Without a record, the configured endpoint is used only after
+        // whatever is listening identifies itself as the daemon.
+        var record = _resolve();
+        var endpoint = record?.Url ?? settings.CommandEndpoint;
+        var token = record?.Token ?? settings.CommandToken;
+
+        if (!IsLoopback(endpoint))
         {
-            Log.Warning($"Command endpoint is not on this machine: {settings.CommandEndpoint}");
+            Log.Warning($"Command endpoint is not on this machine: {endpoint}");
             return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
                 "Command endpoint must be a local address");
+        }
+
+        if (record is null && !await AnswersAsTheDaemonAsync(endpoint, cancellationToken))
+        {
+            return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
+                "No command daemon is listening — run `hermes voice ensure`");
         }
 
         var payload = JsonSerializer.Serialize(new
@@ -83,11 +103,11 @@ public class VoiceCommandService : IVoiceCommandService
             sentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         });
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, settings.CommandEndpoint)
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json"),
         };
-        request.Headers.TryAddWithoutValidation("x-voice-token", settings.CommandToken);
+        request.Headers.TryAddWithoutValidation("x-voice-token", token);
 
         try
         {
@@ -132,6 +152,33 @@ public class VoiceCommandService : IVoiceCommandService
         {
             Log.Error("Command dispatch failed", ex);
             return new VoiceCommandResult(VoiceCommandOutcome.NotReached, "Command dispatch failed");
+        }
+    }
+
+    /// <summary>
+    /// Does whatever holds that port say it is the command daemon? Speech goes
+    /// nowhere until something answers with the service's own name, because a
+    /// configured port outlives the program that used to own it.
+    /// </summary>
+    private async Task<bool> AnswersAsTheDaemonAsync(string endpoint, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var health = new Uri(new Uri(endpoint), "/health");
+            using var probe = new CancellationTokenSource(Constants.VoiceCommandHealthTimeoutMs);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(probe.Token, cancellationToken);
+            using var response = await _http.GetAsync(health, linked.Token);
+            if (!response.IsSuccessStatusCode) return false;
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(linked.Token));
+            var service = document.RootElement.TryGetProperty("service", out var name) ? name.GetString() : null;
+            if (service == VoiceEndpointResolver.ServiceName) return true;
+            Log.Warning($"{endpoint} is answered by something else, so the command was not sent");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"Command endpoint did not identify itself: {ex.Message}");
+            return false;
         }
     }
 

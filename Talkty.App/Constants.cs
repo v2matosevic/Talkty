@@ -143,8 +143,16 @@ public static class Constants
     /// <summary>The daemon's reply is shown in a toast, so it is bounded like one.</summary>
     public const int VoiceCommandMessageMaxChars = 180;
 
-    /// <summary>Where the daemon listens by default: `hermes voice serve`.</summary>
-    public const string VoiceCommandDefaultEndpoint = "http://127.0.0.1:8765/command";
+    /// <summary>
+    /// Fallback address for the daemon, used only when it has published no
+    /// service record. It is checked before anything is sent: a port outlives
+    /// the program that owned it, and spoken commands must not land on whatever
+    /// took it. See <see cref="Talkty.App.Services.VoiceEndpointResolver"/>.
+    /// </summary>
+    public const string VoiceCommandDefaultEndpoint = "http://127.0.0.1:17765/command";
+
+    /// <summary>How long the daemon has to identify itself before a command is abandoned.</summary>
+    public const int VoiceCommandHealthTimeoutMs = 1_200;
 
     // ─── Prompt fidelity check (TypeSafe Jev via OpenRouter) ────────────
     // Bounds for the optional check that runs AFTER Prompting has produced a prompt. See

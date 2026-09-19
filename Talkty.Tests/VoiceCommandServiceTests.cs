@@ -168,6 +168,81 @@ public class VoiceCommandServiceTests
     }
 
     [Fact]
+    public async Task ALiveServiceRecordDecidesWhereTheCommandGoes()
+    {
+        // The daemon moved to another port. Nothing in settings knows that, and
+        // nothing has to: the record it wrote when it started does.
+        HttpRequestMessage? seen = null;
+        var handler = new StubHandler(r => { seen = r; return Json(HttpStatusCode.OK, """{"ok":true,"outcome":"executed","detail":"done"}"""); });
+        var service = Build(handler,
+            s => { s.CommandEndpoint = "http://127.0.0.1:8765/command"; s.CommandToken = "old-token"; },
+            () => new VoiceEndpointResolver.Endpoint("http://127.0.0.1:17765/command", "record-token", 4242));
+
+        var result = await service.DispatchAsync("mute", null, default);
+
+        Assert.Equal(VoiceCommandOutcome.Delivered, result.Outcome);
+        Assert.Equal("http://127.0.0.1:17765/command", seen!.RequestUri!.ToString());
+        Assert.Equal("record-token", seen.Headers.GetValues("x-voice-token").Single());
+        Assert.Equal(0, handler.HealthChecks);
+    }
+
+    [Fact]
+    public async Task WithoutARecordNothingIsSentUntilThePortIdentifiesItselfAsTheDaemon()
+    {
+        // This is the failure that happened for real: the daemon was down and
+        // another program held its port, so spoken commands reached a stranger.
+        var handler = new StubHandler(_ => Json(HttpStatusCode.OK, """{"ok":true}"""))
+        {
+            HealthBody = """{"error":"Not found"}""",
+        };
+        var service = Build(handler);
+
+        var result = await service.DispatchAsync("open youtube", null, default);
+
+        Assert.Equal(VoiceCommandOutcome.NotReached, result.Outcome);
+        Assert.Equal(0, handler.Calls);
+        Assert.Equal(1, handler.HealthChecks);
+    }
+
+    [Fact]
+    public async Task WithoutARecordTheConfiguredEndpointStillWorksWhenItIsTheDaemon()
+    {
+        var handler = new StubHandler(_ => Json(HttpStatusCode.OK, """{"ok":true,"outcome":"executed","detail":"muted"}"""));
+        var service = Build(handler);
+
+        var result = await service.DispatchAsync("mute", null, default);
+
+        Assert.Equal(VoiceCommandOutcome.Delivered, result.Outcome);
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("""{"service":"hermes-voice","pid":4242,"url":"http://127.0.0.1:17765","command":"/command","token":"t"}""", "http://127.0.0.1:17765/command")]
+    [InlineData("""{"service":"hermes-voice","pid":4242,"url":"http://127.0.0.1:17765"}""", "http://127.0.0.1:17765/command")]
+    public void AGoodRecordResolvesToTheDaemonsCommandUrl(string json, string expected)
+    {
+        var endpoint = VoiceEndpointResolver.Parse(json, _ => true);
+        Assert.Equal(expected, endpoint!.Url);
+    }
+
+    [Theory]
+    [InlineData("""{"service":"something-else","pid":4242,"url":"http://127.0.0.1:17765"}""", true)]
+    [InlineData("""{"service":"hermes-voice","pid":4242,"url":"http://10.0.0.4:17765"}""", true)]
+    [InlineData("""{"service":"hermes-voice","url":"http://127.0.0.1:17765"}""", true)]
+    [InlineData("""{"service":"hermes-voice","pid":4242,"url":"http://127.0.0.1:17765"}""", false)]
+    public void ARecordThatIsNotOursOrNotAliveIsIgnored(string json, bool alive)
+        => Assert.Null(VoiceEndpointResolver.Parse(json, _ => alive));
+
+    [Fact]
+    public void ARecordMakesCommandModeConfiguredEvenWithEmptySettings()
+    {
+        var handler = new StubHandler(_ => Json(HttpStatusCode.OK, "{}"));
+        var service = Build(handler, s => { s.CommandEndpoint = ""; s.CommandToken = ""; },
+            () => new VoiceEndpointResolver.Endpoint("http://127.0.0.1:17765/command", "t", 1));
+        Assert.True(service.IsConfigured);
+    }
+
+    [Fact]
     public void ConfigurationNeedsAnEndpointATokenAndALocalAddress()
     {
         Assert.True(Build(new StubHandler(_ => Json(HttpStatusCode.OK, "{}"))).IsConfigured);
@@ -176,14 +251,19 @@ public class VoiceCommandServiceTests
             s => s.CommandEndpoint = "https://example.com/x").IsConfigured);
     }
 
-    private static VoiceCommandService Build(StubHandler handler, Action<AppSettings>? configure = null)
+    private static VoiceCommandService Build(
+        StubHandler handler,
+        Action<AppSettings>? configure = null,
+        Func<VoiceEndpointResolver.Endpoint?>? resolve = null)
     {
         // Reuses the flow tests' settings fake so there is one ISettingsService stub.
         var service = new TranscriptionFlowTests.FakeSettings();
         service.Settings.CommandMode = true;
         service.Settings.CommandToken = "token";
         configure?.Invoke(service.Settings);
-        return new VoiceCommandService(service, new HttpClient(handler));
+        // No service record unless a test supplies one, so these stay hermetic
+        // whatever is running on the machine.
+        return new VoiceCommandService(service, new HttpClient(handler), resolve ?? (() => null));
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body) => new(status)
@@ -194,9 +274,21 @@ public class VoiceCommandServiceTests
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         public int Calls { get; private set; }
+        public int HealthChecks { get; private set; }
+
+        /// <summary>Answer the identity probe as the daemon unless a test says otherwise.</summary>
+        public string HealthBody { get; set; } = """{"ok":true,"service":"hermes-voice"}""";
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/health")
+            {
+                HealthChecks++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(HealthBody, Encoding.UTF8, "application/json"),
+                });
+            }
             Calls++;
             return Task.FromResult(respond(request));
         }

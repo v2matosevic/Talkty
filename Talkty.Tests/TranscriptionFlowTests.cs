@@ -268,6 +268,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public FakePaste Paste { get; } = new();
         public FakeRefiner Refiner { get; } = new();
         public FakeFidelity Fidelity { get; } = new();
+        public FakeVoiceCommand Voice { get; } = new();
         public MemoryRecoveryStore Recovery { get; } = new();
         public MainViewModel ViewModel { get; }
         public List<string> Warnings { get; } = [];
@@ -278,7 +279,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
             configure?.Invoke(Settings.Settings);
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
                 new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery,
-                promptFidelityService: Fidelity);
+                promptFidelityService: Fidelity, voiceCommandService: Voice);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
             ViewModel.PropertyChanged += (_, e) =>
             {
@@ -293,7 +294,21 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public void Dispose() => ViewModel.Dispose();
     }
 
-    private sealed class FakeSettings : ISettingsService
+    internal sealed class FakeVoiceCommand : IVoiceCommandService
+    {
+        public bool IsConfigured { get; set; } = true;
+        public List<string> Sent { get; } = [];
+        public VoiceCommandResult Result { get; set; } =
+            new(VoiceCommandOutcome.Delivered, "recorded os.launch");
+
+        public Task<VoiceCommandResult> DispatchAsync(string text, string? foregroundApp, CancellationToken ct)
+        {
+            Sent.Add(text);
+            return Task.FromResult(Result);
+        }
+    }
+
+    internal sealed class FakeSettings : ISettingsService
     {
         public AppSettings Settings { get; } = new() { AutoPaste = true, UseCustomVocabulary = false };
         public bool IsFirstRun => false;

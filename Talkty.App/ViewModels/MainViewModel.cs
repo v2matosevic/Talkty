@@ -27,6 +27,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IAutoPasteService _autoPasteService;
     private readonly IPromptRefinementService? _promptRefinementService;
     private readonly IPromptFidelityService? _promptFidelityService;
+    private readonly IVoiceCommandService? _voiceCommandService;
+
+    /// <summary>Armed by the command hotkey for the NEXT recording only.</summary>
+    private bool _pendingCommandMode;
+
+    /// <summary>Whether the recording currently running is a command, not dictation.</summary>
+    private bool _commandModeRecording;
 
     // Linked across a single recording -> transcription cycle. ESC cancels it mid-flight,
     // which aborts both the NAudio capture (if still recording) and the Whisper decode.
@@ -95,11 +102,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IAutoPasteService? autoPasteService = null,
         IPromptRefinementService? promptRefinementService = null,
         RecordingRecoveryStore? recoveryStore = null,
-        IPromptFidelityService? promptFidelityService = null)
+        IPromptFidelityService? promptFidelityService = null,
+        IVoiceCommandService? voiceCommandService = null)
     {
         Log.Info("MainViewModel constructor starting");
 
         _settingsService = settingsService;
+        _voiceCommandService = voiceCommandService;
         _recoveryStore = recoveryStore ?? new RecordingRecoveryStore();
         foreach (var recording in _recoveryStore.Load()) RecoverableRecordings.Add(recording);
         _audioCaptureService = audioCaptureService;
@@ -388,6 +397,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void ToggleListening()
     {
+        // The command hotkey arms the NEXT recording. Consume that arming here so a
+        // refused start (still transcribing, model loading, no model) cannot leak
+        // command mode into the next ordinary dictation.
+        var commandRequested = _pendingCommandMode;
+        _pendingCommandMode = false;
+
         Log.Info($"ToggleListening called. IsListening: {IsListening}, IsTranscribing: {IsTranscribing}, IsModelLoaded: {IsModelLoaded}, IsModelLoading: {IsModelLoading}");
 
         if (IsTranscribing)
@@ -424,10 +439,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         else
         {
-            Log.Info("Starting listening");
+            Log.Info(commandRequested ? "Starting listening (command mode)" : "Starting listening");
+            _commandModeRecording = commandRequested;
             _ = StartListeningAsync();
         }
     }
+
+    /// <summary>
+    /// The command hotkey (Alt+W). It records exactly like dictation; the only
+    /// difference is where the transcript goes when it finishes. Pressing it while a
+    /// recording is already running simply stops that recording, in whatever mode it
+    /// started, because the mode belongs to the recording and not to the key.
+    /// </summary>
+    [RelayCommand]
+    public void ToggleCommandListening()
+    {
+        if (!IsListening) _pendingCommandMode = true;
+        ToggleListening();
+    }
+
+    /// <summary>
+    /// Test seam: mark the recording currently running as a command. ToggleListening
+    /// does this from the hotkey's arming; tests start the recorder directly.
+    /// </summary>
+    internal void MarkRecordingAsCommand() => _commandModeRecording = true;
+
+    /// <summary>Test seam: whether the NEXT recording is armed as a command.</summary>
+    internal bool IsCommandModeArmed => _pendingCommandMode;
 
     /// <summary>
     /// Cancels the current recording without transcribing.
@@ -550,6 +588,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         var cycle = _transcriptionCts;
         var cancellationToken = cycle?.Token ?? default;
+        // The mode belongs to the recording that just ended. Read it once and clear it,
+        // so a recovery replay of old audio is never treated as a command.
+        var commandMode = _commandModeRecording && retry == null;
+        _commandModeRecording = false;
         RecoverableRecording? recovery = retry;
         try
         {
@@ -725,6 +767,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 }
 
                 Log.Info($"Transcribed text ({result.Text.Length} chars): \"{result.Text}\"");
+
+                // Command mode: this dictation is an instruction for the machine, not
+                // text for the cursor. It goes to the local daemon and stops here —
+                // Prompting must never rewrite an instruction, and the clipboard and
+                // auto-paste must not fire. If nothing is listening we fall through to
+                // ordinary dictation, so a sentence is never lost to a stopped daemon.
+                if (commandMode)
+                {
+                    var dispatch = await DispatchCommandAsync(result.Text, cancellationToken);
+                    if (dispatch.Outcome != VoiceCommandOutcome.NotReached)
+                    {
+                        RecordCommandInHistory(result, recovery);
+                        StatusText = dispatch.Message;
+                        RequestShowToast?.Invoke(this, new ToastEventArgs
+                        {
+                            Message = dispatch.Message,
+                            Type = dispatch.Delivered ? ToastType.Info : ToastType.Warning,
+                            DurationMs = dispatch.Delivered ? 3000 : 5000
+                        });
+                        return;
+                    }
+
+                    Log.Info($"Command not delivered ({dispatch.Message}) — falling back to dictation");
+                    ShowWarning($"{dispatch.Message}. Copied the text instead.");
+                }
 
                 // Prompt mode: expand the transcription into a structured coding-agent prompt
                 // before it hits the clipboard/paste. Falls back to the raw text on any failure.
@@ -1002,6 +1069,44 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// on its way to the clipboard, so the check adds zero latency to delivery and a failure of any
     /// kind leaves the established flow untouched.
     /// </summary>
+    /// <summary>
+    /// Hand one command to the local daemon. Never throws; the service turns every
+    /// failure into an outcome the caller can act on.
+    /// </summary>
+    private async Task<VoiceCommandResult> DispatchCommandAsync(string text, CancellationToken cancellationToken)
+    {
+        if (_voiceCommandService == null || !_voiceCommandService.IsConfigured)
+        {
+            return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
+                "Command mode is not configured");
+        }
+
+        StatusText = "Sending command...";
+        // foregroundApp stays null for now. The daemon accepts it and no command uses
+        // it yet, and IAutoPasteService captures the target window without exposing
+        // its title. Adding that is a change to the paste service, not to this path.
+        return await _voiceCommandService.DispatchAsync(text, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// A command still belongs in history: it is a thing he said, and when a command
+    /// goes wrong the exact words are the first thing worth reading back.
+    /// </summary>
+    private void RecordCommandInHistory(TranscriptionResult result, RecoverableRecording? recovery)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            History.Insert(0, new TranscriptionHistoryItem
+            {
+                Text = result.Text,
+                Timestamp = recovery?.Timestamp ?? result.Timestamp,
+                Duration = result.Duration
+            });
+            if (History.Count > Constants.MaxHistoryEntries) History.RemoveAt(History.Count - 1);
+            QueueHistorySave();
+        });
+    }
+
     private void StartFidelityCheck(string transcript, string rewrite)
     {
         var service = _promptFidelityService;
@@ -1333,6 +1438,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Same lesson: a new AppSettings field that is not copied here is applied to the live
         // services but never written to disk, so it resets on the next restart.
         _settingsService.Settings.PromptFidelity = settings.PromptFidelity;
+        _settingsService.Settings.CommandMode = settings.CommandMode;
+        _settingsService.Settings.CommandHotkeyModifier = settings.CommandHotkeyModifier;
+        _settingsService.Settings.CommandHotkeyKey = settings.CommandHotkeyKey;
+        _settingsService.Settings.CommandEndpoint = settings.CommandEndpoint;
+        _settingsService.Settings.CommandToken = settings.CommandToken;
 
         _settingsService.Settings.UnloadModelWhenIdle = settings.UnloadModelWhenIdle;
         _transcriptionService.SetIdleUnload(settings.UnloadModelWhenIdle);

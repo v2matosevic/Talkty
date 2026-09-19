@@ -388,9 +388,23 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    // Command mode has no picker in this dialog yet. These carry the stored values
+    // through unchanged, because the dialog rebuilds AppSettings from scratch on save
+    // and anything missing here would silently revert to its default.
+    private bool _commandMode;
+    private HotkeyModifiers _commandHotkeyModifier = HotkeyModifiers.Alt;
+    private Key _commandHotkeyKey = Key.W;
+    private string _commandEndpoint = Constants.VoiceCommandDefaultEndpoint;
+    private string _commandToken = "";
+
     private void LoadSettings()
     {
         var settings = _settingsService.Settings;
+        _commandMode = settings.CommandMode;
+        _commandHotkeyModifier = settings.CommandHotkeyModifier;
+        _commandHotkeyKey = settings.CommandHotkeyKey;
+        _commandEndpoint = settings.CommandEndpoint;
+        _commandToken = settings.CommandToken;
         SelectedProfile = RemapRetiredProfile(settings.ModelProfile);
         SelectedCloudFallback = CloudFallbackOptions.FirstOrDefault(o => o.Profile == settings.CloudFallbackModel)
             ?? CloudFallbackOptions[0];
@@ -713,7 +727,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             OpenRouterApiKeyEncrypted = ApiKeyProtector.Protect(
                 string.IsNullOrWhiteSpace(OpenRouterApiKey) ? null : OpenRouterApiKey.Trim()),
             PromptingModel = SelectedPromptModel?.Slug ?? PromptModels[0].Slug,
-            PromptFidelity = SelectedFidelityMode?.Mode ?? FidelityModes[0].Mode
+            PromptFidelity = SelectedFidelityMode?.Mode ?? FidelityModes[0].Mode,
+            CommandMode = _commandMode,
+            CommandHotkeyModifier = _commandHotkeyModifier,
+            CommandHotkeyKey = _commandHotkeyKey,
+            CommandEndpoint = _commandEndpoint,
+            CommandToken = _commandToken
         };
 
         SettingsSaved?.Invoke(this, settings);

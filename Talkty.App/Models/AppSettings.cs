@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using Talkty.App;
 
 namespace Talkty.App.Models;
 
@@ -99,6 +100,24 @@ public class AppSettings
     // Hotkey settings
     public HotkeyModifiers HotkeyModifier { get; set; } = HotkeyModifiers.Alt;
     public Key HotkeyKey { get; set; } = Key.Q;
+
+    // ─── Command mode ───────────────────────────────────────────────────
+    // A second hotkey that records exactly like the first, but hands the
+    // transcript to a local daemon instead of the clipboard. Off by default:
+    // it does nothing at all until an endpoint and token are configured.
+
+    /// <summary>Whether the command hotkey is registered at all.</summary>
+    public bool CommandMode { get; set; } = false;
+
+    /// <summary>Second hotkey. Alt+W sits next to Alt+Q on purpose.</summary>
+    public HotkeyModifiers CommandHotkeyModifier { get; set; } = HotkeyModifiers.Alt;
+    public Key CommandHotkeyKey { get; set; } = Key.W;
+
+    /// <summary>Local daemon endpoint. A non-loopback address is refused, not dialled.</summary>
+    public string CommandEndpoint { get; set; } = Constants.VoiceCommandDefaultEndpoint;
+
+    /// <summary>Shared token the daemon expects. From `hermes voice token`.</summary>
+    public string CommandToken { get; set; } = "";
 
     // UX hint tracking - tracks which hints the user has seen
     public UserHints Hints { get; set; } = new();

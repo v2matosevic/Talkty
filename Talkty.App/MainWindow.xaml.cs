@@ -76,6 +76,9 @@ public partial class MainWindow : Window
         var promptFidelityService = new PromptFidelityService();
         Log.Debug("PromptFidelityService created");
 
+        var voiceCommandService = new VoiceCommandService(_settingsService);
+        Log.Debug("VoiceCommandService created");
+
         // Initialize ViewModel
         Log.Info("Creating MainViewModel...");
         _viewModel = new MainViewModel(
@@ -86,7 +89,8 @@ public partial class MainWindow : Window
             volumeDuckingService: volumeDuckingService,
             autoPasteService: autoPasteService,
             promptRefinementService: promptRefinementService,
-            promptFidelityService: promptFidelityService);
+            promptFidelityService: promptFidelityService,
+            voiceCommandService: voiceCommandService);
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;
@@ -124,9 +128,11 @@ public partial class MainWindow : Window
 
         // Register hotkey from settings
         RegisterConfiguredHotkey(handle);
+        RegisterCommandHotkey(handle);
 
         _hotkeyService.HotkeyPressed += OnHotkeyPressed;
         _hotkeyService.CancelHotkeyPressed += OnCancelHotkeyPressed;
+        _hotkeyService.CommandHotkeyPressed += OnCommandHotkeyPressed;
         Log.Debug("Hotkey event handlers attached");
 
         Log.Info($"MainWindow loaded. Size: {Width}x{Height}, Position: {Left},{Top}");
@@ -235,6 +241,57 @@ public partial class MainWindow : Window
             Log.Debug("Executing ToggleListeningCommand");
             _viewModel.ToggleListeningCommand.Execute(null);
         });
+    }
+
+    /// <summary>
+    /// Command mode. Same debounce and same modal guard as dictation, because it is
+    /// the same recorder; only the destination of the finished transcript differs.
+    /// </summary>
+    private void OnCommandHotkeyPressed(object? sender, EventArgs e)
+    {
+        if (_settingsWindow?.IsVisible == true)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        var now = DateTime.Now;
+        if (now - _lastHotkeyTime < HotkeyDebounceInterval)
+        {
+            Log.Debug("Command hotkey debounced");
+            return;
+        }
+
+        _lastHotkeyTime = now;
+        var settings = _settingsService.Settings;
+        Log.Info($">>> COMMAND HOTKEY PRESSED ({settings.CommandHotkeyModifier}+{settings.CommandHotkeyKey}) <<<");
+
+        Dispatcher.Invoke(() => _viewModel.ToggleCommandListeningCommand.Execute(null));
+    }
+
+    /// <summary>
+    /// Registered only when command mode is on, so the key stays free for other apps
+    /// for everyone who does not use it.
+    /// </summary>
+    private void RegisterCommandHotkey(nint handle)
+    {
+        var settings = _settingsService.Settings;
+        if (!settings.CommandMode)
+        {
+            _hotkeyService.UnregisterCommandHotkey();
+            return;
+        }
+
+        var registered = _hotkeyService.RegisterCommandHotkey(
+            handle, settings.CommandHotkeyModifier, settings.CommandHotkeyKey);
+
+        if (!registered)
+        {
+            Toast.Show(
+                $"Command hotkey {settings.CommandHotkeyModifier}+{settings.CommandHotkeyKey} is in use by another app",
+                ToastType.Warning,
+                6000);
+        }
     }
 
     private void OnCancelHotkeyPressed(object? sender, EventArgs e)
@@ -436,9 +493,10 @@ public partial class MainWindow : Window
                     Log.Info("Settings saved, applying...");
                     _viewModel.ApplySettings(settings);
 
-                    // Re-register hotkey if it changed
+                    // Re-register hotkeys if they changed
                     var handle = new WindowInteropHelper(this).Handle;
                     RegisterConfiguredHotkey(handle);
+                    RegisterCommandHotkey(handle);
 
                     // Update hotkey badge display
                     UpdateHotkeyBadge();
@@ -469,6 +527,7 @@ public partial class MainWindow : Window
         Log.Info("Cleaning up resources...");
         _hotkeyService.HotkeyPressed -= OnHotkeyPressed;
         _hotkeyService.CancelHotkeyPressed -= OnCancelHotkeyPressed;
+        _hotkeyService.CommandHotkeyPressed -= OnCommandHotkeyPressed;
         _hotkeyService.Dispose();
         Log.Debug("HotkeyService disposed");
 

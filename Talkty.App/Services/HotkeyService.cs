@@ -9,6 +9,7 @@ public class HotkeyService : IHotkeyService
 {
     private const int HOTKEY_ID = 9000;
     private const int CANCEL_HOTKEY_ID = 9001;
+    private const int COMMAND_HOTKEY_ID = 9002;
     private const int WM_HOTKEY = 0x0312;
 
     public const uint MOD_ALT = 0x0001;
@@ -30,10 +31,12 @@ public class HotkeyService : IHotkeyService
     private HwndSource? _source;
     private bool _isRegistered;
     private bool _isCancelRegistered;
+    private bool _isCommandRegistered;
     private bool _hookAdded;
 
     public event EventHandler? HotkeyPressed;
     public event EventHandler? CancelHotkeyPressed;
+    public event EventHandler? CommandHotkeyPressed;
 
     public bool Register(nint windowHandle, uint modifiers, uint key)
     {
@@ -105,11 +108,51 @@ public class HotkeyService : IHotkeyService
             _isRegistered = false;
         }
 
+        UnregisterCommandHotkey();
+
         if (_hookAdded)
         {
             _source?.RemoveHook(WndProc);
             _source = null;
             _hookAdded = false;
+        }
+    }
+
+    public bool RegisterCommandHotkey(nint windowHandle, HotkeyModifiers modifiers, Key key)
+    {
+        UnregisterCommandHotkey();
+        _windowHandle = windowHandle;
+
+        if (!_hookAdded)
+        {
+            _source = HwndSource.FromHwnd(windowHandle);
+            _source?.AddHook(WndProc);
+            _hookAdded = true;
+        }
+
+        uint mods = MOD_NOREPEAT;
+        if (modifiers.HasFlag(HotkeyModifiers.Alt)) mods |= MOD_ALT;
+        if (modifiers.HasFlag(HotkeyModifiers.Ctrl)) mods |= MOD_CONTROL;
+        if (modifiers.HasFlag(HotkeyModifiers.Shift)) mods |= MOD_SHIFT;
+        if (modifiers.HasFlag(HotkeyModifiers.Win)) mods |= MOD_WIN;
+
+        uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+        Log.Info($"Registering command hotkey: modifiers=0x{mods:X4}, vk=0x{vk:X2} ({key})");
+        _isCommandRegistered = RegisterHotKey(windowHandle, COMMAND_HOTKEY_ID, mods, vk);
+
+        if (!_isCommandRegistered)
+            Log.Warning($"Failed to register command hotkey {modifiers}+{key} - may be in use");
+
+        return _isCommandRegistered;
+    }
+
+    public void UnregisterCommandHotkey()
+    {
+        if (_isCommandRegistered && _windowHandle != nint.Zero)
+        {
+            UnregisterHotKey(_windowHandle, COMMAND_HOTKEY_ID);
+            _isCommandRegistered = false;
+            Log.Debug("Command hotkey unregistered");
         }
     }
 
@@ -168,6 +211,11 @@ public class HotkeyService : IHotkeyService
             else if (hotkeyId == CANCEL_HOTKEY_ID)
             {
                 CancelHotkeyPressed?.Invoke(this, EventArgs.Empty);
+                handled = true;
+            }
+            else if (hotkeyId == COMMAND_HOTKEY_ID)
+            {
+                CommandHotkeyPressed?.Invoke(this, EventArgs.Empty);
                 handled = true;
             }
         }

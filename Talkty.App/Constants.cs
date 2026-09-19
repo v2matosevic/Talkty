@@ -131,6 +131,21 @@ public static class Constants
     /// </summary>
     public const double PromptCompletenessMinOutputRatio = 0.6;
 
+    // ─── Command mode (Alt+W → local command daemon) ────────────────────
+
+    /// <summary>
+    /// How long to wait for the command daemon. Generous, because a single spoken
+    /// command can mean several cockpit verbs, but bounded: past this the outcome
+    /// is UNCERTAIN and the sentence is never sent again.
+    /// </summary>
+    public const int VoiceCommandTimeoutMs = 15_000;
+
+    /// <summary>The daemon's reply is shown in a toast, so it is bounded like one.</summary>
+    public const int VoiceCommandMessageMaxChars = 180;
+
+    /// <summary>Where the daemon listens by default: `hermes voice serve`.</summary>
+    public const string VoiceCommandDefaultEndpoint = "http://127.0.0.1:8765/command";
+
     // ─── Prompt fidelity check (TypeSafe Jev via OpenRouter) ────────────
     // Bounds for the optional check that runs AFTER Prompting has produced a prompt. See
     // docs/PROMPT-FIDELITY.md. Every one of these is deliberately smaller than what the model or

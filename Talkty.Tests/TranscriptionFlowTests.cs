@@ -270,6 +270,11 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public FakeFidelity Fidelity { get; } = new();
         public FakeDecisions Decisions { get; } = new();
         public FakeVoiceCommand Voice { get; } = new();
+        /// <summary>Is there a start-up shim to run? Off, so no test starts anything.</summary>
+        public bool ShimPresent;
+        /// <summary>Every request to start the daemon.</summary>
+        public List<string> DaemonStarts { get; } = [];
+        public VoiceDaemonLauncher Launcher { get; }
         public MemoryRecoveryStore Recovery { get; } = new();
         public PromptClassifier Classifier { get; private set; } = null!;
         public MainViewModel ViewModel { get; }
@@ -281,12 +286,15 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public Context(Action<AppSettings>? configure = null)
         {
             configure?.Invoke(Settings.Settings);
+            Launcher = new VoiceDaemonLauncher(
+                _ => ShimPresent,
+                (file, _) => DaemonStarts.Add(file));
             Classifier = new PromptClassifier(Decisions);
             Classifier.SetApiKey("test-key");
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
                 new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery,
                 promptFidelityService: Fidelity, voiceCommandService: Voice,
-                promptClassifier: Classifier);
+                promptClassifier: Classifier, daemonLauncher: Launcher);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
             ViewModel.CommandProgress += (_, e) => Pill.Add(e);
             ViewModel.PropertyChanged += (_, e) =>
@@ -305,6 +313,9 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
     internal sealed class FakeVoiceCommand : IVoiceCommandService
     {
         public bool IsConfigured { get; set; } = true;
+        public bool IsDaemonLive { get; set; } = true;
+        /// <summary>Runs after each dispatch, so a test can make the world change.</summary>
+        public Action<FakeVoiceCommand>? AfterDispatch { get; set; }
         public List<string> Sent { get; } = [];
         public CapturedWindowInfo? Target { get; private set; }
         public VoiceCommandResult Result { get; set; } =
@@ -313,7 +324,9 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         public Task<VoiceCommandResult> DispatchAsync(string text, string? foregroundApp, CancellationToken ct)
         {
             Sent.Add(text);
-            return Task.FromResult(Result);
+            var answer = Result;
+            AfterDispatch?.Invoke(this);
+            return Task.FromResult(answer);
         }
         public Task<VoiceCommandResult> DispatchAsync(string text, string? foregroundApp, CancellationToken ct, CapturedWindowInfo? target)
         {

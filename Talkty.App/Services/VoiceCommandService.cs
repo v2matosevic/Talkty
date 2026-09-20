@@ -43,6 +43,8 @@ public class VoiceCommandService : IVoiceCommandService
         }
     }
 
+    public bool IsDaemonLive => _resolve() is not null;
+
     /// <summary>A command endpoint must be on this machine. Anything else is refused.</summary>
     public static bool IsLoopback(string? endpoint)
     {

@@ -118,12 +118,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RecordingRecoveryStore? recoveryStore = null,
         IPromptFidelityService? promptFidelityService = null,
         IVoiceCommandService? voiceCommandService = null,
-        PromptClassifier? promptClassifier = null)
+        PromptClassifier? promptClassifier = null,
+        VoiceDaemonLauncher? daemonLauncher = null)
     {
         Log.Info("MainViewModel constructor starting");
 
         _settingsService = settingsService;
         _voiceCommandService = voiceCommandService;
+        _daemonLauncher = daemonLauncher ?? new VoiceDaemonLauncher();
         _recoveryStore = recoveryStore ?? new RecordingRecoveryStore();
         foreach (var recording in _recoveryStore.Load()) RecoverableRecordings.Add(recording);
         _audioCaptureService = audioCaptureService;
@@ -589,6 +591,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
             RequestShowOverlay?.Invoke(this, EventArgs.Empty);
             RecordingStarted?.Invoke(this, EventArgs.Empty);
             StartLivePreview();
+
+            // Alt+W with no daemon used to end as pasted text. Start it now,
+            // while he is talking, so it is listening by the time he stops.
+            if (_commandModeRecording && _voiceCommandService?.IsDaemonLive == false)
+            {
+                _daemonLauncher.TryStart();
+            }
         }
         catch (Exception ex)
         {
@@ -825,9 +834,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         return;
                     }
 
-                    Log.Info($"Command not delivered ({dispatch.Message}) — falling back to dictation");
-                    ReportCommand(result.Text, CommandStage.None, null);
-                    ShowWarning($"{dispatch.Message}. Copied the text instead.");
+                    // Alt+W is how he uses this machine hands-free. Its words are
+                    // an instruction, never text for the cursor, so a missing
+                    // daemon is answered by starting one and asking again. The
+                    // first attempt provably reached nothing, so asking again
+                    // cannot act twice.
+                    Log.Info($"Command not delivered ({dispatch.Message}); starting the daemon and retrying once");
+                    ReportCommand(result.Text, CommandStage.Sending, "Starting the voice daemon…");
+                    var second = await RetryCommandOnceAsync(result.Text, cancellationToken, commandTarget);
+                    if (second is not null)
+                    {
+                        RecordCommandInHistory(result, recovery);
+                        StatusText = second.Message;
+                        if (second.IsWorking)
+                        {
+                            ReportCommand(result.Text, CommandStage.Working, second.Message);
+                            FollowCommandGoal(second.GoalId!, result.Text);
+                            return;
+                        }
+                        ReportCommand(result.Text, second.Ok ? CommandStage.Succeeded : CommandStage.Failed, second.Message);
+                        return;
+                    }
+
+                    RecordCommandInHistory(result, recovery);
+                    StatusText = dispatch.Message;
+                    ReportCommand(result.Text, CommandStage.Failed,
+                        "No voice daemon, so nothing ran. Your words are in History.");
+                    ShowWarning("The voice daemon is not running, so that command did not run. " +
+                                "It was not typed anywhere; run `hermes voice ensure`.");
+                    return;
                 }
 
                 // Prompt mode: expand the transcription into a structured coding-agent prompt
@@ -1150,6 +1185,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Hand one command to the local daemon. Never throws; the service turns every
     /// failure into an outcome the caller can act on.
     /// </summary>
+    private readonly VoiceDaemonLauncher _daemonLauncher;
     private CancellationTokenSource? _previewCts;
     private Task? _preview;
 
@@ -1270,6 +1306,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         StatusText = "Sending command...";
         return await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow);
+    }
+
+    /// <summary>
+    /// Start the daemon, wait for it to announce itself, and ask once more.
+    /// Returns null when there is still nothing listening. Safe by construction:
+    /// it only runs after an outcome that means nothing was sent.
+    /// </summary>
+    private async Task<VoiceCommandResult?> RetryCommandOnceAsync(
+        string text, CancellationToken cancellationToken, CapturedWindowInfo? targetWindow)
+    {
+        if (_voiceCommandService is null) return null;
+        // NotReached means nothing was sent, so asking again cannot act twice.
+        if (!_voiceCommandService.IsDaemonLive && !_daemonLauncher.TryStart()) return null;
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(Constants.VoiceDaemonStartWaitMs);
+        while (!_voiceCommandService.IsDaemonLive && DateTime.UtcNow < deadline)
+        {
+            if (cancellationToken.IsCancellationRequested) return null;
+            try { await Task.Delay(250, cancellationToken); }
+            catch (OperationCanceledException) { return null; }
+        }
+        if (!_voiceCommandService.IsDaemonLive) return null;
+
+        var result = await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow);
+        return result.Outcome == VoiceCommandOutcome.NotReached ? null : result;
     }
 
     /// <summary>

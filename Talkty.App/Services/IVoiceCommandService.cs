@@ -49,6 +49,12 @@ public interface IVoiceCommandService
     bool IsConfigured { get; }
 
     /// <summary>
+    /// Whether a daemon has announced itself and its process is still alive.
+    /// Cheap: it reads the service record, and never opens a connection.
+    /// </summary>
+    bool IsDaemonLive => true;
+
+    /// <summary>
     /// Hand one spoken instruction to the local command daemon. Never throws:
     /// a failure comes back as <see cref="VoiceCommandOutcome.NotReached"/> so the
     /// caller can fall back to ordinary dictation and the sentence is not lost.

@@ -154,6 +154,13 @@ public static class Constants
     /// <summary>How long the daemon has to identify itself before a command is abandoned.</summary>
     public const int VoiceCommandHealthTimeoutMs = 1_200;
 
+    /// <summary>
+    /// How long to wait for a just-started daemon to announce itself before
+    /// giving up on a command. Long enough for Node to boot, short enough that
+    /// he is not left watching the pill.
+    /// </summary>
+    public const int VoiceDaemonStartWaitMs = 8_000;
+
     /// <summary>How often a running goal is read back while the pill shows it.</summary>
     public const int VoiceGoalPollMs = 700;
 

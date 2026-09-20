@@ -108,17 +108,63 @@ public partial class TranscriptionFlowTests
     });
 
     [Fact]
-    public Task AnUnreachableDaemonFallsBackToOrdinaryDictation() => ui.Run(async () =>
+    public Task AnUnreachableDaemonNeverTurnsACommandIntoTypedText() => ui.Run(async () =>
     {
         using var context = new Context();
+        context.Voice.IsDaemonLive = false;
         context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.NotReached, "No command daemon is listening");
         context.ViewModel.MarkRecordingAsCommand();
         await context.Record();
 
-        // The sentence is not lost: it goes where dictation would have put it.
+        // Alt+W is an instruction. With nothing to run it, nothing runs — and
+        // above all nothing is typed into whatever he was looking at.
+        Assert.Empty(context.Clipboard.Writes);
+        Assert.Equal(0, context.Paste.Pasted);
+        Assert.Equal(CommandStage.Failed, context.Pill.Last().Stage);
+        Assert.Contains("nothing ran", context.Pill.Last().Detail);
+        Assert.Contains(context.Warnings, w => w.Contains("not typed anywhere"));
+        // The words are still recoverable.
+        Assert.Single(context.ViewModel.History);
+    });
+
+    [Fact]
+    public Task AMissingDaemonIsStartedAndTheCommandRunsOnce() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.ShimPresent = true;
+        context.Voice.IsDaemonLive = false;
+        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.NotReached, "No command daemon is listening");
+        // The daemon finishes booting just after the first attempt fails.
+        context.Voice.AfterDispatch = voice =>
+        {
+            voice.AfterDispatch = null;
+            voice.IsDaemonLive = true;
+            voice.Result = new VoiceCommandResult(VoiceCommandOutcome.Delivered, "opened https://youtube.com", Ok: true);
+        };
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+
+        Assert.NotEmpty(context.DaemonStarts);
+        Assert.Equal(2, context.Voice.Sent.Count);   // exactly once more, never twice more
+        Assert.Equal(CommandStage.Succeeded, context.Pill.Last().Stage);
+        Assert.Equal("opened https://youtube.com", context.Pill.Last().Detail);
+        Assert.Empty(context.Clipboard.Writes);
+    });
+
+    [Fact]
+    public Task WithNoStartUpEntryItSaysSoInsteadOfWaiting() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.ShimPresent = false;
+        context.Voice.IsDaemonLive = false;
+        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.NotReached, "No command daemon is listening");
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+
+        Assert.Empty(context.DaemonStarts);
         Assert.Single(context.Voice.Sent);
-        Assert.NotEmpty(context.Clipboard.Writes);
-        Assert.Contains(context.Warnings, w => w.Contains("No command daemon is listening"));
+        Assert.Equal(CommandStage.Failed, context.Pill.Last().Stage);
+        Assert.Empty(context.Clipboard.Writes);
     });
 
     [Fact]
@@ -137,15 +183,18 @@ public partial class TranscriptionFlowTests
     });
 
     [Fact]
-    public Task AnUnconfiguredCommandModeFallsBackWithoutSending() => ui.Run(async () =>
+    public Task AnUnconfiguredCommandModeSaysSoAndStillTypesNothing() => ui.Run(async () =>
     {
         using var context = new Context();
         context.Voice.IsConfigured = false;
+        context.Voice.IsDaemonLive = false;
         context.ViewModel.MarkRecordingAsCommand();
         await context.Record();
 
         Assert.Empty(context.Voice.Sent);
-        Assert.NotEmpty(context.Clipboard.Writes);
+        Assert.Empty(context.Clipboard.Writes);
+        Assert.Equal(0, context.Paste.Pasted);
+        Assert.Equal(CommandStage.Failed, context.Pill.Last().Stage);
     });
 
     [Fact]

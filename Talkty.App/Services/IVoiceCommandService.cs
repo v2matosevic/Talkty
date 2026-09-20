@@ -39,6 +39,10 @@ public record VoiceGoalUpdate(string Status, string? Detail, int Steps = 0)
     /// <summary>True once nothing more will happen without the owner saying something.</summary>
     public bool Finished => !Waiting.Contains(Status);
 
+    /// <summary>Stopped on a question: it needs a yes, or an answer, from him.</summary>
+    public bool NeedsAnswer => Status.Equals("needs-confirm", StringComparison.OrdinalIgnoreCase)
+                           || Status.Equals("needs-input", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Only "done" is a success; the rest are stopped, refused or unverified.</summary>
     public bool Succeeded => string.Equals(Status, "done", StringComparison.OrdinalIgnoreCase);
 }

@@ -161,6 +161,12 @@ public static class Constants
     /// </summary>
     public const int VoiceDaemonStartWaitMs = 8_000;
 
+    /// <summary>
+    /// How long a question stays on the pill. It is waiting for him to say yes
+    /// or cancel, so it must outlast reading it and walking back to the mic.
+    /// </summary>
+    public const int VoiceCommandAskingLingerMs = 45_000;
+
     /// <summary>How often a running goal is read back while the pill shows it.</summary>
     public const int VoiceGoalPollMs = 700;
 

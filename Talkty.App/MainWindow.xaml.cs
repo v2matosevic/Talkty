@@ -457,10 +457,12 @@ public partial class MainWindow : Window
             if (e.Stage is CommandStage.Sending or CommandStage.Working) return;
 
             _commandLinger ??= new System.Windows.Threading.DispatcherTimer();
-            _commandLinger.Interval = TimeSpan.FromMilliseconds(
-                e.Stage == CommandStage.Failed
-                    ? Constants.VoiceCommandFailureLingerMs
-                    : Constants.VoiceCommandResultLingerMs);
+            _commandLinger.Interval = TimeSpan.FromMilliseconds(e.Stage switch
+            {
+                CommandStage.Asking => Constants.VoiceCommandAskingLingerMs,
+                CommandStage.Failed => Constants.VoiceCommandFailureLingerMs,
+                _ => Constants.VoiceCommandResultLingerMs,
+            });
             _commandLinger.Tick -= OnCommandLingerElapsed;
             _commandLinger.Tick += OnCommandLingerElapsed;
             _commandLinger.Start();

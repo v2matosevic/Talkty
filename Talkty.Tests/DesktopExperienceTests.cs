@@ -231,6 +231,17 @@ public partial class TranscriptionFlowTests
         Assert.Same(red, failed.Foreground);
         SavePreview(surface, 520, 80, "overlay-command-failed.png");
 
+        // A question is amber and reads as his turn, not as a fault.
+        var amber = Application.Current.Resources["StatusAmberBrush"];
+        vm.CommandStage = CommandStage.Asking;
+        vm.CommandDetail = "Click \"Vocal Chillstep Mix\" in Spotify? Say yes, or cancel.";
+        Layout(surface, 560, 80);
+        var asking = Descendants<TextBlock>(surface).Single(t => t.Text == vm.CommandDetail);
+        Assert.Equal(Visibility.Visible, asking.Visibility);
+        Assert.Same(amber, asking.Foreground);
+        Assert.NotSame(red, asking.Foreground);
+        SavePreview(surface, 560, 80, "overlay-command-asking.png");
+
         // An ordinary dictation is untouched by any of this.
         vm.ClearCommand();
         vm.StatusText = "Transcribing...";

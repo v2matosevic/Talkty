@@ -54,6 +54,9 @@
                                         <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
                                         </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandAsking}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusAmberBrush}"/>
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -80,6 +83,9 @@
                                         <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
                                         </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandAsking}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusAmberBrush}"/>
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -105,6 +111,9 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource StatusRedBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCommandAsking}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource StatusAmberBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -207,6 +216,9 @@
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsCommandFailed}" Value="True">
                                         <Setter Property="Foreground" Value="{StaticResource StatusRedBrush}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsCommandAsking}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource StatusAmberBrush}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>

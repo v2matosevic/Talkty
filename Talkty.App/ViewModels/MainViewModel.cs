@@ -1278,6 +1278,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     return;
                 }
 
+                // A goal that stopped to ask him something has not failed. It
+                // is waiting, and the pill must read as a question he can answer
+                // by saying yes, not as red text about something that went wrong.
+                if (update.NeedsAnswer)
+                {
+                    ReportCommand(spoken, CommandStage.Asking, update.Detail ?? "Waiting for your answer. Say yes, or cancel.");
+                    return;
+                }
+
                 var detail = update.Detail ?? (update.Succeeded ? "Done." : $"Stopped: {update.Status}.");
                 ReportCommand(spoken, update.Succeeded ? CommandStage.Succeeded : CommandStage.Failed, detail);
                 if (!update.Succeeded)

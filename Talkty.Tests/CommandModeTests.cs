@@ -198,6 +198,24 @@ public partial class TranscriptionFlowTests
     });
 
     [Fact]
+    public Task AGoalThatStopsToAskReadsAsAQuestionAndNotAFailure() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        context.Voice.Result = new VoiceCommandResult(VoiceCommandOutcome.Delivered, "Working on the goal.", Ok: true, GoalId: "g-9");
+        context.Voice.Updates.Add(new VoiceGoalUpdate("needs-confirm",
+            "Click \"Vocal Chillstep Mix\" in Spotify? Say yes, or cancel."));
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+
+        for (var i = 0; i < 60 && context.Pill.Last().Stage != CommandStage.Asking; i++) await Task.Delay(25);
+        var final = context.Pill.Last();
+        Assert.Equal(CommandStage.Asking, final.Stage);
+        Assert.Contains("Say yes", final.Detail);
+        // Amber, not red, and no alarming toast: it is his turn, not a fault.
+        Assert.DoesNotContain(context.Warnings, w => w.Contains("Vocal Chillstep"));
+    });
+
+    [Fact]
     public Task PromptingNeverRewritesACommand() => ui.Run(async () =>
     {
         using var context = new Context();

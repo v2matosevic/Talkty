@@ -24,6 +24,9 @@ public enum CommandStage
 
     /// <summary>It did not run, stopped early, or could not be verified.</summary>
     Failed,
+
+    /// <summary>It stopped to ask him something and is waiting for an answer.</summary>
+    Asking,
 }
 
 public partial class OverlayViewModel : ObservableObject
@@ -49,12 +52,16 @@ public partial class OverlayViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsCommandBusy))]
     [NotifyPropertyChangedFor(nameof(IsCommandFailed))]
     [NotifyPropertyChangedFor(nameof(IsCommandDone))]
+    [NotifyPropertyChangedFor(nameof(IsCommandAsking))]
     private CommandStage _commandStage = CommandStage.None;
 
     public bool IsCommand => CommandStage != CommandStage.None;
     public bool IsCommandBusy => CommandStage is CommandStage.Sending or CommandStage.Working;
     public bool IsCommandFailed => CommandStage == CommandStage.Failed;
     public bool IsCommandDone => CommandStage == CommandStage.Succeeded;
+
+    /// <summary>Waiting on his answer. Amber, and it stays up until he answers.</summary>
+    public bool IsCommandAsking => CommandStage == CommandStage.Asking;
 
     /// <summary>Back to an ordinary recording pill.</summary>
     public void ClearCommand()

@@ -49,6 +49,8 @@
     <SolidColorBrush x:Key="StatusGreenBrush" Color="{StaticResource StatusGreen}"/>
     <SolidColorBrush x:Key="StatusRedBrush" Color="{StaticResource StatusRed}"/>
     <SolidColorBrush x:Key="StatusPurpleBrush" Color="{StaticResource StatusPurple}"/>
+    <!-- Waiting on him to answer: a question, not a failure. -->
+    <SolidColorBrush x:Key="StatusAmberBrush" Color="{StaticResource Yellow}"/>
 
     <!-- Compatibility -->
     <SolidColorBrush x:Key="BaseBrush" Color="{StaticResource Zinc950}"/>

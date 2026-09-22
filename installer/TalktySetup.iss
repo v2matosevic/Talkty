@@ -93,15 +93,15 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [UninstallDelete]
 ; Clean up app data on uninstall (optional - ask user)
-Type: filesandordirs; Name: "{userappdata}\Talkty"
+Type: filesandordirs; Name: "{userappdata}\Talkty"; Check: ShouldRemoveUserData
 
 [Code]
 var
-  DataDirPage: TInputOptionWizardPage;
+  RemoveUserData: Boolean;
 
-procedure InitializeWizard;
+function ShouldRemoveUserData: Boolean;
 begin
-  // Add a custom page asking about keeping data on uninstall
+  Result := RemoveUserData;
 end;
 
 function InitializeUninstall(): Boolean;
@@ -109,12 +109,10 @@ var
   MsgResult: Integer;
 begin
   Result := True;
-  MsgResult := MsgBox('Do you want to remove your Talkty settings and downloaded models?' + #13#10 + #13#10 +
+  MsgResult := SuppressibleMsgBox('Do you want to remove your Talkty settings, history, saved recordings and downloaded models?' + #13#10 + #13#10 +
                       'Click Yes to remove all data, or No to keep your settings for future reinstallation.',
-                      mbConfirmation, MB_YESNO);
-  if MsgResult = IDNO then
-  begin
-    // User wants to keep data - remove the uninstall delete entry
-    UnloadDLL(ExpandConstant('{app}\Talkty.App.exe'));
-  end;
+                      mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO);
+  // Keep data unless the user explicitly chooses Yes. Suppressed/silent prompts
+  // default to No, and UninstallDelete evaluates this same decision.
+  RemoveUserData := MsgResult = IDYES;
 end;

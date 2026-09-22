@@ -33,6 +33,11 @@ remains 1.3.5 until publication is separately requested.
   script now uses a fresh non-single-file publish, verifies native payloads, and produces
   a file manifest and SHA-256 checksum. CUDA remains an optional separate pack.
 
+- Fixed the uninstaller's Keep data choice: deletion now checks the actual answer.
+  The old code asked but did not condition its deletion entry. Keeping data is the
+  default, including when confirmation messages are suppressed. The existing Windows
+  installation is upgraded in place; its uninstaller is not run for verification.
+
 Upgrading preserves settings, history, encrypted recovery files, downloaded models and
 the optional CUDA pack. Recognition language and primary model are not changed.
 

@@ -152,6 +152,10 @@ No public release, installer execution or replacement of the running Talkty
 installation is part of this verification. The currently running app retains its old code
 until an update is installed.
 
+Later on September 22, Marko requested installation. These changes are now installed
+in the local 1.4.0 package, with payload/data hashes and CUDA startup verified. See
+[the 1.4.0 delivery record](RELEASE-1.4.0.md). The public release remains a draft.
+
 ## Primary references
 
 - [Whisper.net 1.9 factory options](https://github.com/sandrohanea/whisper.net/blob/1.9.0/Whisper.net/WhisperFactoryOptions.cs), also verified against the installed DLL and NuGet XML.

@@ -1,10 +1,8 @@
 # Talkty 1.4.0
 
 Local Windows installation and open-source release preparation requested by Marko on
-22 September 2026. The installer and GitHub draft are prepared. Windows canceled the
-administrator prompt before installation, so the previous 1.3.5 app was relaunched.
-Local installation still needs an approved administrator prompt. Public Latest remains
-1.3.5 until publication is separately requested.
+22 September 2026. **1.4.0 is installed and running locally**, and the GitHub draft
+is prepared. Public Latest remains 1.3.5 until publication is separately requested.
 
 ## Release notes
 
@@ -77,20 +75,28 @@ their request payloads or audio processing. No further paid verification is requ
 - The restored Prompting control was rendered and inspected off-screen at 680 x 560:
   `installer/output/settings-1.4.0/settings-prompt-check.png`. No desktop input was injected.
 
-## Windows installation attempt
+## Windows installation
 
 - The previous app was confirmed idle and backed up at
   `installer/output/pre-1.4.0-app` before the attempted upgrade.
 - Preservation snapshots cover 53 settings/history/recovery/model files and 13 CUDA
   files. Local hash manifests: `data-before-1.4.0.json` and `cuda-before-1.4.0.json` in
   `installer/output`. They contain hashes and paths, not copied credentials.
-- Windows canceled the UAC request before the elevated installer started. No successful
-  installer exit, post-install payload verification or 1.4.0 installation is claimed.
-  There is no completed installer log for this attempt.
-- The previous `B:/Talkty/Talkty.App.exe` was relaunched as PID 84928. Windows registration
-  remains 1.3.5. Startup log `talkty_2026-09-22_20-17-41.log` confirms the hotkey, CUDA GPU
-  model load and completed warm-up. Its product version is
-  `1.3.5+c1ad900c878e5ae61212636d58e379ae8f821f33`.
-- The owner was asked whether to display the administrator prompt again. No further
-  installation attempt is made without that response. No live microphone test or public
-  application release is implied.
+- Windows canceled the first UAC request before setup started, and the previous app
+  was reopened. Marko explicitly requested another prompt; the retry was approved.
+- The official elevated installer completed with **exit 0** at 21:18 on September 22.
+  Windows registration now reports **1.4.0**, installed at `B:/Talkty`; no Windows reboot
+  was required. Installer log: `installer/output/install-1.4.0.log`.
+- **492/492 installed payload hashes match** the verified package. All **53 data/model
+  files and 13 CUDA files** were hashed again after installation and match their
+  preservation snapshots, before the app was relaunched. The unchanged model/runtime
+  pre-update hashes were reused on the retry when their file timestamps were unchanged;
+  the post-install checks reread every file, approximately 6 GB in total.
+- Relaunched normally as PID **2824**. Startup log `talkty_2026-09-22_21-23-59.log`
+  confirms version 1.4.0, registered hotkey, CUDA model loaded, **GPU flash attention
+  enabled**, and warm-up completed. The primary model remains Large v3 Turbo, language
+  English, GPU and auto-paste enabled. The new pause-recognition setting defaults on;
+  Prompting remains off. No user setting was changed to force those defaults.
+- Verification record: `installer/output/install-verification-1.4.0.json`. The app's
+  product version matches the compiled source listed above. No live microphone or
+  desktop-input test was performed for installation; no public release was published.

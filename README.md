@@ -11,8 +11,8 @@ speak, and your words land on the clipboard (and optionally type themselves at t
 cursor). Transcription runs entirely on your device by default. No account, no
 internet, no telemetry. Free and open source.
 
-The current source includes the upcoming **1.4.0** changes. See the
-[release preparation record](docs/RELEASE-1.4.0.md) for installation and draft-release status.
+**[Talkty 1.4.0](https://github.com/v2matosevic/Talkty/releases/tag/v1.4.0)** is the latest
+stable release. See the [release record](docs/RELEASE-1.4.0.md) for changes and verification.
 
 ![Talkty, the floating recording pill with a live waveform](./docs/assets/hero.png)
 

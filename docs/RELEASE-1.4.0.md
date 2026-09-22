@@ -1,8 +1,8 @@
 # Talkty 1.4.0
 
 Local Windows installation and open-source release preparation requested by Marko on
-22 September 2026. **1.4.0 is installed and running locally**, and the GitHub draft
-is prepared. Public Latest remains 1.3.5 until publication is separately requested.
+22 September 2026. **1.4.0 is installed and running locally and is the public Latest
+release.** Marko explicitly requested publication after the local installation was verified.
 
 ## Release notes
 
@@ -48,11 +48,11 @@ the optional CUDA pack. Recognition language and primary model are not changed.
 Behavioral baseline: `f6a8f53`, 387 passing tests and GitHub CI 35758274073.
 The 1.4.0 Release build and **389 tests passed locally**, including saved Prompting
 activation, command isolation and off-screen Settings rendering. Six pre-existing
-test-source warnings remain. Exact-source CI will be recorded below. Earlier paid model
+test-source warnings remain. Exact-source CI is recorded below. Earlier paid model
 measurements are reused because this packaging/control fix does not change the engines,
 their request payloads or audio processing. No further paid verification is required.
 
-## Package and draft evidence
+## Package and publication evidence
 
 - Compiled source: `9a9f7b4c7ce38a6027550d863d45e2b50d02064d`.
   [Exact-source CI 35764624933](https://github.com/v2matosevic/Talkty/actions/runs/35764624933)
@@ -66,9 +66,13 @@ their request payloads or audio processing. No further paid verification is requ
   `6567995affdc2a5fd4978525364bdd437cf72c89f7deff7d47b03a2acaccc643`.
   The final Inno compile completed successfully without warnings. Build log:
   `installer/output/build-1.4.0-verified.log`; manifest: `payload-1.4.0.csv`.
-- [GitHub draft](https://github.com/v2matosevic/Talkty/releases/tag/untagged-4b3a40947aa2ce616063)
-  targets that source commit and includes the installer and `.sha256` file. The GitHub
-  asset digest and a freshly downloaded installer both match the local installer hash.
+- [Public GitHub release](https://github.com/v2matosevic/Talkty/releases/tag/v1.4.0)
+  was published on September 22 at 19:32:55 UTC and marked Latest (not a prerelease).
+  The public tag points to the compiled source above. It includes the installer and
+  `.sha256` file; the asset digest matches the locally installed and previously downloaded
+  package. The unauthenticated Latest API and public release page both resolve to 1.4.0.
+- Root `version.json` advances to 1.4.0 after publication, keeping its download link on
+  GitHub's Latest release. Existing installations can discover it through their update check.
 - Uninstall fixture evidence: `installer/output/uninstall-check-e3b5717c84244a32982798269fe9a5e1/results.json`.
   These fixtures register no application and never access the installed Talkty or real
   user data. They are not a clean-machine test of the complete application's uninstall.
@@ -99,4 +103,5 @@ their request payloads or audio processing. No further paid verification is requ
   Prompting remains off. No user setting was changed to force those defaults.
 - Verification record: `installer/output/install-verification-1.4.0.json`. The app's
   product version matches the compiled source listed above. No live microphone or
-  desktop-input test was performed for installation; no public release was published.
+  desktop-input test was performed for installation. Public publication was subsequently
+  authorized and completed as recorded above.

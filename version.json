@@ -1,5 +1,5 @@
 {
-  "version": "1.3.5",
+  "version": "1.4.0",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Failed cloud recordings now stay encrypted on your PC with Retry and Discard, even after restarting Talkty. Choose a cloud backup in Settings: Qwen3 ASR Flash is the default, with other models and Off available. Temporary failures switch directly to a compatible backup; backup requests cost per use. Added Qwen3 ASR 1.7B as a separate option. Upgrading keeps your settings, history, saved recordings, models, and CUDA pack."
+  "release_notes": "Prepare transcription during pauses with full-recording context. Adds CUDA Flash Attention and fixes MAI cloud errors. Restores the opt-in Prompting switch and includes optional command-service integration. Early cloud processing can cost an extra pass. Upgrading keeps settings, history, saved recordings, models and CUDA."
 }

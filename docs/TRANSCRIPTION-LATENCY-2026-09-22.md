@@ -154,7 +154,8 @@ until an update is installed.
 
 Later on September 22, Marko requested installation. These changes are now installed
 in the local 1.4.0 package, with payload/data hashes and CUDA startup verified. See
-[the 1.4.0 delivery record](RELEASE-1.4.0.md). The public release remains a draft.
+[the 1.4.0 delivery record](RELEASE-1.4.0.md). Marko subsequently authorized publication,
+and 1.4.0 is now the public Latest release.
 
 ## Primary references
 

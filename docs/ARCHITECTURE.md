@@ -160,7 +160,8 @@ It is the most test-covered class in the repo — edge cases live in `Talkty.Tes
 
 ## Prompting
 
-Opt-in per recording via the sparkle on the overlay pill. `PromptRefinementService`
+Opt-in through Settings > Cloud & Prompting (`PromptingEnabled`, default false),
+snapshotted at recording start. Commands never enable it. `PromptRefinementService`
 sends the transcription to OpenRouter chat completions with a "reformat, don't
 summarize" system prompt and a model fallback chain. Guards: a completeness check
 escalates to the next model when a result looks summarized, `finish_reason == "length"`

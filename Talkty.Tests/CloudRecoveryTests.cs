@@ -262,6 +262,11 @@ public partial class TranscriptionFlowTests
         ((System.Windows.Controls.RadioButton)window.FindName("NavCloud")).IsChecked = true;
         var surface = (System.Windows.FrameworkElement)window.Content;
         Layout(surface, 680, 560);
+        var prompting = Descendants<System.Windows.Controls.CheckBox>(surface)
+            .Single(c => c.Content as string == "Turn dictation into an agent prompt");
+        Assert.False(prompting.IsChecked);
+        prompting.IsChecked = true;
+        Assert.True(vm.PromptingEnabled);
         SavePreview(surface, 680, 560, "cloud-backup-settings.png");
         Assert.Equal(ModelProfile.CloudQwen3Asr, vm.SelectedCloudFallback!.Profile);
         vm.SelectedCloudFallback = vm.CloudFallbackOptions.Single(o => o.Profile == ModelProfile.CloudWhisperLargeV3Turbo);
@@ -277,6 +282,7 @@ public partial class TranscriptionFlowTests
         vm.SettingsSaved += (_, settings) => context.ViewModel.ApplySettings(settings);
         vm.Save();
         Assert.False(context.Settings.Settings.TranscribeDuringPauses);
+        Assert.True(context.Settings.Settings.PromptingEnabled);
         Assert.Equal(ModelProfile.CloudWhisperLargeV3Turbo, context.Settings.Settings.CloudFallbackModel);
         var json = JsonSerializer.Serialize(context.Settings.Settings);
         Assert.Equal(ModelProfile.CloudWhisperLargeV3Turbo, JsonSerializer.Deserialize<AppSettings>(json)!.CloudFallbackModel);

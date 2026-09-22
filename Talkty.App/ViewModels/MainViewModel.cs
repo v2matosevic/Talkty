@@ -66,7 +66,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// When true, the completed transcription is expanded into a structured coding-agent prompt
-    /// before output. Mirrored from the overlay "Prompting" toggle; resets each recording.
+    /// before output. Snapshotted from Settings for each ordinary recording.
     /// </summary>
     [ObservableProperty]
     private bool _promptMode;
@@ -557,6 +557,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     internal async Task StartListeningAsync()
     {
+        PromptMode = !_commandModeRecording && _settingsService.Settings.PromptingEnabled;
         bool volumeDucked = false;
         try
         {
@@ -1676,6 +1677,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Prompting model — persist the user's pick. Without this it was applied to the live refiner
         // (SetModel below) but never written to disk, so it reset to the default on every restart.
         _settingsService.Settings.PromptingModel = settings.PromptingModel;
+        _settingsService.Settings.PromptingEnabled = settings.PromptingEnabled;
 
         // Same lesson: a new AppSettings field that is not copied here is applied to the live
         // services but never written to disk, so it resets on the next restart.

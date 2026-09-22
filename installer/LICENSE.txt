@@ -24,9 +24,25 @@ SOFTWARE.
 
 PRIVACY
 
-Talkty processes all speech-to-text locally on your device.
-No audio data or transcriptions are sent to external servers.
-Your data stays on your device.
+Local transcription processes audio on your device. Cloud transcription and
+Prompting are optional: enabling them sends the relevant audio or text to
+OpenRouter and its model providers and costs per use. Optional prompt planning
+and fidelity checks can send transcript/prompt text to a decision model.
+
+With transcription during pauses enabled, a selected cloud model can receive
+audio before you press Stop. One additional early request may be billed even
+if you cancel or continue speaking. Local models still keep audio on this PC.
+
+Settings, transcript history and diagnostic logs are stored on this PC. Logs
+can contain dictated text. The OpenRouter key is encrypted with Windows DPAPI.
+At Stop, cloud recordings are saved encrypted for retry and removed after
+successful history saving or when you choose Discard. Early in-flight audio
+is not a persistent recovery copy. Model downloads and update checks use the
+network. Talkty does not send analytics or telemetry.
+
+Optional command mode sends the transcript and captured window information to
+a separately configured service on this PC. That service controls any further
+actions or network access. It is not bundled with Talkty.
 
 ---
 

@@ -352,10 +352,9 @@ public partial class MainWindow : Window
                 _overlayWindow.ViewModel.StatusText = "Listening...";
                 _overlayWindow.ViewModel.StartTimer();
 
-                // Prompt mode is a setting now, not a button on the pill; each
-                // recording still starts from off, as it always did.
-                _overlayWindow.ViewModel.IsPromptMode = false;
-                _viewModel.PromptMode = false;
+                // The recording owns the Settings snapshot. Showing the pill must
+                // not reset it or accidentally turn a command into a rewrite.
+                _overlayWindow.ViewModel.IsPromptMode = _viewModel.PromptMode;
 
                 _overlayWindow.Show();
                 Log.Info("OverlayWindow shown");

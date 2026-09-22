@@ -91,6 +91,9 @@ public class AppSettings
     /// </summary>
     public string PromptingModel { get; set; } = "google/gemini-3.1-flash-lite";
 
+    /// <summary>Opt-in rewrite of ordinary dictation into an agent prompt. Adds a paid text request.</summary>
+    public bool PromptingEnabled { get; set; } = false;
+
     /// <summary>
     /// Optional fidelity check on a generated prompt: does it still carry every instruction, value
     /// and prohibition from the dictation? Runs only when Prompting produced a prompt, using the

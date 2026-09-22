@@ -60,6 +60,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _transcribeDuringPauses = true;
 
     [ObservableProperty]
+    private bool _promptingEnabled;
+
+    [ObservableProperty]
     private bool _restoreClipboardAfterPaste;
 
     [ObservableProperty]
@@ -427,6 +430,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         CopyToClipboard = settings.CopyToClipboard;
         TranscribeDuringPauses = settings.TranscribeDuringPauses;
+        PromptingEnabled = settings.PromptingEnabled;
         AutoPaste = settings.AutoPaste;
         RestoreClipboardAfterPaste = settings.RestoreClipboardAfterPaste;
         OverlayNearTextCursor = settings.OverlayNearTextCursor;
@@ -719,6 +723,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             SelectedMicrophoneId = SelectedAudioDevice?.Id,
             CopyToClipboard = CopyToClipboard,
             TranscribeDuringPauses = TranscribeDuringPauses,
+            PromptingEnabled = PromptingEnabled,
             AutoPaste = AutoPaste,
             RestoreClipboardAfterPaste = RestoreClipboardAfterPaste,
             OverlayNearTextCursor = OverlayNearTextCursor,

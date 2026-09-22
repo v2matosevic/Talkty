@@ -2,8 +2,13 @@
 
 Implemented 19 September 2026, following [JEV-FINDINGS-2026-09-19.md](JEV-FINDINGS-2026-09-19.md).
 
-**State: implemented and locally verified on Windows. Not released, not installed, default Off.**
+**State: included in the 1.4.0 Windows package, default Off; see [delivery status](RELEASE-1.4.0.md).**
 The public 1.3.5 installer does not contain it, and `talkty-mac` does not have this feature.
+
+This is an advanced `promptPlanning` setting in `%AppData%/Talkty/settings.json`
+(0 = Off, 1 = Hints, 2 = Full), not a mode picker in the current Settings UI.
+Enable ordinary Prompting in Settings > Cloud & Prompting first. Close Talkty
+before manually editing its settings file.
 
 ---
 

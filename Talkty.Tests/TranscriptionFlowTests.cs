@@ -11,6 +11,34 @@ namespace Talkty.Tests;
 // model, network requests, system clipboard access, or persisted user settings.
 public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThread>
 {
+    [Fact]
+    public Task SavedPromptingSettingReachesTheRecordingAndCanBeDisabled() => ui.Run(async () =>
+    {
+        using var context = new Context();
+        var settings = new AppSettings { PromptingEnabled = true, AutoPaste = true };
+        context.ViewModel.ApplySettings(settings);
+        Assert.True(context.Settings.Settings.PromptingEnabled);
+        await context.Record();
+        Assert.Equal(1, context.Refiner.Calls);
+        Assert.Equal("A generated prompt", context.Clipboard.Text);
+        settings.PromptingEnabled = false;
+        context.ViewModel.ApplySettings(settings);
+        await context.Record();
+        Assert.Equal(1, context.Refiner.Calls);
+        Assert.StartsWith(context.Engine.Text, context.Clipboard.Text);
+    });
+
+    [Fact]
+    public Task SavedPromptingSettingNeverRewritesACommand() => ui.Run(async () =>
+    {
+        using var context = new Context(s => s.PromptingEnabled = true);
+        context.ViewModel.MarkRecordingAsCommand();
+        await context.Record();
+        Assert.Equal(0, context.Refiner.Calls);
+        Assert.Single(context.Voice.Sent);
+        Assert.Empty(context.Clipboard.Writes);
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

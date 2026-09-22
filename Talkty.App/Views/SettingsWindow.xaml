@@ -594,6 +594,10 @@
                                 CornerRadius="10"
                                 Padding="14">
                             <StackPanel>
+                                <CheckBox Content="Turn dictation into an agent prompt"
+                                          IsChecked="{Binding PromptingEnabled}"
+                                          ToolTip="Sends the completed transcript to your selected OpenRouter model. Adds a paid request and a wait after transcription. Command mode is unaffected."
+                                          Margin="0,0,0,12"/>
                                 <TextBlock Text="Prompt model"
                                            FontSize="13"
                                            Foreground="{StaticResource Zinc200Brush}"
@@ -609,7 +613,7 @@
                                            Foreground="{StaticResource Zinc500Brush}"
                                            TextWrapping="Wrap"
                                            Margin="0,8,0,0"
-                                           Text="With Prompting on (the sparkle on the recording pill), your dictation is rewritten into a structured prompt for a coding agent like Claude Code or Cursor. Uses your OpenRouter key above; falls back to the raw text if it fails."/>
+                                           Text="When enabled, ordinary dictation is rewritten into a structured prompt for a coding agent. Uses your OpenRouter key and adds a paid request after transcription; falls back to the raw text if it fails. Turn it off for the quickest plain dictation."/>
                             </StackPanel>
                         </Border>
 

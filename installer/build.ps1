@@ -1,108 +1,61 @@
-# Talkty Build and Installer Script
-# Requires: .NET 8 SDK, Inno Setup 6
-
+<#
+Builds the Windows installer into installer/output with an explicit payload manifest.
+Requires .NET 8 SDK and Inno Setup 6. Existing publish directories are never deleted.
+#>
 param(
     [switch]$SkipPublish,
     [switch]$SkipInstaller,
-    [string]$InnoSetupPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    [switch]$SkipChecks,
+    [string]$PublishDirectory = '',
+    [string]$InnoSetupPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
 )
-
-$ErrorActionPreference = "Stop"
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
-$AppProject = Join-Path $ProjectRoot "Talkty.App\Talkty.App.csproj"
-$InstallerScript = Join-Path $PSScriptRoot "setup.iss"
-$DistDir = Join-Path $ProjectRoot "dist"
-
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "  Talkty Build Script" -ForegroundColor Cyan
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host ""
-
-# Step 1: Publish the application
+$ErrorActionPreference = 'Stop'
+$repoRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$version = (Get-Content -LiteralPath (Join-Path $repoRoot 'version.txt') -Raw).Trim()
+$outputRoot = Join-Path $PSScriptRoot 'output'
+New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
+if (-not $PublishDirectory) { $PublishDirectory = Join-Path $outputRoot "release-$version" }
+$PublishDirectory = [IO.Path]::GetFullPath($PublishDirectory)
+$solution = Join-Path $repoRoot 'Talkty.sln'
+$project = Join-Path $repoRoot 'Talkty.App/Talkty.App.csproj'
+if (-not $SkipInstaller -and -not (Test-Path -LiteralPath $InnoSetupPath)) { throw 'Inno Setup 6 is required to build the installer.' }
+if (-not $SkipPublish -and (Test-Path -LiteralPath $PublishDirectory)) { throw 'Publish directory already exists. Choose a new, empty -PublishDirectory; existing artifacts are preserved.' }
+if (-not $SkipChecks) {
+    dotnet restore $solution
+    if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+    dotnet build $solution -c Release --no-restore
+    if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
+    dotnet test $solution -c Release --no-build --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+}
 if (-not $SkipPublish) {
-    Write-Host "[1/3] Publishing Talkty..." -ForegroundColor Yellow
-
-    # Clean previous publish
-    $PublishDir = Join-Path $ProjectRoot "Talkty.App\bin\Release\net8.0-windows\win-x64\publish"
-    if (Test-Path $PublishDir) {
-        Remove-Item -Path $PublishDir -Recurse -Force
-    }
-
-    # Publish as self-contained single file
-    dotnet publish $AppProject `
-        -c Release `
-        -r win-x64 `
-        --self-contained true `
-        -p:PublishSingleFile=true `
-        -p:IncludeNativeLibrariesForSelfExtract=true `
-        -p:EnableCompressionInSingleFile=true
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: Publish failed!" -ForegroundColor Red
-        exit 1
-    }
-
-    $ExePath = Join-Path $PublishDir "Talkty.App.exe"
-    if (Test-Path $ExePath) {
-        $FileInfo = Get-Item $ExePath
-        Write-Host "  Published: $ExePath" -ForegroundColor Green
-        Write-Host "  Size: $([math]::Round($FileInfo.Length / 1MB, 2)) MB" -ForegroundColor Green
-    } else {
-        Write-Host "ERROR: Published executable not found!" -ForegroundColor Red
-        exit 1
-    }
-
-    Write-Host ""
+    dotnet publish $project -c Release -r win-x64 --self-contained true -p:BundleCuda=false -p:PublishSingleFile=false -o $PublishDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 }
-
-# Step 2: Create dist directory
-Write-Host "[2/3] Preparing distribution..." -ForegroundColor Yellow
-
-if (-not (Test-Path $DistDir)) {
-    New-Item -ItemType Directory -Path $DistDir | Out-Null
+foreach ($required in @('Talkty.App.exe', 'Talkty.App.dll', 'THIRD_PARTY_LICENSES', 'runtimes/win-x64/whisper.dll', 'runtimes/vulkan/win-x64/whisper.dll')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $PublishDirectory $required))) { throw "Missing publish payload: $required" }
 }
-
-Write-Host "  Output directory: $DistDir" -ForegroundColor Green
-Write-Host ""
-
-# Step 3: Build installer
+if (-not ((Test-Path -LiteralPath (Join-Path $PublishDirectory 'opus.dll')) -or (Test-Path -LiteralPath (Join-Path $PublishDirectory 'runtimes/win-x64/native/opus.dll')))) { throw 'Missing native Opus encoder.' }
+$productVersion = (Get-Item -LiteralPath (Join-Path $PublishDirectory 'Talkty.App.dll')).VersionInfo.ProductVersion
+if ($productVersion -notmatch ('^' + [regex]::Escape($version) + '(\+|$)')) { throw "Payload version $productVersion does not match $version." }
+$payload = @(Get-ChildItem -LiteralPath $PublishDirectory -Recurse -File | ForEach-Object {
+    $relative = [IO.Path]::GetRelativePath($PublishDirectory, $_.FullName).Replace('\','/')
+    # Match TalktySetup.iss exclusions exactly.
+    if ($relative -notlike '*.pdb' -and $relative -notlike '*linux*' -and $relative -notlike '*.so') {
+        if ($relative -match '(^|/)(cuda|win-arm64|win-x86)(/|$)|(^|/)(cublas|cudart)') { throw "Unsupported/bundled CUDA payload: $relative" }
+        [pscustomobject]@{ Path = $relative; Bytes = $_.Length; Sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+    }
+} | Sort-Object Path)
+$manifest = Join-Path $outputRoot "payload-$version.csv"
+$payload | Export-Csv -LiteralPath $manifest -NoTypeInformation -Encoding utf8
 if (-not $SkipInstaller) {
-    Write-Host "[3/3] Building installer..." -ForegroundColor Yellow
-
-    if (-not (Test-Path $InnoSetupPath)) {
-        Write-Host "WARNING: Inno Setup not found at $InnoSetupPath" -ForegroundColor Yellow
-        Write-Host "Download from: https://jrsoftware.org/isdl.php" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "To build installer manually after installing Inno Setup:" -ForegroundColor Cyan
-        Write-Host "  1. Open Inno Setup Compiler"
-        Write-Host "  2. Load: $InstallerScript"
-        Write-Host "  3. Press Ctrl+F9 to compile"
-        Write-Host ""
-    } else {
-        & $InnoSetupPath $InstallerScript
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Installer build failed!" -ForegroundColor Red
-            exit 1
-        }
-
-        $InstallerPath = Join-Path $DistDir "TalktySetup-1.0.0.exe"
-        if (Test-Path $InstallerPath) {
-            $FileInfo = Get-Item $InstallerPath
-            Write-Host "  Installer: $InstallerPath" -ForegroundColor Green
-            Write-Host "  Size: $([math]::Round($FileInfo.Length / 1MB, 2)) MB" -ForegroundColor Green
-        }
-    }
-    Write-Host ""
+    & $InnoSetupPath "/DMyAppSourcePath=$PublishDirectory" (Join-Path $PSScriptRoot 'TalktySetup.iss')
+    if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+    $installer = Join-Path $outputRoot "TalktySetup-$version.exe"
+    if (-not (Test-Path -LiteralPath $installer)) { throw 'Expected installer was not produced.' }
+    $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$hash  $([IO.Path]::GetFileName($installer))" | Set-Content -LiteralPath (Join-Path $outputRoot "TalktySetup-$version.sha256") -Encoding ascii
+    Write-Output "Installer: $installer"
+    Write-Output "SHA256: $hash"
 }
-
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "  Build Complete!" -ForegroundColor Green
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Test the installer on a clean machine" -ForegroundColor White
-Write-Host "  2. Download Whisper models from:" -ForegroundColor White
-Write-Host "     https://huggingface.co/ggerganov/whisper.cpp/tree/main" -ForegroundColor Cyan
-Write-Host "  3. Place models in: %APPDATA%\Talkty\models\" -ForegroundColor White
-Write-Host ""
+Write-Output "Payload: $PublishDirectory ($($payload.Count) files); manifest: $manifest"

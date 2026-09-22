@@ -4,7 +4,8 @@ The **Prompting** feature lets you speak a rough request and have Talkty hand yo
 well-structured prompt for a coding AI agent (Claude Code, Cursor, GitHub Copilot) instead of
 the raw transcription.
 
-You hover the recording pill, click **Prompting**, speak, and on stop the transcription is
+Enable **Turn dictation into an agent prompt** in Settings > Cloud & Prompting.
+Speak normally, and on stop the transcription is
 expanded by an LLM into a paste-ready prompt.
 
 ---
@@ -26,16 +27,15 @@ hotkey ─▶ record ─▶ transcribe (local or cloud)
                              └─ optional: prompt fidelity check (after delivery, never delays it)
 ```
 
-- **Trigger:** a hover-revealed **sparkle icon** toggle on the recording pill (`OverlayWindow`) —
-  a bare glyph matching the pill's wave-bar/timer style, tinted accent-purple when active. It is
-  **per-recording** — it resets to off each time a new recording starts.
+- **Trigger:** the saved Settings switch (`PromptingEnabled`, off by default), snapshotted
+  at recording start. It applies to ordinary dictation; commands always bypass rewriting.
 - **Layered cleanup:** the deterministic `TextPostProcessor` runs first (so coding terms like
   `kubectl` / `PostgreSQL` are already corrected and filler is stripped), then the LLM does the
   real expansion. Cheap deterministic pass feeding a smart rewrite.
 - **Failure is safe:** if refinement fails for any reason, the raw (cleaned) transcription is used
   instead — you never lose your dictation.
 - **Requires an OpenRouter key** (the same key used for cloud transcription — see
-  [cloud transcription](#) / `project-cloud-transcription-openrouter`). Local transcription still
+  [cloud transcription](../README.md#cloud-and-prompting-both-opt-in)). Local transcription still
   works without a key; only the refinement step needs it.
 
 ---
@@ -229,8 +229,8 @@ prompt-engineering practice for coding agents (2026).
 |--------|------|
 | Refinement service + model chain + system prompt | `Talkty.App/Services/PromptRefinementService.cs` |
 | Interface | `Talkty.App/Services/IPromptRefinementService.cs` |
-| Overlay toggle state | `Talkty.App/ViewModels/OverlayViewModel.cs` (`IsPromptMode`) |
-| Overlay icon (hover-revealed sparkle) | `Talkty.App/Views/OverlayWindow.xaml` (`PromptButton`) |
+| Saved switch and recording snapshot | `Talkty.App/Models/AppSettings.cs` (`PromptingEnabled`), `Talkty.App/ViewModels/MainViewModel.cs` (`PromptMode`) |
+| User control | `Talkty.App/Views/SettingsWindow.xaml`, `Talkty.App/ViewModels/SettingsViewModel.cs` |
 | Toggle → pipeline wiring | `Talkty.App/MainWindow.xaml.cs` (`OnOverlayPromptModeChanged`) |
 | Pipeline branch (refine before clipboard) | `Talkty.App/ViewModels/MainViewModel.cs` (`PromptMode`) |
 | Timeout constant | `Talkty.App/Constants.cs` (`PromptRefinementTimeoutMs`) |

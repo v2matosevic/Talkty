@@ -11,6 +11,9 @@ speak, and your words land on the clipboard (and optionally type themselves at t
 cursor). Transcription runs entirely on your device by default. No account, no
 internet, no telemetry. Free and open source.
 
+The current source includes the upcoming **1.4.0** changes. See the
+[release preparation record](docs/RELEASE-1.4.0.md) for installation and draft-release status.
+
 ![Talkty, the floating recording pill with a live waveform](./docs/assets/hero.png)
 
 > On a Mac? There is a native Apple Silicon build too:
@@ -46,6 +49,10 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
 - **GPU when you have one.** Vulkan acceleration works out of the box on NVIDIA, AMD
   and Intel GPUs, with CPU fallback. NVIDIA users can install the optional CUDA pack
   from Settings for maximum speed — it's a separate download so the installer stays small.
+- **Less waiting after a pause.** Talkty can recognize the full take while you pause,
+  then reuse it only if the final audio matches exactly. CUDA uses faster attention.
+  These preserve the selected model and full-recording context; timing depends on
+  your speech, hardware and provider. [Measured results](docs/TRANSCRIPTION-LATENCY-2026-09-22.md).
 - **Coding vocabulary built in.** A two-layer system biases Whisper toward developer
   terms and fixes the ones it still gets wrong (for example "cube cuddle" becomes
   `kubectl`, "post gres" becomes `PostgreSQL`). Fully editable in Settings.
@@ -53,7 +60,7 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
   hallucinations like `[MUSIC]` and "Thanks for watching", and normalizes punctuation.
 - **Quiet in the tray.** Lives in the system tray, shows a small floating pill while
   recording, and ducks background audio so the mic hears you clearly.
-- **Light on your PC.** Zero CPU while idle, and the speech model's memory
+- **Light on your PC.** Low resource use while idle, and the speech model's memory
   (up to several GB for the large models) is freed after 15 minutes of inactivity —
   it reloads automatically while you speak, so you never notice.
 - **Cloud transcription** *(opt-in)*. Route a take through OpenRouter models
@@ -62,9 +69,13 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
 - **Recover failed cloud recordings.** Failed takes stay encrypted on your PC with
   Retry and Discard controls, even after restarting Talkty. Pick an automatic backup
   model in Settings to handle temporary cloud failures.
-- **Prompting mode** *(opt-in)*. Hover the recording pill, tap the sparkle, and your
+- **Prompting mode** *(opt-in)*. Enable it in Settings > Cloud & Prompting, and your
   dictation is expanded into a structured prompt for a coding AI agent before it hits
   the clipboard.
+- **Command mode** *(optional integration)*. A separate shortcut sends a spoken
+  instruction to a compatible local command service and shows its response on the
+  pill. The service is not bundled; ordinary dictation needs no service.
+  [Integration and privacy](docs/COMMAND-MODE.md).
 
 ![The recording pill in each state: recording, transcribing, copied, and prompting](./docs/assets/pill-states.png)
 
@@ -131,6 +142,16 @@ that is stored **encrypted on your device** (Windows DPAPI), never in plain text
 
 Leave both off and Talkty stays 100% local.
 
+For the shortest plain-dictation delay, leave Prompting off. Optional prompt planning
+and fidelity checks are documented in [planning](docs/PROMPT-PLANNING.md) and
+[fidelity](docs/PROMPT-FIDELITY.md); they can add paid text requests when configured.
+Planning is an advanced setting and defaults off.
+
+**Start transcription during pauses** is enabled by default under Settings > Behavior.
+With a cloud model selected, audio can be sent before you press Stop. At most one
+extra early pass may be billed, even if you cancel or continue speaking. Disable this
+setting to send cloud audio only after stopping.
+
 ---
 
 ## Privacy
@@ -146,10 +167,16 @@ If you turn on Cloud transcription or Prompting, the relevant audio or text is s
 to OpenRouter and its model providers. A cloud backup can send the same recording
 to another provider when the primary fails. Your API key is encrypted on disk.
 Cloud recordings are saved under `%AppData%\Talkty\Recovery`, encrypted with Windows
-DPAPI for your Windows account, before upload. The recovery copy is removed after
+DPAPI for your Windows account, at Stop before the final upload. An early request
+during a pause can precede that save. The recovery copy is removed after
 the transcript is saved to history or when you choose Discard. Failed takes survive
 restarts; switching to a local model does not delete them. Turn cloud features off
 to keep new transcription requests offline.
+
+History and diagnostic logs stay on your PC; logs may contain dictated text.
+Model downloads and update checks use the network. Optional command mode passes
+transcript and window information to the configured local service, which controls
+any further actions or network access.
 
 ---
 
@@ -169,6 +196,9 @@ Open Settings from the gear icon or by right-clicking the tray icon.
 | Vocabulary | Custom coding terms and text replacements |
 | API key | OpenRouter key for Cloud and Prompting (encrypted) |
 | Cloud backup | Automatic fallback model for temporary cloud failures, or Off |
+| Transcription during pauses | Prepare a whole-take result early; cloud can bill one extra pass |
+| Prompting | Rewrite ordinary dictation into an agent prompt; adds a paid request and delay |
+| Command mode | Separate shortcut for a configured local command service; off by default |
 
 ---
 
@@ -176,21 +206,19 @@ Open Settings from the gear icon or by right-clicking the tray icon.
 
 Requirements: .NET 8 SDK, Windows 10 or 11, and (for the installer) Inno Setup 6.
 
-```bash
+```powershell
 # Build and run
-cd Talkty.App
-dotnet build
-dotnet run
+dotnet build Talkty.App
+dotnet run --project Talkty.App
 
-# Release build (not single-file: Whisper needs the runtimes folder)
-dotnet publish -c Release -r win-x64 --self-contained true
-
-# Installer
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\TalktySetup.iss
+# Checked release build and installer, in a fresh publish directory
+pwsh -File installer/build.ps1
 ```
 
 Run the tests with `dotnet test`. The version number lives in a single place,
 `version.txt`, and flows into the assembly and the installer automatically.
+The script keeps native runtime files alongside the executable, verifies the
+payload, and writes SHA-256 hashes. See [the release guide](installer/RELEASE.md).
 
 ---
 
@@ -203,7 +231,7 @@ Talkty.App/
     Engines/     Whisper (CUDA/Vulkan/CPU), SherpaOnnx, OpenRouter cloud
   ViewModels/    Recording state machine and settings logic (MVVM)
   Views/         Main window, settings, overlay pill, onboarding
-Talkty.Tests/    xUnit tests for the text post-processing pipeline
+Talkty.Tests/    xUnit tests for recording, output, cloud recovery, prompts and UI
 installer/       Inno Setup script
 docs/            PROMPTING.md and assets
 ```

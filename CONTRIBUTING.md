@@ -30,9 +30,16 @@ Run the tests from the repo root:
 dotnet test
 ```
 
-The tests cover the text post-processing pipeline (replacements, hallucination
-stripping, segment joining, the Prompting completeness guard). If you touch that
-code, add or update a test.
+The tests cover recording/flush behavior, cancellation, text cleanup, clipboard
+commit, cloud recovery, prompt checks/planning, Settings and off-screen WPF layouts.
+Add focused regression coverage for changed behavior. Tests do not operate your
+microphone or paste into the desktop. Paid integration harnesses require explicit
+flags; never put credentials or personal recordings in the repository.
+
+For installer builds, use [installer/build.ps1](installer/build.ps1) and follow
+[the release guide](installer/RELEASE.md). A new publish directory is required;
+single-file publishing breaks native runtime discovery. Keep the optional CUDA
+pack out of the standard installer.
 
 ## Making a change
 

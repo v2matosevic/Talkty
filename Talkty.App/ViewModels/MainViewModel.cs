@@ -503,6 +503,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
+            _earlyTranscription?.Dispose();
+            _earlyTranscription = null;
             StopLivePreview();
 
             // Cancel the token — aborts in-flight Whisper decode if transcribing
@@ -591,6 +593,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             RequestShowOverlay?.Invoke(this, EventArgs.Empty);
             RecordingStarted?.Invoke(this, EventArgs.Empty);
             StartLivePreview();
+            StartEarlyTranscription();
 
             // Alt+W with no daemon used to end as pasted text. Start it now,
             // while he is talking, so it is listening by the time he stops.
@@ -615,6 +618,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     internal async Task StopListeningAndTranscribeAsync(RecoverableRecording? retry = null)
     {
+        var deliveryClock = System.Diagnostics.Stopwatch.StartNew();
+        var early = _earlyTranscription;
+        _earlyTranscription = null;
+        early?.StopScheduling();
         var cycle = _transcriptionCts;
         var cancellationToken = cycle?.Token ?? default;
         // The mode belongs to the recording that just ended. Read it once and clear it,
@@ -768,7 +775,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 };
             }
 
-            var result = await _transcriptionService.TranscribeAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt, vocabularyTerms);
+            var result = retry == null && early != null
+                ? await early.CompleteAsync(audioSamples, cancellationToken)
+                : null;
+            result ??= await _transcriptionService.TranscribeAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt, vocabularyTerms);
             cancellationToken.ThrowIfCancellationRequested();
             var elapsed = DateTime.Now - startTime;
 
@@ -954,6 +964,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     });
 
                     StatusText = clipboardSuccess ? "Copied to clipboard" : "Saved to history; clipboard unavailable";
+                    Log.Info($"Stop-to-clipboard: {deliveryClock.ElapsedMilliseconds}ms, earlyReuse={early?.Reused == true}, success={clipboardSuccess}");
                     if (!clipboardSuccess)
                         ShowWarning("Could not copy the text. Your transcription is saved in History.");
 
@@ -982,6 +993,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         });
                         cancellationToken.ThrowIfCancellationRequested();
 
+                        Log.Info($"Stop-to-paste: {deliveryClock.ElapsedMilliseconds}ms, earlyReuse={early?.Reused == true}, outcome={pasteOutcome}");
                         if (!clipboardReadyForPaste)
                         {
                             StatusText = "Saved to history; clipboard unavailable";
@@ -1133,6 +1145,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            early?.Dispose();
             // Covers cancellation and every early return, including empty cleaned output.
             if (ReferenceEquals(_transcriptionCts, cycle))
             {
@@ -1186,6 +1199,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// failure into an outcome the caller can act on.
     /// </summary>
     private readonly VoiceDaemonLauncher _daemonLauncher;
+    private SpeculativeTranscriber? _earlyTranscription;
+
+    private void StartEarlyTranscription()
+    {
+        _earlyTranscription?.Dispose();
+        _earlyTranscription = null;
+        // Command previews already own this engine; preserve their separate behavior.
+        if (_commandModeRecording || !_settingsService.Settings.TranscribeDuringPauses) return;
+        var settings = _settingsService.Settings;
+        var language = settings.AutoDetectLanguage ? "auto" : settings.Language;
+        var vocabulary = VocabularyPromptBuilder.Build(settings);
+        var terms = VocabularyPromptBuilder.BuildCloudTerms(settings);
+        var early = new SpeculativeTranscriber(
+            _audioCaptureService.GetRecordedAudioAsFloat,
+            _audioCaptureService.GetRecordedAudioTail,
+            (audio, token) => _transcriptionService.TranscribeEarlyAsync(audio, language, token, vocabulary, terms),
+            settings.ModelProfile.IsCloud(), _transcriptionCts?.Token ?? default);
+        _earlyTranscription = early;
+        early.Start();
+    }
     private CancellationTokenSource? _previewCts;
     private Task? _preview;
 
@@ -1216,16 +1249,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 return result.Success ? result.Text : null;
             },
             text => Application.Current?.Dispatcher.BeginInvoke(() => LivePreview?.Invoke(this, text)));
-        _preview = transcriber.RunAsync(cts.Token);
+        // No dispatcher continuation is needed here. A hotkey must never wait for
+        // a preview whose cancelled delay is trying to resume on that same dispatcher.
+        _preview = Task.Run(() => transcriber.RunAsync(cts.Token));
     }
 
     private string PreviewLanguage =>
         _settingsService.Settings.AutoDetectLanguage ? "auto" : _settingsService.Settings.Language;
 
     /// <summary>
-    /// Stop previewing and let any pass in flight finish. The engine holds one
-    /// native decode state, so cancelling mid-decode is what wedges it; waiting
-    /// the few hundred milliseconds is the safe trade.
+    /// Stop previews without blocking the dispatcher. The transcription service
+    /// waits for cancellation to unwind before allowing another native decode.
     /// </summary>
     private void StopLivePreview()
     {
@@ -1235,9 +1269,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _preview = null;
         if (cts is null) return;
         try { cts.Cancel(); } catch (ObjectDisposedException) { }
-        try { running?.Wait(TimeSpan.FromSeconds(3)); }
-        catch (Exception ex) { Log.Info($"Live preview did not stop cleanly: {ex.Message}"); }
-        cts.Dispose();
+        // TranscriptionService serializes decoder access, including the final pass.
+        // Let cancellation unwind off-thread while the microphone flushes.
+        _ = (running ?? Task.CompletedTask).ContinueWith(_ => cts.Dispose(), TaskScheduler.Default);
     }
 
     /// <summary>Tell the pill what this command is doing. Never throws into the pipeline.</summary>
@@ -1477,56 +1511,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Uses RMS energy in 100ms windows with a 200ms safety margin on each end.
     /// Reduces audio Whisper must process — typically 10-25% faster inference.
     /// </summary>
-    private static float[] TrimSilence(float[] samples, float threshold = Constants.SilenceThreshold)
-    {
-        const int sampleRate = Constants.SampleRate;
-        const int windowSize = Constants.SilenceWindowSamples;
-        const int marginSamples = Constants.SilenceMarginSamples;
-
-        if (samples.Length < windowSize * 3)
-            return samples; // Too short to trim meaningfully
-
-        // Find first non-silent window from start
-        int start = 0;
-        for (int i = 0; i <= samples.Length - windowSize; i += windowSize)
-        {
-            float sumSquares = 0;
-            for (int j = 0; j < windowSize; j++)
-                sumSquares += samples[i + j] * samples[i + j];
-            float rms = MathF.Sqrt(sumSquares / windowSize);
-
-            if (rms > threshold)
-            {
-                start = Math.Max(0, i - marginSamples);
-                break;
-            }
-        }
-
-        // Find last non-silent window from end
-        int end = samples.Length;
-        for (int i = samples.Length - windowSize; i >= 0; i -= windowSize)
-        {
-            float sumSquares = 0;
-            for (int j = 0; j < windowSize; j++)
-                sumSquares += samples[i + j] * samples[i + j];
-            float rms = MathF.Sqrt(sumSquares / windowSize);
-
-            if (rms > threshold)
-            {
-                end = Math.Min(samples.Length, i + windowSize + marginSamples);
-                break;
-            }
-        }
-
-        if (start >= end || (start == 0 && end == samples.Length))
-            return samples; // Nothing to trim
-
-        var trimmed = samples[start..end];
-        var trimmedDuration = trimmed.Length / (float)sampleRate;
-        var originalDuration = samples.Length / (float)sampleRate;
-        Log.Info($"Silence trimmed: {originalDuration:F1}s → {trimmedDuration:F1}s (removed {originalDuration - trimmedDuration:F1}s)");
-        return trimmed;
-    }
+    private static float[] TrimSilence(float[] samples) => AudioSilenceTrimmer.Trim(samples);
 
     private void OnAudioLevelChanged(object? sender, float level)
     {
@@ -1648,6 +1633,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void ApplySettings(AppSettings settings)
     {
+        _earlyTranscription?.Dispose();
+        _earlyTranscription = null;
         Log.Info($"ApplySettings: Profile={settings.ModelProfile}, Mic={settings.SelectedMicrophoneId}, UseGpu={settings.UseGpu}, Hotkey={settings.HotkeyModifier}+{settings.HotkeyKey}");
 
         // Capture current settings to detect changes
@@ -1660,6 +1647,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _transcriptionService.SetCloudFallback(settings.CloudFallbackModel);
         _settingsService.Settings.SelectedMicrophoneId = settings.SelectedMicrophoneId;
         _settingsService.Settings.CopyToClipboard = settings.CopyToClipboard;
+        _settingsService.Settings.TranscribeDuringPauses = settings.TranscribeDuringPauses;
         _settingsService.Settings.AutoPaste = settings.AutoPaste;
         _settingsService.Settings.RestoreClipboardAfterPaste = settings.RestoreClipboardAfterPaste;
         _settingsService.Settings.OverlayNearTextCursor = settings.OverlayNearTextCursor;
@@ -1756,6 +1744,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             Log.Info("MainViewModel disposing...");
 
+            _earlyTranscription?.Dispose();
+            _earlyTranscription = null;
+            try { _transcriptionCts?.Cancel(); } catch (ObjectDisposedException) { }
             StopLivePreview();
             _audioCaptureService.AudioLevelChanged -= OnAudioLevelChanged;
 

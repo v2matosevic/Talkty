@@ -28,6 +28,11 @@ public interface ITranscriptionService : IDisposable
         string? vocabularyPrompt = null,
         IReadOnlyList<string>? vocabularyTerms = null);
 
+    /// <summary>Optional early pass; cloud implementations must not retry or switch providers.</summary>
+    Task<TranscriptionResult> TranscribeEarlyAsync(float[] audio, string language,
+        CancellationToken cancellationToken, string? vocabularyPrompt, IReadOnlyList<string>? vocabularyTerms) =>
+        TranscribeAsync(audio, language, cancellationToken, vocabularyPrompt: vocabularyPrompt, vocabularyTerms: vocabularyTerms);
+
     /// <summary>
     /// Call at recording start. With a cloud model selected, opens the HTTPS connection and
     /// initializes the audio encoder while the user speaks, so the request at stop time pays

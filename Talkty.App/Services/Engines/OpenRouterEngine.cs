@@ -350,10 +350,9 @@ public class OpenRouterEngine : ITranscriptionEngine
             {
                 // Default "verbatim" keeps "um", "uh" and false starts in the pasted text; "clean"
                 // matches what Whisper gives.
-                ["enhancedMode"] = new Dictionary<string, object?>
-                {
-                    ["modelOptions"] = new Dictionary<string, object?> { ["transcribeStyle"] = "clean" }
-                }
+                // modelOptions is a sibling of phraseList, not a child of
+                // enhancedMode. The nested form returns provider HTTP 400.
+                ["modelOptions"] = new Dictionary<string, object?> { ["transcribeStyle"] = "clean" }
             };
 
             // Keyword biasing from the user's saved vocabulary (additions first).

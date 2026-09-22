@@ -11,6 +11,51 @@ namespace Talkty.Tests;
 
 public class CloudRecoveryTests
 {
+    [Fact]
+    public async Task DisposingDuringAnEarlyPassDoesNotBlockTheCallerOrAllowAnotherPass()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var http = new HttpClient(new Handler(async (_, _) =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"text\":\"Complete\"}") };
+        }));
+        var service = new TranscriptionService(() => new OpenRouterEngine(http));
+        service.SetCloudApiKey("test-key");
+        await service.LoadModelAsync(ModelProfile.CloudMaiTranscribe2, "");
+        var pending = service.TranscribeEarlyAsync(new float[16000], "en", default, null, null);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        try
+        {
+            await Task.Run(service.Dispose).WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.False(await service.EnsureModelLoadedAsync());
+        }
+        finally { release.TrySetResult(); }
+        await pending;
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => service.TranscribeAsync(new float[16000]));
+    }
+
+    [Fact]
+    public async Task AnEarlyCloudFailureDoesNotRetryOrSpendOnTheBackup()
+    {
+        var calls = 0;
+        using var http = new HttpClient(new Handler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            { Content = new StringContent("{}") });
+        }));
+        using var service = new TranscriptionService(() => new OpenRouterEngine(http));
+        service.SetCloudApiKey("test-key");
+        service.SetCloudFallback(ModelProfile.CloudQwen3Asr);
+        await service.LoadModelAsync(ModelProfile.CloudMaiTranscribe2, "");
+        var result = await service.TranscribeEarlyAsync(new float[16000], "en", default, null, null);
+        Assert.False(result.Success);
+        Assert.Equal(1, calls);
+    }
+
     [Theory]
     [InlineData(ModelProfile.CloudMaiTranscribe2, ModelProfile.CloudQwen3Asr, "opus", "mp3")]
     [InlineData(ModelProfile.CloudQwen3Asr, ModelProfile.CloudMaiTranscribe2, "mp3", "opus")]
@@ -220,8 +265,18 @@ public partial class TranscriptionFlowTests
         SavePreview(surface, 680, 560, "cloud-backup-settings.png");
         Assert.Equal(ModelProfile.CloudQwen3Asr, vm.SelectedCloudFallback!.Profile);
         vm.SelectedCloudFallback = vm.CloudFallbackOptions.Single(o => o.Profile == ModelProfile.CloudWhisperLargeV3Turbo);
+        ((System.Windows.Controls.RadioButton)window.FindName("NavBehavior")).IsChecked = true;
+        Layout(surface, 680, 560);
+        var pauseToggle = Descendants<System.Windows.Controls.CheckBox>(surface)
+            .Single(c => c.Content as string == "Start transcription during pauses");
+        Assert.True(pauseToggle.IsChecked);
+        Assert.True(pauseToggle.ActualWidth > 200);
+        SavePreview(surface, 680, 560, "pause-transcription-settings.png");
+        pauseToggle.IsChecked = false;
+        Assert.False(vm.TranscribeDuringPauses);
         vm.SettingsSaved += (_, settings) => context.ViewModel.ApplySettings(settings);
         vm.Save();
+        Assert.False(context.Settings.Settings.TranscribeDuringPauses);
         Assert.Equal(ModelProfile.CloudWhisperLargeV3Turbo, context.Settings.Settings.CloudFallbackModel);
         var json = JsonSerializer.Serialize(context.Settings.Settings);
         Assert.Equal(ModelProfile.CloudWhisperLargeV3Turbo, JsonSerializer.Deserialize<AppSettings>(json)!.CloudFallbackModel);

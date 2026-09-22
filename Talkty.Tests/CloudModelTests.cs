@@ -31,8 +31,11 @@ public class CloudModelTests
     {
         using var doc = Serialize(ModelProfile.CloudMaiTranscribe2, "en");
         var style = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure")
-            .GetProperty("enhancedMode").GetProperty("modelOptions").GetProperty("transcribeStyle").GetString();
+            .GetProperty("modelOptions").GetProperty("transcribeStyle").GetString();
         Assert.Equal("clean", style);
+        // Live qualification 2026-09-22: nesting under enhancedMode returns 400.
+        Assert.False(doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure")
+            .TryGetProperty("enhancedMode", out _));
     }
 
     [Theory]
@@ -72,7 +75,7 @@ public class CloudModelTests
         var azure = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure");
         var phrases = azure.GetProperty("phraseList").GetProperty("phrases").EnumerateArray().Select(p => p.GetString()!).ToArray();
         Assert.Equal(["Revori", "Kenshi"], phrases);
-        Assert.Equal("clean", azure.GetProperty("enhancedMode").GetProperty("modelOptions").GetProperty("transcribeStyle").GetString());
+        Assert.Equal("clean", azure.GetProperty("modelOptions").GetProperty("transcribeStyle").GetString());
     }
 
     [Fact]
@@ -173,7 +176,7 @@ public class CloudModelTests
         Assert.Equal(audio, doc.RootElement.GetProperty("input_audio").GetProperty("data").GetBytesFromBase64());
         var azure = doc.RootElement.GetProperty("provider").GetProperty("options").GetProperty("azure");
         Assert.Equal(terms, azure.GetProperty("phraseList").GetProperty("phrases").EnumerateArray().Select(e => e.GetString()));
-        Assert.Equal("clean", azure.GetProperty("enhancedMode").GetProperty("modelOptions").GetProperty("transcribeStyle").GetString());
+        Assert.Equal("clean", azure.GetProperty("modelOptions").GetProperty("transcribeStyle").GetString());
     }
 
     [Fact]

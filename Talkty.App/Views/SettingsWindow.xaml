@@ -723,6 +723,11 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <CheckBox Content="Start transcription during pauses"
+                                          IsChecked="{Binding TranscribeDuringPauses}"
+                                          ToolTip="Keeps the whole recording and selected model. Reuses an early result only when the final audio matches exactly. Cloud may charge for one extra pass, including if you cancel."
+                                          Margin="0,0,0,12"/>
+
                                 <CheckBox Content="Free memory when idle"
                                           IsChecked="{Binding UnloadModelWhenIdle}"
                                           ToolTip="Unloads the speech model after 15 minutes of inactivity to free RAM. It reloads automatically while you speak — you won't notice it."

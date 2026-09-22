@@ -57,6 +57,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _autoPaste;
 
     [ObservableProperty]
+    private bool _transcribeDuringPauses = true;
+
+    [ObservableProperty]
     private bool _restoreClipboardAfterPaste;
 
     [ObservableProperty]
@@ -423,6 +426,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                                ?? AvailableFidelityModes[0];
 
         CopyToClipboard = settings.CopyToClipboard;
+        TranscribeDuringPauses = settings.TranscribeDuringPauses;
         AutoPaste = settings.AutoPaste;
         RestoreClipboardAfterPaste = settings.RestoreClipboardAfterPaste;
         OverlayNearTextCursor = settings.OverlayNearTextCursor;
@@ -714,6 +718,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             CloudFallbackModel = SelectedCloudFallback?.Profile,
             SelectedMicrophoneId = SelectedAudioDevice?.Id,
             CopyToClipboard = CopyToClipboard,
+            TranscribeDuringPauses = TranscribeDuringPauses,
             AutoPaste = AutoPaste,
             RestoreClipboardAfterPaste = RestoreClipboardAfterPaste,
             OverlayNearTextCursor = OverlayNearTextCursor,

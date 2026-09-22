@@ -22,6 +22,9 @@ public class TranscriptionService : ITranscriptionService
     private ITranscriptionEngine? _currentEngine;
     private readonly object _lock = new();
     private readonly SemaphoreSlim _loadSemaphore = new(1, 1);
+    // A cancelled early pass must finish unwinding before the next recording uses
+    // the same native decoder. Also serializes command previews and final passes.
+    private readonly SemaphoreSlim _transcribeSemaphore = new(1, 1);
     private bool _isLoading;
 
     public bool IsModelLoaded => !_isLoading && (_currentEngine?.IsModelLoaded ?? false);
@@ -49,7 +52,7 @@ public class TranscriptionService : ITranscriptionService
     private Timer? _idleTimer;
     private int _activeTranscriptions;
     private volatile bool _idleUnloadEnabled = true;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     public void SetVocabularyPrompt(string? prompt)
     {
@@ -107,14 +110,17 @@ public class TranscriptionService : ITranscriptionService
         Log.Info($"TranscriptionService.LoadModelAsync: Profile={profile}, Path={modelPath}, UseGpu={useGpu}");
 
         // Serialize load requests to prevent race conditions
-        await _loadSemaphore.WaitAsync();
+        await _transcribeSemaphore.WaitAsync();
         try
         {
-            return await LoadModelCoreAsync(profile, modelPath, useGpu);
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            await _loadSemaphore.WaitAsync();
+            try { return await LoadModelCoreAsync(profile, modelPath, useGpu); }
+            finally { _loadSemaphore.Release(); }
         }
         finally
         {
-            _loadSemaphore.Release();
+            _transcribeSemaphore.Release();
         }
     }
 
@@ -187,6 +193,7 @@ public class TranscriptionService : ITranscriptionService
 
     public async Task<bool> EnsureModelLoadedAsync()
     {
+        if (_disposed) return false;
         // Fast path: engine alive — nothing to do.
         if (_currentEngine?.IsModelLoaded == true)
             return true;
@@ -198,6 +205,7 @@ public class TranscriptionService : ITranscriptionService
         await _loadSemaphore.WaitAsync();
         try
         {
+            if (_disposed) return false;
             // Re-check under the semaphore — a concurrent Ensure may have already reloaded.
             if (_currentEngine?.IsModelLoaded == true)
                 return true;
@@ -211,18 +219,28 @@ public class TranscriptionService : ITranscriptionService
         }
     }
 
-    public async Task<TranscriptionResult> TranscribeAsync(
+    public Task<TranscriptionResult> TranscribeAsync(
         float[] audioSamples,
         string language = "en",
         CancellationToken cancellationToken = default,
         Action<string>? onFirstSegment = null,
         string? vocabularyPrompt = null,
-        IReadOnlyList<string>? vocabularyTerms = null)
+        IReadOnlyList<string>? vocabularyTerms = null) =>
+        TranscribeCoreAsync(audioSamples, language, cancellationToken, onFirstSegment, vocabularyPrompt, vocabularyTerms, false);
+
+    public Task<TranscriptionResult> TranscribeEarlyAsync(float[] audio, string language,
+        CancellationToken cancellationToken, string? vocabularyPrompt, IReadOnlyList<string>? vocabularyTerms) =>
+        TranscribeCoreAsync(audio, language, cancellationToken, null, vocabularyPrompt, vocabularyTerms, true);
+
+    private async Task<TranscriptionResult> TranscribeCoreAsync(float[] audioSamples, string language,
+        CancellationToken cancellationToken, Action<string>? onFirstSegment,
+        string? vocabularyPrompt, IReadOnlyList<string>? vocabularyTerms, bool speculative)
     {
         Log.Info($"TranscriptionService.TranscribeAsync: Samples={audioSamples.Length}, Language={language}{(vocabularyPrompt != null ? $", Vocabulary={vocabularyPrompt.Length} chars" : "")}");
 
         // Remember the language actually in use so a later idle-unload reload rebuilds
         // the processor with it directly (no first-transcription rebuild).
+        await _transcribeSemaphore.WaitAsync(cancellationToken);
         _pendingLanguage = language;
 
         // Counter BEFORE EnsureModelLoadedAsync — see the race note on _idleTimer.
@@ -230,6 +248,7 @@ public class TranscriptionService : ITranscriptionService
         StopIdleTimer();
         try
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             // Transparently restore the model if it was unloaded while idle. Usually a no-op:
             // the reload was already kicked off at recording start and finished during speech.
             await EnsureModelLoadedAsync();
@@ -269,11 +288,11 @@ public class TranscriptionService : ITranscriptionService
             }
 
             var fallback = _fallbackProfile;
-            var canFallback = CurrentProfile?.IsCloud() == true && fallback is { } backupProfile &&
+            var canFallback = !speculative && CurrentProfile?.IsCloud() == true && fallback is { } backupProfile &&
                 backupProfile != CurrentProfile && backupProfile.GetSupportedLanguages().Contains(effectiveLanguage);
             var options = new TranscriptionOptions
             {
-                RetryTransientCloudErrors = !canFallback,
+                RetryTransientCloudErrors = !speculative && !canFallback,
                 CloudAudioCache = new(),
                 Language = effectiveLanguage,
                 TimeoutMs = (int)ITranscriptionService.DefaultTimeout.TotalMilliseconds,
@@ -300,6 +319,7 @@ public class TranscriptionService : ITranscriptionService
         {
             Interlocked.Decrement(ref _activeTranscriptions);
             ArmIdleTimer();
+            _transcribeSemaphore.Release();
         }
     }
 
@@ -377,20 +397,42 @@ public class TranscriptionService : ITranscriptionService
 
     public void Dispose()
     {
-        _disposed = true;
+        // The VM cancels early work before disposing us. Do not free native memory
+        // while the cancelled decode is still returning from whisper.cpp. Do not
+        // block the dispatcher either: a final-segment callback may still need it.
         lock (_lock)
         {
+            if (_disposed) return;
+            _disposed = true;
             _idleTimer?.Dispose();
             _idleTimer = null;
-
-            if (_currentEngine != null)
-            {
-                Log.Debug($"Disposing {_currentEngine.EngineName} engine");
-                _currentEngine.Dispose();
-                _currentEngine = null;
-            }
         }
-        _loadSemaphore.Dispose();
+        _ = DisposeEngineAsync();
         GC.SuppressFinalize(this);
+    }
+
+    private async Task DisposeEngineAsync()
+    {
+        await _transcribeSemaphore.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            // EnsureModelLoadedAsync/idle unload also use this gate independently.
+            await _loadSemaphore.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                lock (_lock)
+                {
+                    if (_currentEngine != null)
+                    {
+                        Log.Debug($"Disposing {_currentEngine.EngineName} engine");
+                        _currentEngine.Dispose();
+                        _currentEngine = null;
+                    }
+                }
+            }
+            finally { _loadSemaphore.Release(); }
+        }
+        catch (Exception ex) { Log.Error("Could not dispose transcription engine", ex); }
+        finally { _transcribeSemaphore.Release(); }
     }
 }

@@ -18,5 +18,10 @@ public interface IAudioCaptureService : IDisposable
     Task<bool> StopRecordingAndFlushAsync(int timeoutMs = 500);
     byte[] GetRecordedAudio();
     float[] GetRecordedAudioAsFloat();
+    float[] GetRecordedAudioTail(int maximumSamples)
+    {
+        var audio = GetRecordedAudioAsFloat();
+        return audio.Length <= maximumSamples ? audio : audio[^maximumSamples..];
+    }
     bool IsRecording { get; }
 }

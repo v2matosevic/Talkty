@@ -11,8 +11,8 @@ namespace Talkty.App.Services;
 /// Two rules keep it from costing anything that matters:
 /// one pass at a time, and never while there is nothing new to hear. The engine
 /// holds a single native decode state, so a preview and the real transcription
-/// can never run at once; a preview in flight is awaited, never cancelled
-/// mid-decode, because that is what wedges the decoder.
+/// can never run at once. TranscriptionService serializes access so cancellation
+/// unwinds before the next pass enters the native decoder.
 /// </summary>
 public sealed class LivePreviewTranscriber
 {

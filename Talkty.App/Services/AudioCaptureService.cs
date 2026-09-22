@@ -145,6 +145,16 @@ public class AudioCaptureService : IAudioCaptureService
         }
     }
 
+    public float[] GetRecordedAudioTail(int maximumSamples)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumSamples);
+        lock (_dataLock)
+        {
+            var count = Math.Min(maximumSamples, _floatSamples.Count);
+            return CollectionsMarshal.AsSpan(_floatSamples).Slice(_floatSamples.Count - count, count).ToArray();
+        }
+    }
+
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
         try

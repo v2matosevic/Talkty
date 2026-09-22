@@ -4,6 +4,10 @@ A tour of how the app is put together, for contributors. User-facing docs live i
 [README](../README.md); the Prompting feature has its own deep-dive in
 [PROMPTING.md](./PROMPTING.md).
 
+Full-context recognition during pauses, CUDA attention, cancellation ownership and the
+current MAI request contract are documented in
+[the September 22 latency record](TRANSCRIPTION-LATENCY-2026-09-22.md).
+
 ## The big picture
 
 Talkty is a .NET 8 WPF tray app built on MVVM (CommunityToolkit.Mvvm). There is no DI

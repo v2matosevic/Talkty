@@ -261,7 +261,16 @@ public class WhisperEngine : ITranscriptionEngine
                     var factoryStart = DateTime.Now;
 
                     // No CPU fallback - if GPU is requested and CUDA fails, let it fail
-                    _factory = WhisperFactory.FromPath(modelPath);
+                    // Whisper.net 1.9 defaults this off, overriding whisper.cpp's
+                    // faster attention path. Keep the same model/context/decoding;
+                    // enable only on the CUDA backend qualified by our audio harness.
+                    var flashAttention = useGpu && RuntimeOptions.RuntimeLibraryOrder.FirstOrDefault() == RuntimeLibrary.Cuda;
+                    _factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions
+                    {
+                        UseGpu = useGpu,
+                        UseFlashAttention = flashAttention
+                    });
+                    Log.Info($"GPU flash attention: {flashAttention}");
 
                     var factoryTime = DateTime.Now - factoryStart;
                     Log.Info($"WhisperFactory created in {factoryTime.TotalMilliseconds:F0}ms");

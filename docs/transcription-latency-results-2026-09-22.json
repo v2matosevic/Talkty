@@ -1,0 +1,374 @@
+{
+  "cloud-complete-options": {
+    "mode": "contract-probe",
+    "variant": "opus-complete-options",
+    "status": 400,
+    "ms": 563.8599,
+    "body": "{\"error\":{\"message\":\"Provider returned 400\",\"code\":400}}"
+  },
+  "cloud-contract": [
+    {
+      "mode": "contract-probe",
+      "variant": "opus-no-options",
+      "status": 200,
+      "ms": 1184.681,
+      "body": "{\"text\":\"Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.\",\"usage\":{\"seconds\":16,\"cost\":0.00044444444444444447}}"
+    },
+    {
+      "mode": "contract-probe",
+      "variant": "ogg-options",
+      "status": 400,
+      "ms": 293.5771,
+      "body": "{\"error\":{\"message\":\"Provider returned 400\",\"code\":400}}"
+    },
+    {
+      "mode": "contract-probe",
+      "variant": "mp3-options",
+      "status": 400,
+      "ms": 310.4458,
+      "body": "{\"error\":{\"message\":\"Provider returned 400\",\"code\":400}}"
+    }
+  ],
+  "cloud-final-short": [
+    {
+      "mode": "baseline",
+      "round": 0,
+      "profile": "CloudMaiTranscribe2",
+      "backend": "OpenRouter (cloud) — microsoft/mai-transcribe-2",
+      "stopDelayMs": 908.1375,
+      "stopToResultMs": 1359.6338,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 0,
+      "profile": "CloudMaiTranscribe2",
+      "backend": "OpenRouter (cloud) — microsoft/mai-transcribe-2",
+      "stopDelayMs": 909.3929,
+      "stopToResultMs": 207.8293,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 1,
+      "profile": "CloudMaiTranscribe2",
+      "backend": "OpenRouter (cloud) — microsoft/mai-transcribe-2",
+      "stopDelayMs": 911.2501,
+      "stopToResultMs": 852.0937,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "baseline",
+      "round": 1,
+      "profile": "CloudMaiTranscribe2",
+      "backend": "OpenRouter (cloud) — microsoft/mai-transcribe-2",
+      "stopDelayMs": 901.8953,
+      "stopToResultMs": 587.4744,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    }
+  ],
+  "cloud-phrases": {
+    "mode": "contract-probe",
+    "variant": "opus-phrases-only",
+    "status": 200,
+    "ms": 1152.997,
+    "body": "{\"text\":\"Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.\",\"usage\":{\"seconds\":16,\"cost\":0.00044444444444444447}}"
+  },
+  "cloud-top-level-options": {
+    "mode": "contract-probe",
+    "variant": "opus-top-level-options",
+    "status": 200,
+    "ms": 602.4337,
+    "body": "{\"text\":\"Update the Velora dashboard. Keep C++, PostgreSQL, Kubernetes, and Playwright in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.\",\"usage\":{\"seconds\":16,\"cost\":0.00044444444444444447}}"
+  },
+  "flash-long": [
+    {
+      "mode": "flash-comparison",
+      "flash": false,
+      "round": 0,
+      "ms": 1286.0713,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": false,
+      "round": 1,
+      "ms": 1117.4462,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": false,
+      "round": 2,
+      "ms": 1251.8851,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": true,
+      "round": 0,
+      "ms": 991.0395,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": true,
+      "round": 1,
+      "ms": 1094.7437,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": true,
+      "round": 2,
+      "ms": 1191.0855,
+      "text": "Before we release the update, check the Velora dashboard in Playwright. The database is PostgreSQL, and the background services run in Kubernetes. Change the timeout from 50 seconds to 15 seconds. Keep the CSV, PDF, and JSON export options. Do not remove the retry button. If the upload fails, show the original error and keep the recording available. Finally, verify that the last sentence is included in the transcript."
+    }
+  ],
+  "flash-short": [
+    {
+      "mode": "flash-comparison",
+      "flash": false,
+      "round": 0,
+      "ms": 561.6277,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": false,
+      "round": 1,
+      "ms": 670.6563,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": false,
+      "round": 2,
+      "ms": 523.3912,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": true,
+      "round": 0,
+      "ms": 425.4478,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": true,
+      "round": 1,
+      "ms": 490.1646,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    },
+    {
+      "mode": "flash-comparison",
+      "flash": true,
+      "round": 2,
+      "ms": 326.6234,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    }
+  ],
+  "local-final-short": [
+    {
+      "mode": "baseline",
+      "round": 0,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 938.525,
+      "stopToResultMs": 1640.7806,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 0,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 905.5302,
+      "stopToResultMs": 4.4936,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 1,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 929.9772,
+      "stopToResultMs": 1.047,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "baseline",
+      "round": 1,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 924.6104,
+      "stopToResultMs": 604.5134,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "baseline",
+      "round": 2,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 909.3801,
+      "stopToResultMs": 354.1086,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 2,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 907.1096,
+      "stopToResultMs": 0.9611,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "after-cancellation",
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    }
+  ],
+  "local-short": [
+    {
+      "mode": "baseline",
+      "round": 0,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 1027.3582,
+      "stopToResultMs": 1065.5112,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 0,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 923.9725,
+      "stopToResultMs": 131.0589,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 1,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 929.667,
+      "stopToResultMs": 2228.4098,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "baseline",
+      "round": 1,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 901.9514,
+      "stopToResultMs": 920.6077,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "baseline",
+      "round": 2,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 902.4315,
+      "stopToResultMs": 573.9137,
+      "reused": false,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "early",
+      "round": 2,
+      "profile": "LargeTurbo",
+      "backend": "CUDA GPU (whisper.cpp)",
+      "stopDelayMs": 931.2233,
+      "stopToResultMs": 0.9796,
+      "reused": true,
+      "calls": 1,
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options.",
+      "error": null
+    },
+    {
+      "mode": "after-cancellation",
+      "success": true,
+      "text": "Update the Valora dashboard. Keep C++, PostgreSQL, Kubernetes, and PlayWrite in the vocabulary. Set the timeout to 15 seconds, not 50, and keep all three export options."
+    }
+  ],
+  "cloud-initial-controls": [
+    {
+      "vocabularyHints": 5,
+      "status": 400,
+      "error": "Provider returned 400",
+      "build": "new-before-provider-option-correction",
+      "stopToResultMs": 4820.5354
+    },
+    {
+      "engineMs": 667,
+      "vocabularyHints": 0,
+      "status": 400,
+      "error": "Provider returned 400",
+      "build": "installed-September-20"
+    }
+  ]
+}

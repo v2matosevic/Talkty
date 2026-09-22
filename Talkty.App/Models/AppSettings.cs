@@ -11,6 +11,9 @@ public class AppSettings
     public bool CopyToClipboard { get; set; } = true;
     public bool AutoPaste { get; set; } = false;
 
+    /// <summary>Recognize whole takes during pauses; reuse only identical final audio.</summary>
+    public bool TranscribeDuringPauses { get; set; } = true;
+
     /// <summary>
     /// After a successful auto-paste, put whatever was on the clipboard before the
     /// recording back on it — dictation stops eating what the user had copied.

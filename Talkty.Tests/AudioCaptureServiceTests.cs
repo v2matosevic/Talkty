@@ -7,6 +7,20 @@ namespace Talkty.Tests;
 public class AudioCaptureServiceTests
 {
     [Fact]
+    public void TailSnapshotIsBoundedAndIncludesFlushedSamplesWithoutChangingTheRecording()
+    {
+        var recorder = new FakeRecorder();
+        using var service = new AudioCaptureService(_ => recorder);
+        service.StartRecording();
+        recorder.Emit(8192);
+        recorder.Emit(16384);
+        recorder.Emit(-16384);
+        Assert.Equal(new[] { 0.5f, -0.5f }, service.GetRecordedAudioTail(2));
+        Assert.Equal(3, service.GetRecordedAudioAsFloat().Length);
+        Assert.Empty(service.GetRecordedAudioTail(0));
+    }
+
+    [Fact]
     public void NextRecordingDisposesPreviousDeviceBeforeOpeningAnother()
     {
         var first = new FakeRecorder();

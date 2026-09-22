@@ -35,8 +35,10 @@ remains 1.3.5 until publication is separately requested.
 
 - Fixed the uninstaller's Keep data choice: deletion now checks the actual answer.
   The old code asked but did not condition its deletion entry. Keeping data is the
-  default, including when confirmation messages are suppressed. The existing Windows
-  installation is upgraded in place; its uninstaller is not run for verification.
+  default, including when confirmation messages are suppressed. An isolated installer
+  test proved both Keep and Remove against repository fixtures, with all four process
+  exits 0. User data removal runs in the uninstall event, not a Setup-time Check entry.
+  The existing Windows installation is upgraded in place; its uninstaller is not run.
 
 Upgrading preserves settings, history, encrypted recovery files, downloaded models and
 the optional CUDA pack. Recognition language and primary model are not changed.

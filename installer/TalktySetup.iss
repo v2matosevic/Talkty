@@ -91,18 +91,9 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-; Clean up app data on uninstall (optional - ask user)
-Type: filesandordirs; Name: "{userappdata}\Talkty"; Check: ShouldRemoveUserData
-
 [Code]
 var
   RemoveUserData: Boolean;
-
-function ShouldRemoveUserData: Boolean;
-begin
-  Result := RemoveUserData;
-end;
 
 function InitializeUninstall(): Boolean;
 var
@@ -113,6 +104,16 @@ begin
                       'Click Yes to remove all data, or No to keep your settings for future reinstallation.',
                       mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO);
   // Keep data unless the user explicitly chooses Yes. Suppressed/silent prompts
-  // default to No, and UninstallDelete evaluates this same decision.
+  // default to No. Delete in the uninstall event, not a Setup-time Check entry.
   RemoveUserData := MsgResult = IDYES;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if (CurUninstallStep = usPostUninstall) and RemoveUserData then
+  begin
+    // Fixed per-user data directory, never the user-selected application path.
+    if not DelTree(ExpandConstant('{userappdata}\Talkty'), True, True, True) then
+      Log('Some Talkty user data could not be removed.');
+  end;
 end;

@@ -41,6 +41,11 @@ recompiles an installer from that layout after checking its version/payload.
 
 ## Verify and install
 
+`pwsh -File installer/test-uninstall-data.ps1` exercises Keep and Remove against
+isolated fixtures under `installer/output`, without app registration or real user
+data. The test uses the production uninstall code and substitutes only its fixture
+path and simulated answer. It is not a clean-machine test of the complete app.
+
 - Record source commit, product version, installer size/hash and payload count.
 - Inspect the actual Settings/overlay layouts affected by the release. Use the
   existing off-screen WPF tests; do not inject input into somebody else's desktop.

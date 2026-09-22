@@ -1,8 +1,10 @@
 # Talkty 1.4.0
 
 Local Windows installation and open-source release preparation requested by Marko on
-22 September 2026. Installation and draft preparation are in progress. Public Latest
-remains 1.3.5 until publication is separately requested.
+22 September 2026. The installer and GitHub draft are prepared. Windows canceled the
+administrator prompt before installation, so the previous 1.3.5 app was relaunched.
+Local installation still needs an approved administrator prompt. Public Latest remains
+1.3.5 until publication is separately requested.
 
 ## Release notes
 
@@ -52,7 +54,43 @@ test-source warnings remain. Exact-source CI will be recorded below. Earlier pai
 measurements are reused because this packaging/control fix does not change the engines,
 their request payloads or audio processing. No further paid verification is required.
 
-Package source, installer hash, manifest count, installation log, preserved-data checks,
-startup verification and GitHub draft link will be recorded after those actions complete.
-Interactive microphone/desktop testing and a clean-machine uninstall are not claimed by
-the headless checks.
+## Package and draft evidence
+
+- Compiled source: `9a9f7b4c7ce38a6027550d863d45e2b50d02064d`.
+  [Exact-source CI 35764624933](https://github.com/v2matosevic/Talkty/actions/runs/35764624933)
+  passed restore, Release build and tests. The C# release suite has 389 tests; the two
+  isolated uninstall cases separately verified Keep and Remove, with exit 0 throughout.
+- Fresh self-contained publish: `installer/output/release-1.4.0-verified`.
+  Product version `1.4.0+9a9f7b4c7ce38a6027550d863d45e2b50d02064d`.
+  The payload manifest contains 492 files, including Vulkan, native Opus and third-party
+  notices, with no bundled CUDA or unsupported platform payloads.
+- Installer: `TalktySetup-1.4.0.exe`, **61,508,891 bytes**. SHA-256:
+  `6567995affdc2a5fd4978525364bdd437cf72c89f7deff7d47b03a2acaccc643`.
+  The final Inno compile completed successfully without warnings. Build log:
+  `installer/output/build-1.4.0-verified.log`; manifest: `payload-1.4.0.csv`.
+- [GitHub draft](https://github.com/v2matosevic/Talkty/releases/tag/untagged-4b3a40947aa2ce616063)
+  targets that source commit and includes the installer and `.sha256` file. The GitHub
+  asset digest and a freshly downloaded installer both match the local installer hash.
+- Uninstall fixture evidence: `installer/output/uninstall-check-e3b5717c84244a32982798269fe9a5e1/results.json`.
+  These fixtures register no application and never access the installed Talkty or real
+  user data. They are not a clean-machine test of the complete application's uninstall.
+- The restored Prompting control was rendered and inspected off-screen at 680 x 560:
+  `installer/output/settings-1.4.0/settings-prompt-check.png`. No desktop input was injected.
+
+## Windows installation attempt
+
+- The previous app was confirmed idle and backed up at
+  `installer/output/pre-1.4.0-app` before the attempted upgrade.
+- Preservation snapshots cover 53 settings/history/recovery/model files and 13 CUDA
+  files. Local hash manifests: `data-before-1.4.0.json` and `cuda-before-1.4.0.json` in
+  `installer/output`. They contain hashes and paths, not copied credentials.
+- Windows canceled the UAC request before the elevated installer started. No successful
+  installer exit, post-install payload verification or 1.4.0 installation is claimed.
+  There is no completed installer log for this attempt.
+- The previous `B:/Talkty/Talkty.App.exe` was relaunched as PID 84928. Windows registration
+  remains 1.3.5. Startup log `talkty_2026-09-22_20-17-41.log` confirms the hotkey, CUDA GPU
+  model load and completed warm-up. Its product version is
+  `1.3.5+c1ad900c878e5ae61212636d58e379ae8f821f33`.
+- The owner was asked whether to display the administrator prompt again. No further
+  installation attempt is made without that response. No live microphone test or public
+  application release is implied.

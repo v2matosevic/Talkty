@@ -26,8 +26,8 @@ The current source includes the upcoming **1.4.0** changes. See the
 
 Most dictation tools send your microphone to someone else's server. That is a hard
 no for a lot of what people actually say out loud: client work, half-formed ideas,
-anything private. Talkty does the opposite. Whisper runs locally on your machine,
-the audio is thrown away the moment it becomes text, and nothing leaves the device
+anything private. Whisper runs locally on your machine,
+new local recordings are held in memory, and no transcription data leaves the device
 unless you deliberately turn on a cloud feature.
 
 It started as a tool for people who code by talking to an AI agent. Dictate a
@@ -41,7 +41,7 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
 ## Features
 
 - **Runs on your device.** Local Whisper transcription with optional GPU
-  acceleration. Audio never leaves your machine and is discarded after transcription.
+  acceleration. New local recordings stay in memory on your machine.
 - **Press, speak, paste.** A global hotkey (default `Alt+Q`) starts and stops
   recording from any app. Text goes straight to the clipboard.
 - **Type at the cursor.** Turn on auto-paste and the text inserts itself where you
@@ -160,7 +160,7 @@ Local transcription is fully private:
 
 - Audio never leaves your device.
 - No internet connection is required for local models.
-- Audio is discarded immediately after it is turned into text.
+- New local recordings are held in memory; transcripts can be stored in local history and logs.
 - No telemetry, no analytics, no account.
 
 If you turn on Cloud transcription or Prompting, the relevant audio or text is sent

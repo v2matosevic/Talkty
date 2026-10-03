@@ -4,12 +4,25 @@ User-facing changes, newest first. Dates are when the work landed.
 
 ## [Unreleased]
 
+No additional changes.
+
+## [1.5.0] - 2026-10-03
+
 - Recording pause checks no longer allocate a copied audio tail on every poll. Obsolete early recognition is cancelled when speech resumes, while full-recording context, selected models and exact final-audio reuse remain intact.
-- Refined main window: microphone action, visible local/cloud model mode, clearer output destination, recording-only meter and full-text history search with distinct empty states. Source-only verification and measured limits: `docs/PERFORMANCE-APPEARANCE-2026-10-03.md`.
+- Refined main window: microphone action, visible local/cloud model mode, clearer output destination, recording-only meter and full-text history search with distinct empty states. Measurements and limits: `docs/PERFORMANCE-APPEARANCE-2026-10-03.md`.
 
 - Choose a named ADE agent draft for dictation. The complete take joins that draft without replacing the clipboard or sending a turn. Unverified deliveries remain encrypted locally for retry with the same frozen destination and operation ID.
 - Command delivery now uses stable operation IDs and Hermes receipts. A lost response or server error is reconciled without blindly repeating an action. Requires the matching Hermes source update for durable command receipts; older services remain safe with conservative uncertainty handling.
-- These capture/command changes are built and tested locally; no installer or public release carries them yet. Implementation record: `docs/CAPTURE-IMPLEMENTATION-2026-10-03.md`.
+- Direct draft delivery needs a compatible ADE capture receiver, which is not included in the current public ADE 0.0.108. Ordinary dictation remains available. See `docs/RELEASE-1.5.0.md` for package, publication and installation status.
+
+## [1.4.0] - 2026-09-22
+
+- Prepare recognition during pauses using the full recording and selected model. Only an exact match with final flushed audio can be reused; provisional text is never pasted. Early cloud recognition can cost an extra pass.
+- CUDA Flash Attention and corrected MAI clean-style options. Bounded measurements: `docs/TRANSCRIPTION-LATENCY-2026-09-22.md`.
+- Restored the opt-in Prompting switch in Settings > Cloud & Prompting.
+- Added optional command-service integration with a separate shortcut, local discovery, progress and result feedback.
+- Fixed blocking command-preview shutdown and serialized native decoder ownership.
+- Fixed uninstall's Keep data choice and verified Keep/Remove against isolated fixtures. Upgrades preserve settings, history, recovery files, models and CUDA.
 
 - Prompting can now decide before it spends: a fast check classifies your dictation first, so a genuinely one-line ask can skip the rewrite entirely instead of waiting one to three seconds for a model to hand back roughly the same sentence. Substantial requests start on the better model instead of escalating to it. Off by default; Settings value `PromptPlanning` has Off, Hints and Full. Details and limits: `docs/PROMPT-PLANNING.md`.
 - Fixed: valid decision responses were being discarded. Probabilities are rounded by the provider, so a distribution over several options routinely misses 1.0 by more than the old window allowed; a peer measured 2.4% of 292 calls thrown away, skewed toward Croatian. The allowance now scales with the number of options, and one bad answer in a batch no longer discards the good ones alongside it.
@@ -18,7 +31,14 @@ User-facing changes, newest first. Dates are when the work landed.
 - Settings > Cloud & Prompting > Prompt check: Record only (default, shows nothing), Show concerns, or Off.
 - Fixed: a prompt-check notice could be cut off mid-sentence when Talkty was in the tray, which is when you are most likely to see it. Notices now fit the Windows notification limit and quotes end on a whole word.
 - Fixed: a prompt-check charge settled just after midnight was dropped from the local daily spend record instead of counting against it.
-- Implemented and verified locally on Windows only. It is not in any installer or published release yet. Details and evidence: `docs/PROMPT-FIDELITY.md`.
+- Details and evidence: `docs/PROMPT-FIDELITY.md`. Delivered package and installation record: `docs/RELEASE-1.4.0.md`.
+
+## [1.3.5] - 2026-09-18
+
+- Failed cloud recordings remain encrypted locally with Retry and Discard controls across restarts.
+- Select an automatic backup model for temporary cloud failures. Authentication, insufficient balance, cancellation and no-speech results do not trigger a backup; requests cost per use.
+- Retry copies recovered text when enabled without pasting into an old window. History-save failure keeps the take recoverable.
+- Added Qwen3 ASR 1.7B as a separate option. Release evidence and language limits: `docs/RELEASE-1.3.5.md`.
 
 ## [1.3.4] - 2026-09-16
 

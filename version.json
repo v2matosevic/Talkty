@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "download_url": "https://github.com/v2matosevic/Talkty/releases/latest",
-  "release_notes": "Prepare transcription during pauses with full-recording context. Adds CUDA Flash Attention and fixes MAI cloud errors. Restores the opt-in Prompting switch and includes optional command-service integration. Early cloud processing can cost an extra pass. Upgrading keeps settings, history, saved recordings, models and CUDA."
+  "release_notes": "Clearer recording controls, output destination and searchable history. Removes copied-buffer pause polling and cancels obsolete early recognition sooner. Adds optional ADE draft delivery, requiring a compatible receiver, and safer command receipts. Upgrading keeps settings, history, recovery files, models and CUDA."
 }

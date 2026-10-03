@@ -2,6 +2,12 @@
 
 Implemented locally on 3 October 2026 after Marko approved the October 2 proposal. The first path connects Talkty and WinSnipper to a chosen ADE agent draft. Application installations and the public ADE 0.0.108 update are unchanged.
 
+Delivery follow-up: the Talkty client is included in public Talkty 1.5.0, with
+[package and PC installation evidence](RELEASE-1.5.0.md). WinSnipper 0.9.0 also
+ships its companion. The installed ADE 0.0.104 and public ADE 0.0.108 do not include
+the receiver, so a working installed hub path is still pending. The source checks
+below do not imply that broader ecosystem delivery is complete.
+
 ## What works in source
 
 - Talkty's destination button selects a named workspace/agent or ordinary dictation at the cursor. Each take freezes its destination at recording start, preserves complete recognition/Prompting output, and stages it without touching the clipboard or submitting a turn.

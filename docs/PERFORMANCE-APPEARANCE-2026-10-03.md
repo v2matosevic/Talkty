@@ -2,6 +2,11 @@
 
 Implemented locally on 3 October 2026 after Marko asked to complete performance, optimization and appearance work beyond the capture integration. No installed binary, app setting, model choice or running process was changed.
 
+Delivery follow-up: this source is included in the public Talkty 1.5.0 release.
+Current package and PC installation status are recorded in [the release record](RELEASE-1.5.0.md).
+The measurements below describe the implementation check and do not establish
+installed microphone behavior or a new overall transcription speed distribution.
+
 ## Performance evidence and changes
 
 The installed session log was read with FileShare.ReadWrite at 16:24:45. It contains 584 stop-to-paste timings: median 839 ms, 95th percentile 2,402 ms, maximum 25,814 ms. Of 209 cycles with early recognition,8 reused the result. The latest encoding/payload preparation samples were 5–33 ms. These are observations from one real session, not controlled before/after measurements or an accuracy score. Private speech/audio was not replayed or copied into this report.

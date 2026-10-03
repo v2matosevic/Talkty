@@ -11,8 +11,8 @@ speak, and your words land on the clipboard (and optionally type themselves at t
 cursor). Transcription runs entirely on your device by default. No account, no
 internet, no telemetry. Free and open source.
 
-**[Talkty 1.4.0](https://github.com/v2matosevic/Talkty/releases/tag/v1.4.0)** is the latest
-stable release. See the [release record](docs/RELEASE-1.4.0.md) for changes and verification.
+**[Talkty 1.5.0](https://github.com/v2matosevic/Talkty/releases/tag/v1.5.0)** is the latest
+stable release. See the [release record](docs/RELEASE-1.5.0.md) for changes and verification.
 
 ![Talkty, the floating recording pill with a live waveform](./docs/assets/hero.png)
 
@@ -60,6 +60,9 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
   hallucinations like `[MUSIC]` and "Thanks for watching", and normalizes punctuation.
 - **Quiet in the tray.** Lives in the system tray, shows a small floating pill while
   recording, and ducks background audio so the mic hears you clearly.
+- **Searchable history.** Find completed text or the original spoken transcription.
+  The main window shows the selected model and where the next take will go.
+  [See the window](docs/evidence/performance-ui-20261003/main.png).
 - **Light on your PC.** Low resource use while idle, and the speech model's memory
   (up to several GB for the large models) is freed after 15 minutes of inactivity —
   it reloads automatically while you speak, so you never notice.
@@ -76,6 +79,10 @@ a structured prompt. But none of that is required. At its core it is a fast, pri
   instruction to a compatible local command service and shows its response on the
   pill. The service is not bundled; ordinary dictation needs no service.
   [Integration and privacy](docs/COMMAND-MODE.md).
+- **ADE drafts** *(optional integration)*. Select a named Hephaestus workspace/agent
+  draft and stage the complete dictation for review without sending a turn. Requires
+  the matching protocol-v1 capture receiver; ADE 0.0.108 does not include it.
+  [Requirements and delivery status](docs/RELEASE-1.5.0.md).
 
 ![The recording pill in each state: recording, transcribing, copied, and prompting](./docs/assets/pill-states.png)
 

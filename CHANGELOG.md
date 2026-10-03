@@ -4,6 +4,9 @@ User-facing changes, newest first. Dates are when the work landed.
 
 ## [Unreleased]
 
+- Recording pause checks no longer allocate a copied audio tail on every poll. Obsolete early recognition is cancelled when speech resumes, while full-recording context, selected models and exact final-audio reuse remain intact.
+- Refined main window: microphone action, visible local/cloud model mode, clearer output destination, recording-only meter and full-text history search with distinct empty states. Source-only verification and measured limits: `docs/PERFORMANCE-APPEARANCE-2026-10-03.md`.
+
 - Choose a named ADE agent draft for dictation. The complete take joins that draft without replacing the clipboard or sending a turn. Unverified deliveries remain encrypted locally for retry with the same frozen destination and operation ID.
 - Command delivery now uses stable operation IDs and Hermes receipts. A lost response or server error is reconciled without blindly repeating an action. Requires the matching Hermes source update for durable command receipts; older services remain safe with conservative uncertainty handling.
 - These capture/command changes are built and tested locally; no installer or public release carries them yet. Implementation record: `docs/CAPTURE-IMPLEMENTATION-2026-10-03.md`.

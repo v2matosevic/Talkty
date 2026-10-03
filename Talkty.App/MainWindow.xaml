@@ -49,7 +49,7 @@
                     <TextBlock Text="Talkty"
                                Foreground="{StaticResource Zinc400Brush}"
                                FontSize="12"
-                               FontWeight="Medium"
+                               FontWeight="SemiBold"
                                VerticalAlignment="Center"
                                Margin="16,0,0,0"/>
 
@@ -128,7 +128,7 @@
                     <!-- Main Recording Button -->
                     <Button Grid.Row="1"
                             x:Name="RecordButton"
-                            Padding="18,20"
+                            Padding="18,14"
                             Cursor="Hand"
                             Command="{Binding ToggleListeningCommand}"
                             AutomationProperties.Name="Start or stop recording"
@@ -137,7 +137,7 @@
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Background" Value="{StaticResource Zinc900Brush}"/>
-                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource Zinc800Brush}"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
@@ -199,7 +199,9 @@
                                         </Style>
                                     </Ellipse.Style>
                                 </Ellipse>
-                                <Ellipse Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Path Data="M8,2 C8,0 16,0 16,2 L16,10 C16,14 8,14 8,10 Z M5,9 L5,11 C5,19 19,19 19,11 L19,9 M12,18 L12,23 M8,23 L16,23"
+                                      Width="18" Height="23" Stretch="Uniform" Stroke="{StaticResource Zinc200Brush}" StrokeThickness="1.6"/>
+                                <Ellipse Width="7" Height="7" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,0,0">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
                                             <Setter Property="Fill" Value="{StaticResource StatusGreenBrush}"/>
@@ -248,10 +250,9 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <TextBlock Text="{Binding ModelProfileDisplay}"
-                                           FontSize="11"
-                                           Foreground="{StaticResource Zinc500Brush}"
-                                           Margin="0,3,0,0"/>
+                                <TextBlock FontSize="11" Foreground="{StaticResource Zinc500Brush}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis">
+                                    <TextBlock.Text><MultiBinding StringFormat="{}{0} / {1}"><Binding Path="RecognitionModeLabel"/><Binding Path="ModelProfileDisplay"/></MultiBinding></TextBlock.Text>
+                                </TextBlock>
                             </StackPanel>
 
                             <!-- Hotkey Badge -->
@@ -276,6 +277,12 @@
                             CornerRadius="2"
                             Background="{StaticResource Zinc800Brush}"
                             Margin="0,14,0,0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers><DataTrigger Binding="{Binding IsListening}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Border CornerRadius="2"
                                 HorizontalAlignment="Left"
                                 Width="{Binding ActualWidth, ElementName=AudioTrack}"
@@ -297,7 +304,7 @@
                     </Border>
 
                     <!-- Status Row -->
-                    <Grid Grid.Row="3" Margin="0,16,0,0">
+                    <Grid Grid.Row="3" Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -343,20 +350,34 @@
                         </Button>
                     </Grid>
 
-                    <Button Grid.Row="4" Click="CaptureHub_Click"
-                            Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,6,0,12"
-                            ToolTip="{Binding CaptureDestinationLabel}">
-                        <TextBlock Text="{Binding CaptureDestinationLabel}" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+                    <Button Grid.Row="4" Click="CaptureHub_Click" HorizontalContentAlignment="Stretch"
+                            Padding="10,7" Margin="0,6,0,10"
+                            AutomationProperties.Name="Choose dictation destination" ToolTip="Choose a destination for dictation">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                                    <Border x:Name="DestinationPanel" Background="{StaticResource Zinc900Brush}" BorderBrush="{StaticResource Zinc800Brush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Stretch"/></Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="DestinationPanel" Property="Background" Value="{StaticResource Zinc800Brush}"/></Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="DestinationPanel" Property="BorderBrush" Value="{StaticResource Zinc300Brush}"/></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate></Setter.Value></Setter>
+                            </Style>
+                        </Button.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{Binding CaptureDestinationLabel}" Foreground="{StaticResource Zinc200Brush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CaptureDestinationLabel}" FontSize="12"/>
+                                <TextBlock Text="{Binding CaptureDestinationHint}" Foreground="{StaticResource Zinc500Brush}" FontSize="10" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <Path Grid.Column="1" Data="M0,0 L4,4 L0,8" Stroke="{StaticResource Zinc500Brush}" StrokeThickness="1.4" Width="4" Height="8" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </Grid>
                     </Button>
-                    <!-- Divider -->
-                    <Border Grid.Row="4"
-                            Height="1"
-                            Background="{StaticResource Zinc800Brush}"
-                            Margin="0,40,0,14"/>
 
                     <!-- Recent Transcriptions -->
                     <Grid Grid.Row="5">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
@@ -424,7 +445,13 @@
                             </Button>
                         </Grid>
 
-                            <ListBox Grid.Row="2" x:Name="HistoryList" ItemsSource="{Binding History}"
+                            <Grid Grid.Row="2" Margin="0,5,0,7" Visibility="{Binding History.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                                <TextBox x:Name="HistorySearchBox" Text="{Binding HistorySearch, UpdateSourceTrigger=PropertyChanged}" Padding="10,6" FontSize="11" AutomationProperties.Name="Search recordings" ToolTip="Search full text and original dictation"/>
+                                <TextBlock Text="Search recordings" Margin="11,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Zinc500Brush}" FontSize="11" IsHitTestVisible="False">
+                                    <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding HistorySearch}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            <ListBox Grid.Row="3" x:Name="HistoryList" ItemsSource="{Binding HistoryView}"
                                      Background="Transparent" BorderThickness="0" Padding="0"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -563,8 +590,15 @@
                                 </ListBox.ItemTemplate>
                             </ListBox>
 
+                        <TextBlock Grid.Row="3" Text="No matching recordings" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource Zinc400Brush}" FontSize="12">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+                                    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding HasHistorySearch}" Value="True"/><Condition Binding="{Binding HistoryView.IsEmpty}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                </Style.Triggers></Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <!-- Empty State -->
-                        <StackPanel Grid.Row="2"
+                        <StackPanel Grid.Row="3"
                                     VerticalAlignment="Center"
                                     HorizontalAlignment="Center">
                             <StackPanel.Style>
@@ -575,6 +609,7 @@
                                             <MultiDataTrigger.Conditions>
                                                 <Condition Binding="{Binding History.Count}" Value="0"/>
                                                 <Condition Binding="{Binding RecoverableRecordings.Count}" Value="0"/>
+                                                <Condition Binding="{Binding HasHistorySearch}" Value="False"/>
                                             </MultiDataTrigger.Conditions>
                                             <Setter Property="Visibility" Value="Visible"/>
                                         </MultiDataTrigger>

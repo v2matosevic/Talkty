@@ -12,6 +12,7 @@ public sealed class SpeculativeTranscriber : IDisposable
 {
     private readonly Func<float[]> _snapshot;
     private readonly Func<int, float[]> _tail;
+    private readonly Func<int, bool> _paused;
     private readonly Func<float[], CancellationToken, Task<TranscriptionResult>> _transcribe;
     private readonly Func<int, CancellationToken, Task> _delay;
     private readonly CancellationTokenSource _schedule = new();
@@ -29,10 +30,12 @@ public sealed class SpeculativeTranscriber : IDisposable
     public SpeculativeTranscriber(Func<float[]> snapshot, Func<int, float[]> tail,
         Func<float[], CancellationToken, Task<TranscriptionResult>> transcribe,
         bool cloud, CancellationToken cancellationToken,
-        Func<int, CancellationToken, Task>? delay = null)
+        Func<int, CancellationToken, Task>? delay = null,
+        Func<int, bool>? paused = null)
     {
         _snapshot = snapshot;
         _tail = tail;
+        _paused = paused ?? (required => AudioSilenceTrimmer.IsPause(_tail(required), required));
         _transcribe = transcribe;
         _delay = delay ?? Task.Delay;
         _work = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -60,7 +63,7 @@ public sealed class SpeculativeTranscriber : IDisposable
             {
                 await _delay(interval, polling.Token).ConfigureAwait(false);
                 polling.Token.ThrowIfCancellationRequested();
-                if (!AudioSilenceTrimmer.IsPause(_tail(_pauseSamples), _pauseSamples)) continue;
+                if (!_paused(_pauseSamples)) continue;
                 var audio = AudioSilenceTrimmer.Trim(_snapshot());
                 if (audio.Length < Constants.SampleRate || AudioSilenceTrimmer.IsQuiet(audio)) continue;
                 lock (_lock)
@@ -74,7 +77,29 @@ public sealed class SpeculativeTranscriber : IDisposable
                 var clock = Stopwatch.StartNew();
                 using var attempt = CancellationTokenSource.CreateLinkedTokenSource(_work.Token);
                 attempt.CancelAfter(TimeSpan.FromSeconds(5));
-                var result = await _transcribe(audio, attempt.Token).ConfigureAwait(false);
+                var decode = _transcribe(audio, attempt.Token);
+                var resumed = false;
+                // Watch for resumed speech while the whole-take call is running.
+                // Cancellation stops obsolete work early; native decoders still
+                // unwind before any later decode can enter their shared state.
+                while (!decode.IsCompleted && !polling.IsCancellationRequested)
+                {
+                    var check = _delay(150, polling.Token);
+                    if (await Task.WhenAny(decode, check).ConfigureAwait(false) == decode) break;
+                    if (polling.IsCancellationRequested) break;
+                    await check.ConfigureAwait(false);
+                    if (!_paused(_pauseSamples))
+                    {
+                        attempt.Cancel();
+                        resumed = true;
+                        Log.Info("Early transcription cancelled because speech resumed");
+                        break;
+                    }
+                }
+                TranscriptionResult result;
+                try { result = await decode.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (resumed && !polling.IsCancellationRequested) { continue; }
+                if (resumed) continue;
                 lock (_lock) _result = result;
                 Log.Info($"Early transcription: pass={Passes}, audio={audio.Length / (double)Constants.SampleRate:F1}s, elapsed={clock.ElapsedMilliseconds}ms, success={result.Success}");
                 if (!result.Success) return; // Leave retries/recovery to the final pass.

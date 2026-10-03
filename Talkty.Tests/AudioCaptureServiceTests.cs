@@ -1,4 +1,7 @@
 using NAudio.Wave;
+using System.Diagnostics;
+using System.Text.Json;
+using System.IO;
 using Talkty.App.Services;
 using Xunit;
 
@@ -6,6 +9,42 @@ namespace Talkty.Tests;
 
 public class AudioCaptureServiceTests
 {
+    [Fact]
+    public void PausePollingBenchmarkRecordsTheRealBufferAllocationDifference()
+    {
+        var recorder = new FakeRecorder(); using var service = new AudioCaptureService(_ => recorder);
+        service.StartRecording(); for (var i = 0; i < 12800; i++) recorder.Emit(0);
+        service.HasQuietTail(12800); service.GetRecordedAudioTail(12800);
+        const int rounds = 1000;
+        var clock = Stopwatch.StartNew(); var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < rounds; i++) Assert.True(AudioSilenceTrimmer.IsPause(service.GetRecordedAudioTail(12800), 12800));
+        var oldBytes = GC.GetAllocatedBytesForCurrentThread() - before; var oldMs = clock.Elapsed.TotalMilliseconds;
+        clock.Restart(); before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < rounds; i++) Assert.True(service.HasQuietTail(12800));
+        var newBytes = GC.GetAllocatedBytesForCurrentThread() - before; var newMs = clock.Elapsed.TotalMilliseconds;
+        Assert.True(oldBytes >= rounds * 12800L * sizeof(float)); Assert.Equal(0, newBytes);
+        var folder = Path.Combine(AppContext.BaseDirectory, "perf-evidence"); Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "pause-polling.json"), JsonSerializer.Serialize(new { rounds, samplesPerPoll = 12800, oldBytes, newBytes, oldMs, newMs, scope = "RMS polling, no model or microphone" }));
+    }
+
+    [Fact]
+    public void QuietTailMatchesTheSnapshotPolicyWithoutAllocatingOrChangingSamples()
+    {
+        var recorder = new FakeRecorder();
+        using var service = new AudioCaptureService(_ => recorder);
+        service.StartRecording();
+        recorder.Emit(8192);
+        for (var i = 0; i < 16000; i++) recorder.Emit(0);
+        Assert.Equal(AudioSilenceTrimmer.IsPause(service.GetRecordedAudioTail(12800), 12800), service.HasQuietTail(12800));
+        service.HasQuietTail(12800);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 100; i++) Assert.True(service.HasQuietTail(12800));
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        for (var i = 0; i < 160; i++) recorder.Emit(8192);
+        Assert.False(service.HasQuietTail(12800));
+        Assert.Equal(16161, service.GetRecordedAudioAsFloat().Length);
+    }
+
     [Fact]
     public void TailSnapshotIsBoundedAndIncludesFlushedSamplesWithoutChangingTheRecording()
     {

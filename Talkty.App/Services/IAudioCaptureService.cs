@@ -23,5 +23,6 @@ public interface IAudioCaptureService : IDisposable
         var audio = GetRecordedAudioAsFloat();
         return audio.Length <= maximumSamples ? audio : audio[^maximumSamples..];
     }
+    bool HasQuietTail(int requiredSamples) => AudioSilenceTrimmer.IsPause(GetRecordedAudioTail(requiredSamples), requiredSamples);
     bool IsRecording { get; }
 }

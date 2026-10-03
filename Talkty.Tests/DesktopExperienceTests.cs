@@ -16,6 +16,49 @@ namespace Talkty.Tests;
 public partial class TranscriptionFlowTests
 {
     [Fact]
+    public Task HistorySearchFindsFullOriginalTextWithoutChangingSavedContent() => ui.Run(() =>
+    {
+        using var context = new Context();
+        var first = new TranscriptionHistoryItem { Text = "A generated instruction", RawTranscription = "Keep PostgreSQL and the Croatian name Čakovec." };
+        var second = new TranscriptionHistoryItem { Text = "A separate C++ recording." };
+        context.ViewModel.History.Add(first); context.ViewModel.History.Add(second);
+        context.ViewModel.HistorySearch = "čAKOVEC";
+        Assert.Same(first, Assert.Single(context.ViewModel.HistoryView.Cast<TranscriptionHistoryItem>()));
+        context.ViewModel.HistorySearch = "C++";
+        Assert.Same(second, Assert.Single(context.ViewModel.HistoryView.Cast<TranscriptionHistoryItem>()));
+        context.ViewModel.HistorySearch = "absent"; Assert.True(context.ViewModel.HistoryView.IsEmpty);
+        context.ViewModel.HistorySearch = ""; Assert.Equal(2, context.ViewModel.HistoryView.Cast<object>().Count());
+        Assert.Equal("Keep PostgreSQL and the Croatian name Čakovec.", first.RawTranscription);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RefinedMainStatesKeepActionsAndDestinationReadableAtMinimumSize() => ui.Run(() =>
+    {
+        using var context = new Context(); context.ViewModel.IsModelLoaded = true;
+        context.ViewModel.History.Add(new TranscriptionHistoryItem { Text = "A complete saved instruction." });
+        var surface = LoadPreview("Talkty.App/MainWindow.xaml"); surface.DataContext = context.ViewModel;
+        foreach (var state in new[] { "ready", "recording", "transcribing", "loading", "search-empty" })
+        {
+            context.ViewModel.IsListening = state == "recording";
+            context.ViewModel.IsTranscribing = state == "transcribing";
+            context.ViewModel.IsModelLoading = state == "loading";
+            context.ViewModel.StatusText = state == "transcribing" ? "Transcribing..." : state == "recording" ? "Listening..." : "Ready";
+            context.ViewModel.AudioLevel = 0.7f;
+            context.ViewModel.HistorySearch = state == "search-empty" ? "nothing matches" : "";
+            Layout(surface, 380, 420);
+            var record = (Button)surface.FindName("RecordButton");
+            Assert.Equal(state is not "transcribing" and not "loading", record.IsEnabled);
+            var meter = (Border)surface.FindName("AudioTrack");
+            Assert.Equal(state == "recording" ? Visibility.Visible : Visibility.Collapsed, meter.Visibility);
+            if (state == "search-empty") Assert.Contains(Descendants<TextBlock>(surface), t => t.Text == "No matching recordings" && t.Visibility == Visibility.Visible);
+            SavePreview(surface, 380, 420, $"refined-{state}.png");
+        }
+        return Task.CompletedTask;
+    });
+
+
+    [Fact]
     public Task HistorySnapshotsStayOrderedWhenDiskIsSlow() => ui.Run(async () =>
     {
         using var context = new Context();

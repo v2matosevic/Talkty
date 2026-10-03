@@ -155,6 +155,17 @@ public class AudioCaptureService : IAudioCaptureService
         }
     }
 
+    public bool HasQuietTail(int requiredSamples)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requiredSamples);
+        lock (_dataLock)
+        {
+            if (_floatSamples.Count < requiredSamples) return false;
+            var tail = CollectionsMarshal.AsSpan(_floatSamples).Slice(_floatSamples.Count - requiredSamples, requiredSamples);
+            return AudioSilenceTrimmer.IsPause(tail, requiredSamples);
+        }
+    }
+
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
         try

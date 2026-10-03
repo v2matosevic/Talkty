@@ -1,5 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows;
+using System.ComponentModel;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Talkty.App.Models;
@@ -40,9 +42,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly CaptureClient? _captureClient;
     private CaptureDestination? _captureDestination;
     private CaptureDestination? _recordingCaptureDestination;
-    public string CaptureDestinationLabel => _captureDestination?.Label ?? "Dictate at cursor";
+    public string CaptureDestinationLabel => _captureDestination?.Label ??
+        (!_settingsService.Settings.CopyToClipboard ? "History only" : _settingsService.Settings.AutoPaste ? "At the cursor" : "Clipboard");
+    public string CaptureDestinationHint => _captureDestination != null ? "Review in ADE before sending" :
+        (!_settingsService.Settings.CopyToClipboard ? "Keep the text in Talkty" : _settingsService.Settings.AutoPaste ? "Paste into the focused app" : "Copy without changing app focus");
+    public string RecognitionModeLabel => _settingsService.Settings.ModelProfile.IsCloud() ? "Cloud" : "Local";
     public void SelectCaptureDestination(CaptureDestination? destination)
-    { _captureDestination = destination; OnPropertyChanged(nameof(CaptureDestinationLabel)); }
+    { _captureDestination = destination; OnPropertyChanged(nameof(CaptureDestinationLabel)); OnPropertyChanged(nameof(CaptureDestinationHint)); }
 
     // Linked across a single recording -> transcription cycle. ESC cancels it mid-flight,
     // which aborts both the NAudio capture (if still recording) and the Whisper decode.
@@ -81,6 +87,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private ObservableCollection<TranscriptionHistoryItem> _history = [];
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHistorySearch))]
+    private string _historySearch = "";
+    public bool HasHistorySearch => !string.IsNullOrWhiteSpace(HistorySearch);
+    public ICollectionView HistoryView => CollectionViewSource.GetDefaultView(History);
+    partial void OnHistoryChanged(ObservableCollection<TranscriptionHistoryItem> value)
+    {
+        OnPropertyChanged(nameof(HistoryView));
+        OnHistorySearchChanged(HistorySearch);
+    }
+    partial void OnHistorySearchChanged(string value)
+    {
+        var query = value.Trim();
+        HistoryView.Filter = query.Length == 0 ? null : item => item is TranscriptionHistoryItem history &&
+            (history.Text.Contains(query, StringComparison.OrdinalIgnoreCase) || history.Transcription.Contains(query, StringComparison.OrdinalIgnoreCase));
+    }
 
     // Update notification
     [ObservableProperty]
@@ -1241,7 +1263,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _audioCaptureService.GetRecordedAudioAsFloat,
             _audioCaptureService.GetRecordedAudioTail,
             (audio, token) => _transcriptionService.TranscribeEarlyAsync(audio, language, token, vocabulary, terms),
-            settings.ModelProfile.IsCloud(), _transcriptionCts?.Token ?? default);
+            settings.ModelProfile.IsCloud(), _transcriptionCts?.Token ?? default,
+            paused: _audioCaptureService.HasQuietTail);
         _earlyTranscription = early;
         early.Start();
     }
@@ -1643,6 +1666,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (item == null) return;
         History.Remove(item);
+        if (History.Count == 0) HistorySearch = "";
         QueueHistorySave();
         Log.Info("History entry deleted");
     }
@@ -1650,6 +1674,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void ClearHistory()
     {
+        HistorySearch = "";
         if (History.Count == 0) return;
         var count = History.Count;
         History.Clear();
@@ -1727,6 +1752,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _transcriptionService.SetVocabularyPrompt(VocabularyPromptBuilder.Build(settings));
 
         _settingsService.Save();
+        OnPropertyChanged(nameof(CaptureDestinationLabel));
+        OnPropertyChanged(nameof(CaptureDestinationHint));
+        OnPropertyChanged(nameof(RecognitionModeLabel));
 
         _audioCaptureService.SelectDevice(settings.SelectedMicrophoneId);
 

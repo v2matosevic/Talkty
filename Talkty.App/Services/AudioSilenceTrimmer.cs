@@ -37,12 +37,12 @@ public static class AudioSilenceTrimmer
         return Math.Sqrt(energy / samples.Length) <= Constants.SilenceThreshold;
     }
 
-    internal static bool IsPause(float[] tail, int requiredSamples)
+    internal static bool IsPause(ReadOnlySpan<float> tail, int requiredSamples)
     {
         if (tail.Length < requiredSamples) return false;
         // A quiet average alone could hide a short final word inside a long pause.
         for (var i = 0; i < tail.Length; i += Constants.SilenceWindowSamples)
-            if (!IsQuiet(tail.AsSpan(i, Math.Min(Constants.SilenceWindowSamples, tail.Length - i)))) return false;
+            if (!IsQuiet(tail.Slice(i, Math.Min(Constants.SilenceWindowSamples, tail.Length - i)))) return false;
         return true;
     }
 }

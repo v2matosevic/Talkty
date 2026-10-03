@@ -7,6 +7,43 @@ namespace Talkty.Tests;
 
 public class SpeculativeTranscriberTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResumedSpeechCancelsObsoleteDecodeBeforeTheStopHotkey(bool cloud)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var paused = true;
+        using var early = new SpeculativeTranscriber(() => Take(), _ => throw new Exception("Production pause probe must avoid tail copies"), async (_, ct) =>
+        {
+            started.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, ct); }
+            catch (OperationCanceledException) { cancelled.TrySetResult(); throw; }
+            return Success();
+        }, cloud, default, (_, ct) => Task.Delay(1, ct), _ => Volatile.Read(ref paused));
+        early.Start(); await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Volatile.Write(ref paused, false);
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(early.Reused);
+        Assert.Null(await early.CompleteAsync(AudioSilenceTrimmer.Trim(Take()), default));
+    }
+
+    [Fact]
+    public async Task MatchingFinalTakeWaitsForItsDecodeAfterSchedulingStops()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = new TaskCompletionSource<TranscriptionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var early = new SpeculativeTranscriber(() => Take(), n => Take()[^n..], (_, _) =>
+        { started.TrySetResult(); return result.Task; }, true, default, (_, ct) => Task.Delay(1, ct));
+        early.Start(); await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var complete = early.CompleteAsync(AudioSilenceTrimmer.Trim(Take()), default);
+        Assert.False(complete.IsCompleted);
+        result.SetResult(Success());
+        Assert.Equal("Keep every final word.", (await complete)!.Text);
+        Assert.True(early.Reused);
+    }
+
     internal static float[] Take(int silence = 16000) =>
         [.. Enumerable.Repeat(0.1f, 32000), .. new float[silence]];
     private static TranscriptionResult Success(string text = "Keep every final word.") => new() { Success = true, Text = text };

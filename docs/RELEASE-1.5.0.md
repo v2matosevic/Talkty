@@ -24,6 +24,8 @@ and public until the delivery evidence below records successful replacement.
   locally and retry with the same destination and operation ID.
 - Command delivery uses stable operation IDs and receipt reconciliation instead
   of blindly repeating a possibly completed action after a lost response.
+- Corrected the public privacy document and installer disclosure to describe
+  optional cloud processing, text in logs, encrypted recovery and ADE draft delivery.
 
 ## Ecosystem requirements and privacy
 

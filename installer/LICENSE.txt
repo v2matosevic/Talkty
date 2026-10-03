@@ -44,6 +44,11 @@ Optional command mode sends the transcript and captured window information to
 a separately configured service on this PC. That service controls any further
 actions or network access. It is not bundled with Talkty.
 
+Optional direct ADE dictation stages completed text in the local agent draft
+you select; it does not send a turn automatically. Unverified handoffs stay
+encrypted locally until a verified retry or discard. ADE owns accepted drafts
+and its selected agent/provider can receive them when you send.
+
 ---
 
 THIRD-PARTY COMPONENTS

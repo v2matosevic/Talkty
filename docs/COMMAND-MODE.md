@@ -25,7 +25,7 @@ Talkty can request that service start. Talkty does not download or install the s
 ## Request contract
 
 `POST` the command endpoint with JSON and the `x-voice-token` header. The payload contains
-`text`, `hotkey` (`command`), `foregroundApp`, `sentAt` (Unix milliseconds), and optional
+`operationId`, `text`, `hotkey` (`command`), `foregroundApp`, `sentAt` (Unix milliseconds), and optional
 `targetWindow` with `handle`, `pid`, `processName`, `title` and process `startedAt`.
 The target is captured before transcription so later window changes do not retarget it.
 
@@ -35,6 +35,15 @@ current [client/parser](../Talkty.App/Services/VoiceCommandService.cs) and
 confirmation and goal-status responses. An interrupted request may already have arrived;
 Talkty does not blindly send it again. When a response includes a running goal, the pill
 can follow the service's `/goals/<id>` status endpoint with the same token.
+
+After a lost response, connection failure or server error, Talkty queries
+`GET /operations/<operationId>` with the same token. A usable receipt must match
+the operation ID and include `deliveryState`; an absent, mismatched or unreadable
+receipt remains uncertain and does not trigger another command. Durable receipts
+require the matching Hermes operation-receipt update. The service must claim the
+operation before executing it, reject changed payloads for a reused ID and retain
+the receipt across restart. Older services can still execute ordinary commands,
+but cannot establish this durable reconciliation without the update.
 
 ## Privacy and boundaries
 

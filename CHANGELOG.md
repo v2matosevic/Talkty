@@ -14,6 +14,7 @@ No additional changes.
 - Choose a named ADE agent draft for dictation. The complete take joins that draft without replacing the clipboard or sending a turn. Unverified deliveries remain encrypted locally for retry with the same frozen destination and operation ID.
 - Command delivery now uses stable operation IDs and Hermes receipts. A lost response or server error is reconciled without blindly repeating an action. Requires the matching Hermes source update for durable command receipts; older services remain safe with conservative uncertainty handling.
 - Direct draft delivery needs a compatible ADE capture receiver, which is not included in the current public ADE 0.0.108. Ordinary dictation remains available. See `docs/RELEASE-1.5.0.md` for package, publication and installation status.
+- Updated the public privacy document and installer disclosure to describe optional cloud processing, diagnostic logs, encrypted recovery and direct ADE draft delivery accurately.
 
 ## [1.4.0] - 2026-09-22
 

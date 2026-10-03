@@ -13,7 +13,7 @@ Implemented locally on 3 October 2026 after Marko approved the October 2 proposa
 
 Contract: [ADE capture companions](../../Athena/app_tracker/apps/ade/docs/CAPTURE-COMPANIONS.md). Discovery reuses [Version2's local-services registry](../../Athena/docs/ecosystem/local-services.md); it does not borrow agent-session tokens or expose shell execution.
 
-Committed supporting source: ADE `3f029e89`, WinSnipper `1e4b9e8` (preserving reliability baseline d802e85), and Hermes/discovery `dc02d887b`. Talkty source is committed with this handoff. These are local source commits, not published/installed packages.
+Committed source: Talkty `2e8ffe1`, ADE `3f029e89`, WinSnipper `1e4b9e8` (preserving reliability baseline d802e85), and Hermes/discovery `dc02d887b`. These are local source commits, not published/installed packages.
 
 ## Evidence
 
@@ -54,6 +54,6 @@ Accepted images reside in ADE's capture-inbox; provider cleanup cannot break the
 
 This is the accepted first implementation slice, not all eight roadmap items. Athena Desktop conversation delivery, Work Hub evidence uploads, generic-terminal support, visual video processing, workspace recognition profiles, searchable dictation history and coordinated packaging remain separate work. Existing `Athena-7o1s` and `Athena-ovqe` retain their broader discovery/voice-command work; this receiver does not silently drain the old command-execution channel.
 
-Work Hub 8111 tracks the command retry repair; Athena-e1r5 tracks the capture path. Installation and owner acceptance are not implied by source/build tests. Running Talkty 1.4.0, WinSnipper and ADE remain their previous installed builds. A combined update is required before the new controls can work in daily use; closing apps/agents or stopping their processes still requires Marko's explicit approval under his supplied AGENTS instructions.
+Work Hub 8111 records the completed source retry repair; Athena-e1r5 records the completed capture implementation. Linked delivery task Athena-dkxi retains package preparation and native installed/owner acceptance. Installation and owner acceptance are not implied by source/build tests. Running Talkty 1.4.0, WinSnipper and ADE remain their previous installed builds. A combined update is required before the new controls can work in daily use; closing apps/agents or stopping their processes still requires Marko's explicit approval under his supplied AGENTS instructions.
 
 No public updater/version notice, hosting configuration, global installation or shell/PATH setting was changed. No private audio/screenshot was replayed or uploaded, and no paid model call was made. The temporary Vite verification server on port 50123 remains available until its cleanup is authorized.

@@ -3,7 +3,7 @@ namespace Talkty.App.Services;
 /// <summary>
 /// What happened when a command-mode dictation was handed to the local daemon.
 /// The three cases are deliberately distinct because they need different recovery:
-/// only <see cref="NotReached"/> is safe to treat as an ordinary dictation.
+/// only <see cref="NotReached"/> proves the action did not run.
 /// </summary>
 public enum VoiceCommandOutcome
 {
@@ -22,7 +22,8 @@ public record VoiceCommandResult(
     string Message,
     string? CommandId = null,
     bool Ok = false,
-    string? GoalId = null)
+    string? GoalId = null,
+    string? OperationId = null)
 {
     public bool Delivered => Outcome == VoiceCommandOutcome.Delivered;
 
@@ -60,8 +61,7 @@ public interface IVoiceCommandService
 
     /// <summary>
     /// Hand one spoken instruction to the local command daemon. Never throws:
-    /// a failure comes back as <see cref="VoiceCommandOutcome.NotReached"/> so the
-    /// caller can fall back to ordinary dictation and the sentence is not lost.
+    /// pre-send refusals return NotReached; failures after sending are uncertain.
     /// </summary>
     Task<VoiceCommandResult> DispatchAsync(
         string text,
@@ -74,6 +74,11 @@ public interface IVoiceCommandService
         CancellationToken cancellationToken,
         CapturedWindowInfo? targetWindow)
         => DispatchAsync(text, foregroundApp, cancellationToken);
+
+    Task<VoiceCommandResult> DispatchAsync(
+        string text, string? foregroundApp, CancellationToken cancellationToken,
+        CapturedWindowInfo? targetWindow, string operationId)
+        => DispatchAsync(text, foregroundApp, cancellationToken, targetWindow);
 
     /// <summary>
     /// Watch a goal the daemon accepted but has not finished, reporting each

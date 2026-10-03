@@ -109,22 +109,22 @@ public class VoiceCommandServiceTests
     }
 
     [Fact]
-    public async Task AServerErrorIsNotReached()
+    public async Task AServerErrorIsUncertainAndNeverAllowsARetry()
     {
         var service = Build(new StubHandler(_ => Json(HttpStatusCode.InternalServerError, "{}")));
         var result = await service.DispatchAsync("open chrome", null, default);
 
-        Assert.Equal(VoiceCommandOutcome.NotReached, result.Outcome);
-        Assert.Contains("500", result.Message);
+        Assert.Equal(VoiceCommandOutcome.Uncertain, result.Outcome);
+        Assert.Contains("nothing was retried", result.Message);
     }
 
     [Fact]
-    public async Task NothingListeningIsNotReached()
+    public async Task AConnectionFailureAfterTheIdentityProbeIsUncertain()
     {
         var service = Build(new StubHandler(_ => throw new HttpRequestException("refused")));
         var result = await service.DispatchAsync("open chrome", null, default);
 
-        Assert.Equal(VoiceCommandOutcome.NotReached, result.Outcome);
+        Assert.Equal(VoiceCommandOutcome.Uncertain, result.Outcome);
     }
 
     [Fact]
@@ -138,12 +138,12 @@ public class VoiceCommandServiceTests
     }
 
     [Fact]
-    public async Task AnUnexpectedFailureNeverEscapesIntoTheRecordingPipeline()
+    public async Task AnUnexpectedFailureAfterSendingNeverPermitsAnotherAction()
     {
         var service = Build(new StubHandler(_ => throw new InvalidOperationException("boom")));
         var result = await service.DispatchAsync("open chrome", null, default);
 
-        Assert.Equal(VoiceCommandOutcome.NotReached, result.Outcome);
+        Assert.Equal(VoiceCommandOutcome.Uncertain, result.Outcome);
     }
 
     [Fact]
@@ -151,12 +151,12 @@ public class VoiceCommandServiceTests
         => Assert.Equal("no-match", VoiceCommandService.Read("""{"ok":false,"outcome":"no-match"}""").Message);
 
     [Fact]
-    public void AnUnreadableAnswerStillCountsAsDelivered()
+    public void AnUnreadableAnswerIsUncertain()
     {
         // It answered. We cannot parse it, but the command was received, so falling
         // back to dictation would risk acting twice.
         var result = VoiceCommandService.Read("<html>not json</html>");
-        Assert.Equal(VoiceCommandOutcome.Delivered, result.Outcome);
+        Assert.Equal(VoiceCommandOutcome.Uncertain, result.Outcome);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class VoiceCommandServiceTests
         Assert.Equal(VoiceCommandOutcome.Delivered, result.Outcome);
         Assert.Equal("http://127.0.0.1:17765/command", seen!.RequestUri!.ToString());
         Assert.Equal("record-token", seen.Headers.GetValues("x-voice-token").Single());
-        Assert.Equal(0, handler.HealthChecks);
+        Assert.Equal(1, handler.HealthChecks);
     }
 
     [Fact]
@@ -337,6 +337,31 @@ public class VoiceCommandServiceTests
         Assert.False(Build(new StubHandler(_ => Json(HttpStatusCode.OK, "{}")), s => s.CommandToken = "").IsConfigured);
         Assert.False(Build(new StubHandler(_ => Json(HttpStatusCode.OK, "{}")),
             s => s.CommandEndpoint = "https://example.com/x").IsConfigured);
+    }
+
+    [Fact]
+    public async Task LostVoiceResponseIsRecoveredByItsExactOperationReceipt()
+    {
+        var operation = Guid.NewGuid().ToString("D"); int posts = 0;
+        var handler = new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Post) { posts++; throw new HttpRequestException("response was lost after execution"); }
+            Assert.EndsWith(operation, request.RequestUri!.AbsolutePath);
+            return Json(HttpStatusCode.OK, $$"""{"ok":true,"outcome":"executed","detail":"Verified once","operationId":"{{operation}}","deliveryState":"completed"}""");
+        });
+        var result = await Build(handler).DispatchAsync("fixture", null, default, null, operation);
+        Assert.Equal(VoiceCommandOutcome.Delivered, result.Outcome); Assert.True(result.Ok);
+        Assert.Equal(operation, result.OperationId); Assert.Equal(1, posts);
+    }
+
+    [Fact]
+    public async Task AnUnrelatedReceiptCannotVerifyTheInstruction()
+    {
+        var handler = new StubHandler(request => request.Method == HttpMethod.Post
+            ? Json(HttpStatusCode.InternalServerError, "{}")
+            : Json(HttpStatusCode.OK, """{"ok":true,"outcome":"executed","operationId":"wrong","deliveryState":"completed"}"""));
+        var result = await Build(handler).DispatchAsync("fixture", null, default);
+        Assert.Equal(VoiceCommandOutcome.Uncertain, result.Outcome);
     }
 
     private static VoiceCommandService Build(

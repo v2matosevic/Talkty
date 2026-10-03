@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Talkty.App.Models;
 using Talkty.App.Services;
+using Version2.Capture;
 
 namespace Talkty.App.ViewModels;
 
@@ -35,6 +36,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether the recording currently running is a command, not dictation.</summary>
     private bool _commandModeRecording;
+    private string _commandOperationId = Guid.NewGuid().ToString("D");
+    private readonly CaptureClient? _captureClient;
+    private CaptureDestination? _captureDestination;
+    private CaptureDestination? _recordingCaptureDestination;
+    public string CaptureDestinationLabel => _captureDestination?.Label ?? "Dictate at cursor";
+    public void SelectCaptureDestination(CaptureDestination? destination)
+    { _captureDestination = destination; OnPropertyChanged(nameof(CaptureDestinationLabel)); }
 
     // Linked across a single recording -> transcription cycle. ESC cancels it mid-flight,
     // which aborts both the NAudio capture (if still recording) and the Whisper decode.
@@ -119,12 +127,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IPromptFidelityService? promptFidelityService = null,
         IVoiceCommandService? voiceCommandService = null,
         PromptClassifier? promptClassifier = null,
-        VoiceDaemonLauncher? daemonLauncher = null)
+        VoiceDaemonLauncher? daemonLauncher = null,
+        CaptureClient? captureClient = null)
     {
         Log.Info("MainViewModel constructor starting");
 
         _settingsService = settingsService;
         _voiceCommandService = voiceCommandService;
+        _captureClient = captureClient;
         _daemonLauncher = daemonLauncher ?? new VoiceDaemonLauncher();
         _recoveryStore = recoveryStore ?? new RecordingRecoveryStore();
         foreach (var recording in _recoveryStore.Load()) RecoverableRecordings.Add(recording);
@@ -557,6 +567,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     internal async Task StartListeningAsync()
     {
+        _recordingCaptureDestination = _commandModeRecording ? null : _captureDestination;
         PromptMode = !_commandModeRecording && _settingsService.Settings.PromptingEnabled;
         bool volumeDucked = false;
         try
@@ -628,6 +639,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // The mode belongs to the recording that just ended. Read it once and clear it,
         // so a recovery replay of old audio is never treated as a command.
         var commandMode = _commandModeRecording && retry == null;
+        var captureDestination = retry == null ? _recordingCaptureDestination : null;
         _commandModeRecording = false;
         RecoverableRecording? recovery = retry;
         try
@@ -740,7 +752,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Action<string>? onFirstSegment = null;
             // Partial clipboard writes help manual paste only. In auto-paste/prompt mode
             // they overwrite the user's clipboard even when the operation is cancelled.
-            if (_settingsService.Settings.CopyToClipboard && !_settingsService.Settings.AutoPaste && !PromptMode)
+            if (captureDestination == null && _settingsService.Settings.CopyToClipboard && !_settingsService.Settings.AutoPaste && !PromptMode)
             {
                 onFirstSegment = (text) =>
                 {
@@ -952,7 +964,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 cancellationToken.ThrowIfCancellationRequested();
                 StatusText = "Saved to history";
-                if (_settingsService.Settings.CopyToClipboard)
+                if (captureDestination != null)
+                {
+                    StatusText = "Adding to ADE draft...";
+                    try
+                    {
+                        if (_captureClient is null) throw new InvalidOperationException("ADE delivery is unavailable. Your words remain in History.");
+                        var delivery = await _captureClient.StageAsync(CaptureClient.Text(captureDestination, result.Text), cancellationToken);
+                        StatusText = delivery.Accepted ? "Added to ADE draft" : "Saved for ADE delivery";
+                        if (!delivery.Accepted) ShowWarning(delivery.Message);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) { StatusText = "Saved to history; ADE delivery unavailable"; ShowWarning(ex.Message); }
+                }
+                else if (_settingsService.Settings.CopyToClipboard)
                 {
                     // Update clipboard with full text (overwrites first-segment partial if multi-segment)
                     Log.Debug("Copying full text to clipboard");
@@ -1342,6 +1367,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task<VoiceCommandResult> DispatchCommandAsync(string text, CancellationToken cancellationToken, CapturedWindowInfo? targetWindow)
     {
+        _commandOperationId = Guid.NewGuid().ToString("D");
         if (_voiceCommandService == null || !_voiceCommandService.IsConfigured)
         {
             return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
@@ -1349,7 +1375,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         StatusText = "Sending command...";
-        return await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow);
+        return await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow, _commandOperationId);
     }
 
     /// <summary>
@@ -1373,7 +1399,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         if (!_voiceCommandService.IsDaemonLive) return null;
 
-        var result = await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow);
+        var result = await _voiceCommandService.DispatchAsync(text, targetWindow?.ProcessName, cancellationToken, targetWindow, _commandOperationId);
         return result.Outcome == VoiceCommandOutcome.NotReached ? null : result;
     }
 

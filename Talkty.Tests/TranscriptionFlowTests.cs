@@ -311,7 +311,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
         /// <summary>What the pill was told to show about a spoken command.</summary>
         public List<CommandProgressEventArgs> Pill { get; } = [];
 
-        public Context(Action<AppSettings>? configure = null)
+        public Context(Action<AppSettings>? configure = null, Version2.Capture.CaptureClient? captureClient = null)
         {
             configure?.Invoke(Settings.Settings);
             Launcher = new VoiceDaemonLauncher(
@@ -322,7 +322,7 @@ public partial class TranscriptionFlowTests(UiThread ui) : IClassFixture<UiThrea
             ViewModel = new MainViewModel(Settings, Audio, Engine, Clipboard,
                 new FakeUpdate(), autoPasteService: Paste, promptRefinementService: Refiner, recoveryStore: Recovery,
                 promptFidelityService: Fidelity, voiceCommandService: Voice,
-                promptClassifier: Classifier, daemonLauncher: Launcher);
+                promptClassifier: Classifier, daemonLauncher: Launcher, captureClient: captureClient);
             ViewModel.RequestShowToast += (_, e) => Warnings.Add(e.Message);
             ViewModel.CommandProgress += (_, e) => Pill.Add(e);
             ViewModel.PropertyChanged += (_, e) =>

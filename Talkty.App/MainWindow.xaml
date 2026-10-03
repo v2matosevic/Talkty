@@ -343,11 +343,16 @@
                         </Button>
                     </Grid>
 
+                    <Button Grid.Row="4" Click="CaptureHub_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="0,6,0,12"
+                            ToolTip="{Binding CaptureDestinationLabel}">
+                        <TextBlock Text="{Binding CaptureDestinationLabel}" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+                    </Button>
                     <!-- Divider -->
                     <Border Grid.Row="4"
                             Height="1"
                             Background="{StaticResource Zinc800Brush}"
-                            Margin="0,14,0,14"/>
+                            Margin="0,40,0,14"/>
 
                     <!-- Recent Transcriptions -->
                     <Grid Grid.Row="5">

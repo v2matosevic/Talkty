@@ -4,6 +4,10 @@ User-facing changes, newest first. Dates are when the work landed.
 
 ## [Unreleased]
 
+- Choose a named ADE agent draft for dictation. The complete take joins that draft without replacing the clipboard or sending a turn. Unverified deliveries remain encrypted locally for retry with the same frozen destination and operation ID.
+- Command delivery now uses stable operation IDs and Hermes receipts. A lost response or server error is reconciled without blindly repeating an action. Requires the matching Hermes source update for durable command receipts; older services remain safe with conservative uncertainty handling.
+- These capture/command changes are built and tested locally; no installer or public release carries them yet. Implementation record: `docs/CAPTURE-IMPLEMENTATION-2026-10-03.md`.
+
 - Prompting can now decide before it spends: a fast check classifies your dictation first, so a genuinely one-line ask can skip the rewrite entirely instead of waiting one to three seconds for a model to hand back roughly the same sentence. Substantial requests start on the better model instead of escalating to it. Off by default; Settings value `PromptPlanning` has Off, Hints and Full. Details and limits: `docs/PROMPT-PLANNING.md`.
 - Fixed: valid decision responses were being discarded. Probabilities are rounded by the provider, so a distribution over several options routinely misses 1.0 by more than the old window allowed; a peer measured 2.4% of 292 calls thrown away, skewed toward Croatian. The allowance now scales with the number of options, and one bad answer in a batch no longer discards the good ones alongside it.
 

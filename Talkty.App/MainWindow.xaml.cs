@@ -8,6 +8,8 @@ using Talkty.App.Models;
 using Talkty.App.Services;
 using Talkty.App.ViewModels;
 using Talkty.App.Views;
+using Version2.Capture;
+using System.IO;
 
 namespace Talkty.App;
 
@@ -17,6 +19,7 @@ public partial class MainWindow : Window
     private readonly IHotkeyService _hotkeyService;
     private readonly ISettingsService _settingsService;
     private readonly IAudioCaptureService _audioCaptureService;
+    private readonly CaptureClient _captureClient;
     private OverlayWindow? _overlayWindow;
     private System.Windows.Threading.DispatcherTimer? _commandLinger;
     private SettingsWindow? _settingsWindow;
@@ -82,6 +85,7 @@ public partial class MainWindow : Window
         Log.Debug("PromptClassifier created");
 
         var voiceCommandService = new VoiceCommandService(_settingsService);
+        _captureClient = new CaptureClient(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Talkty", "CaptureOutbox"));
         Log.Debug("VoiceCommandService created");
 
         // Initialize ViewModel
@@ -96,7 +100,8 @@ public partial class MainWindow : Window
             promptRefinementService: promptRefinementService,
             promptFidelityService: promptFidelityService,
             voiceCommandService: voiceCommandService,
-            promptClassifier: promptClassifier);
+            promptClassifier: promptClassifier,
+            captureClient: _captureClient);
 
         _viewModel.RequestShowOverlay += OnRequestShowOverlay;
         _viewModel.RequestHideOverlay += OnRequestHideOverlay;
@@ -125,6 +130,14 @@ public partial class MainWindow : Window
             return;
         }
         DragMove();
+    }
+
+    private void CaptureHub_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.IsListening || _viewModel.IsTranscribing) return;
+        var window = new CaptureHubWindow(_captureClient) { Owner = this };
+        window.ShowDialog();
+        if (window.ChoiceMade) _viewModel.SelectCaptureDestination(window.Chosen);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

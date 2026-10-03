@@ -1,4 +1,5 @@
 using System.Net;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -26,7 +27,7 @@ public class VoiceCommandService : IVoiceCommandService
         Func<VoiceEndpointResolver.Endpoint?>? resolve = null)
     {
         _settingsService = settingsService;
-        _http = http ?? new HttpClient();
+        _http = http ?? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false });
         _http.Timeout = TimeSpan.FromMilliseconds(Constants.VoiceCommandTimeoutMs);
         _resolve = resolve ?? (() => VoiceEndpointResolver.Read());
     }
@@ -60,11 +61,16 @@ public class VoiceCommandService : IVoiceCommandService
         CancellationToken cancellationToken)
         => DispatchAsync(text, foregroundApp, cancellationToken, null);
 
-    public async Task<VoiceCommandResult> DispatchAsync(
+    public Task<VoiceCommandResult> DispatchAsync(
         string text,
         string? foregroundApp,
         CancellationToken cancellationToken,
         CapturedWindowInfo? targetWindow)
+        => DispatchAsync(text, foregroundApp, cancellationToken, targetWindow, Guid.NewGuid().ToString("D"));
+
+    public async Task<VoiceCommandResult> DispatchAsync(
+        string text, string? foregroundApp, CancellationToken cancellationToken,
+        CapturedWindowInfo? targetWindow, string operationId)
     {
         var settings = _settingsService.Settings;
 
@@ -83,7 +89,7 @@ public class VoiceCommandService : IVoiceCommandService
                 "Command endpoint must be a local address");
         }
 
-        if (record is null && !await AnswersAsTheDaemonAsync(endpoint, cancellationToken))
+        if (!await AnswersAsTheDaemonAsync(endpoint, cancellationToken))
         {
             return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
                 "No command daemon is listening — run `hermes voice ensure`");
@@ -91,6 +97,7 @@ public class VoiceCommandService : IVoiceCommandService
 
         var payload = JsonSerializer.Serialize(new
         {
+            operationId,
             text,
             hotkey = "command",
             foregroundApp,
@@ -126,35 +133,57 @@ public class VoiceCommandService : IVoiceCommandService
             if (!response.IsSuccessStatusCode)
             {
                 Log.Warning($"Command daemon returned {(int)response.StatusCode}");
-                return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
-                    $"The command daemon returned {(int)response.StatusCode}");
+                return await ReconcileAsync(endpoint, token, operationId, cancellationToken);
             }
 
-            return Read(body);
+            return Read(body) with { OperationId = operationId };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The user cancelled the cycle (ESC). The request may still have landed.
-            return new VoiceCommandResult(VoiceCommandOutcome.Uncertain, "Cancelled while sending");
+            return new VoiceCommandResult(VoiceCommandOutcome.Uncertain, "Cancelled while sending; the action may have started", OperationId: operationId);
         }
         catch (OperationCanceledException)
         {
             // HttpClient's own timeout. The daemon may be mid-command; never resend.
             Log.Warning("Command daemon did not answer in time");
-            return new VoiceCommandResult(VoiceCommandOutcome.Uncertain,
-                "No answer from the command daemon — it may still be running");
+            return await ReconcileAsync(endpoint, token, operationId, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
             Log.Info($"Command daemon unreachable: {ex.Message}");
-            return new VoiceCommandResult(VoiceCommandOutcome.NotReached,
-                "No command daemon is listening");
+            return await ReconcileAsync(endpoint, token, operationId, cancellationToken);
         }
         catch (Exception ex)
         {
             Log.Error("Command dispatch failed", ex);
-            return new VoiceCommandResult(VoiceCommandOutcome.NotReached, "Command dispatch failed");
+            return new VoiceCommandResult(VoiceCommandOutcome.Uncertain, "Command delivery could not be verified; nothing was retried", OperationId: operationId);
         }
+    }
+
+    private async Task<VoiceCommandResult> ReconcileAsync(string endpoint, string? token, string operationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var deadline = new CancellationTokenSource(Constants.VoiceCommandHealthTimeoutMs);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(endpoint), "/operations/" + Uri.EscapeDataString(operationId)));
+            request.Headers.TryAddWithoutValidation("x-voice-token", token);
+            using var response = await _http.SendAsync(request, linked.Token);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(linked.Token);
+                using var receipt = JsonDocument.Parse(body);
+                if (!receipt.RootElement.TryGetProperty("operationId", out var id) || id.GetString() != operationId
+                    || !receipt.RootElement.TryGetProperty("deliveryState", out _))
+                    throw new InvalidDataException("Receipt identity is unavailable");
+                var result = Read(body);
+                return result with { OperationId = operationId };
+            }
+        }
+        catch (Exception ex) { Log.Info($"Command receipt unavailable: {ex.GetType().Name}"); }
+        return new VoiceCommandResult(VoiceCommandOutcome.Uncertain,
+            "The action may have started. Its result could not be verified; nothing was retried.", OperationId: operationId);
     }
 
     /// <summary>
@@ -279,12 +308,17 @@ public class VoiceCommandService : IVoiceCommandService
             if (message.Length > Constants.VoiceCommandMessageMaxChars)
                 message = message[..Constants.VoiceCommandMessageMaxChars].TrimEnd() + "…";
 
+            var deliveryState = root.TryGetProperty("deliveryState", out var state) ? state.GetString() : null;
+            if (outcome == "uncertain" || deliveryState is "pending" or "uncertain")
+                return new VoiceCommandResult(VoiceCommandOutcome.Uncertain, message);
+            if (outcome is null && !root.TryGetProperty("ok", out _))
+                return new VoiceCommandResult(VoiceCommandOutcome.Uncertain, detail is not null ? message : "The daemon's reply could not be verified; nothing was retried");
             return new VoiceCommandResult(VoiceCommandOutcome.Delivered, message, commandId, ok, goalId);
         }
         catch (JsonException)
         {
             // It answered, so the command was received; we just cannot read the reply.
-            return new VoiceCommandResult(VoiceCommandOutcome.Delivered, "Command sent");
+            return new VoiceCommandResult(VoiceCommandOutcome.Uncertain, "The daemon's reply could not be read; nothing was retried");
         }
     }
 }

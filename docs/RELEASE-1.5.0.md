@@ -1,8 +1,8 @@
 # Talkty 1.5.0
 
 Stable Windows installation and open-source release update requested by Marko on
-3 October 2026. **1.5.0 is the public Latest release. Local installation is pending
-explicit permission to close the running Talkty instance**, as recorded below.
+3 October 2026. **1.5.0 is installed and running on this PC and is the public
+Latest release.** Package, preservation and startup checks passed as recorded below.
 
 ## Release notes
 
@@ -97,6 +97,8 @@ Capture boundary and native/browser evidence:
   `public-verification-1.5.0.json` and `github-release-1.5.0.png`.
 - Public `version.json` advances to 1.5.0 after that publication. The optional
   CUDA pack is version-independent and unchanged. The installer remains unsigned.
+  The public update notice was fetched and verified independently:
+  `installer/output/update-notice-verification-1.5.0.json`.
 
 ## Windows installation
 
@@ -106,10 +108,27 @@ Capture boundary and native/browser evidence:
   user data has also been backed up; large model files are hash-verified and are
   outside the installer payload. Private evidence:
   `installer/output/preservation-1.5.0.json` and `pre-1.5.0-20261003-194753`.
-- Pending: explicit permission to close the running Talkty instance; official Inno
-  upgrade; exit, registry, payload and preserved-data checks; normal-user relaunch
-  and startup version/hotkey/model verification. This PC's existing all-users
-  installation requires Windows administrator approval.
+- Marko explicitly selected Install and restart Talkty in the approval question.
+  The approved PID29892, executable path and start time were rechecked; its last
+  recording had finished. Mutable data was backed up and its hash snapshot refreshed
+  before closing that instance. Other apps, agents and services were not stopped.
+- Installed the exact anonymously downloaded release artifact using the official
+  elevated Inno installer. Windows administrator approval was accepted; the installer
+  completed with **exit 0 at 20:03:58 local time**, and no Windows reboot was required.
+  Registry and product version report 1.5.0 at `B:/Talkty`. The existing uninstaller
+  remains present. Evidence: `installer/output/install-1.5.0.log`,
+  `installation-start-1.5.0.json` and `installation-result-1.5.0.json`.
+- **492/492 installed payload hashes match. All 55 data/model and 13 CUDA files
+  were hashed again after installation and match their preservation snapshots**,
+  before relaunch. Evidence: `installer/output/install-verification-1.5.0.json`.
+  Initial model hashes were reused for the final pre-install snapshot; every
+  post-install file was reread. Mutable settings/history/recovery hashes were refreshed.
+- Relaunched normally at 20:06:30 as PID68308, with a non-elevated launcher.
+  Startup log `talkty_2026-10-03_20-06-30.log` confirms 50 history entries,
+  registered hotkey and the preserved `microsoft/mai-transcribe-2` cloud model ready.
+  No startup error was logged. Settings/history hashes still match after startup;
+  the app's update check finds Latest 1.5.0 and no newer update. Evidence:
+  `installer/output/relaunch-1.5.0.json` and `startup-verification-1.5.0.json`.
 
 Installed microphone/desktop-input behavior and a complete clean-machine install/
 uninstall are separate checks and are not established by headless tests.
